@@ -1,0 +1,2 @@
+..Loading grid data from connectivity file
+....EXCEPTION (/home/conda/feedstock_root/build_artifacts/tempest-extremes_1643338652905/work/src/base/SimpleGrid.cpp, Line 1166) Self-connected node found in connectivity file "outCS_ne30pg2_connect.txt" for node 0
