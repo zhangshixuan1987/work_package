@@ -1,0 +1,124 @@
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+
+Variable: x11
+Type: float
+Total Size: 4143052800 bytes
+            1035763200 values
+Number of Dimensions: 4
+Dimensions and sizes:	[time | 432] x [lev | 37] x [lat | 180] x [lon | 360]
+Coordinates: 
+            time: [692496..1007328]
+            lev: [   1..1000]
+            lat: [-89.5..89.5]
+            lon: [ 0.5..359.5]
+Number Of Attributes: 6
+  cell_measures :	area: area
+  missing_value :	-32767
+  _FillValue :	-32767
+  units :	m s**-1
+  long_name :	U component of wind
+  standard_name :	eastward_wind
+(0)	 
+(0)	output : ../fig_data/U_ERA5.nc
+(0)	 
+
+Variable: x11
+Type: float
+Total Size: 4143052800 bytes
+            1035763200 values
+Number of Dimensions: 4
+Dimensions and sizes:	[time | 432] x [lev | 37] x [lat | 180] x [lon | 360]
+Coordinates: 
+            time: [692496..1007328]
+            lev: [   1..1000]
+            lat: [-89.5..89.5]
+            lon: [ 0.5..359.5]
+Number Of Attributes: 6
+  _FillValue :	-32767
+  standard_name :	northward_wind
+  long_name :	V component of wind
+  units :	m s**-1
+  missing_value :	-32767
+  cell_measures :	area: area
+(0)	 
+(0)	output : ../fig_data/V_ERA5.nc
+(0)	 
+
+Variable: x11
+Type: float
+Total Size: 4143052800 bytes
+            1035763200 values
+Number of Dimensions: 4
+Dimensions and sizes:	[time | 432] x [lev | 37] x [lat | 180] x [lon | 360]
+Coordinates: 
+            time: [692496..1007328]
+            lev: [   1..1000]
+            lat: [-89.5..89.5]
+            lon: [ 0.5..359.5]
+Number Of Attributes: 6
+  _FillValue :	-32767
+  standard_name :	air_temperature
+  long_name :	Temperature
+  units :	K
+  missing_value :	-32767
+  cell_measures :	area: area
+(0)	 
+(0)	output : ../fig_data/T_ERA5.nc
+(0)	 
+
+Variable: x11
+Type: float
+Total Size: 4143052800 bytes
+            1035763200 values
+Number of Dimensions: 4
+Dimensions and sizes:	[time | 432] x [lev | 37] x [lat | 180] x [lon | 360]
+Coordinates: 
+            time: [692496..1007328]
+            lev: [   1..1000]
+            lat: [-89.5..89.5]
+            lon: [ 0.5..359.5]
+Number Of Attributes: 6
+  _FillValue :	-32767
+  standard_name :	specific_humidity
+  long_name :	Specific humidity
+  units :	kg kg**-1
+  missing_value :	-32767
+  cell_measures :	area: area
+(0)	 
+(0)	output : ../fig_data/Q_ERA5.nc
+(0)	 
+
+Variable: x11
+Type: float
+Total Size: 4143052800 bytes
+            1035763200 values
+Number of Dimensions: 4
+Dimensions and sizes:	[time | 432] x [lev | 37] x [lat | 180] x [lon | 360]
+Coordinates: 
+            time: [692496..1007328]
+            lev: [   1..1000]
+            lat: [-89.5..89.5]
+            lon: [ 0.5..359.5]
+Number Of Attributes: 6
+  _FillValue :	-32767
+  standard_name :	relative_humidity
+  long_name :	Relative humidity
+  units :	%
+  missing_value :	-32767
+  cell_measures :	area: area
+(0)	 
+(0)	output : ../fig_data/RELHUM_ERA5.nc
+(0)	 
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+fatal:where: dimension sizes  of parameter 0 and parameter 2 do not match
+fatal:["Execute.c":8637]:Execute: Error occurred at or near line 90 in file 1_gen_data_e3sm.ncl
+
+

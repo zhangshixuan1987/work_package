@@ -1,0 +1,3 @@
+/var/spool/slurm/job1530631/slurm_script: line 16: 1765916 Killed                  ncl 1_gen_data_e3sm.ncl
+/var/spool/slurm/job1530631/slurm_script: line 16: 1765917 Killed                  ncl 1_gen_data_era5.ncl
+slurmstepd: error: Detected 2 oom-kill event(s) in StepId=1530631.batch. Some of your processes may have been killed by the cgroup out-of-memory handler.

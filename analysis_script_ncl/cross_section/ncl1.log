@@ -1,0 +1,1087 @@
+nohup: ignoring input
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30_2014.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30_2014.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30_2014.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30_2014.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30_2014.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1979.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1980.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1981.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1982.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1983.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1984.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1985.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1986.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1987.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1988.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1989.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1990.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1991.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1992.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1993.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1994.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1995.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1996.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1997.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1998.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_1999.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Rinput in flex scanner failed
+ELHUM_CLIM30ML_2000.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2001.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2002.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2003.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2004.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2005.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2006.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2007.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2008.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2009.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2010.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2011.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2012.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2013.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/U_CLIM30ML_2014.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/V_CLIM30ML_2014.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/T_CLIM30ML_2014.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/Q_CLIM30ML_2014.nc
+(0)	 
+(0)	 
+(0)	output : ../fig_data/RELHUM_CLIM30ML_2014.nc
+(0)	 
