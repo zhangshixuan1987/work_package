@@ -1,0 +1,4 @@
+I just spoke to Themis, and he asked that we make some figures of local PDFs, for example, over Europe to America, the Atlantic, the Pacific, etc. He said you would know what regions, and what sigma levels would be most appropriate for these different variables. Do you think you could make those? I don’t have any of the data or anything so I can’t make them without your help.
+ 
+ We need to compare the ERA5 (now RD), CLIM (now CR) and the prediction LSTM(CLIM) now ML(CR).
+
