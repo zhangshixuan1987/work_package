@@ -5,4 +5,4 @@ sh run_crop.sh
 cd ../
 
 rm -rvf animate*.gif
-convert -delay 30 -loop 0 sub_fig/ndguv_animation_tc*png  animate_sandy.gif
+convert -delay 30 -loop 0 sub_fig/animation_tc*png  animate_sandy.gif

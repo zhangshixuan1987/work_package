@@ -1,0 +1,1 @@
+../../../../Blocking/ppe_ndguvtq_srf2/NDGUVTQ3_SRF2_tau06_BLOCK_rgd_H_mean_stddev_smoothed.nc

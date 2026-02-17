@@ -1,0 +1,1 @@
+/global/cscratch1/sd/zhan391/DARPA_project/nudged_e3smv2_simulation/e3sm_v2_NDGERA5_PL_UVT3_tau06_F20TR_ne30pg2_EC30to60E2r2/run/e3sm_v2_NDGERA5_PL_UVT3_tau06_F20TR_ne30pg2_EC30to60E2r2.eam.h2.2017-12-07-00000.nc;/global/cscratch1/sd/zhan391/DARPA_project/darpa_project/TempestExtremes/data/e3sm_phis.nc

@@ -1,0 +1,13 @@
+The first iteration of IBTrACS version 04 was released in March of 2019. It is updated weekly.
+
+New Features (Improvements from v03)
+Best track data are updated daily, and contain provisional tracks of recent storms.
+Data are available in three inter-consistent (identical parameters, file structure, etc) formats (netCDF, CSV, shapefile). 
+More parameters are available from best track data providers. 
+Basin Assignment: Systems that occur within a basin are included in that basin file (in version 3, the storm was only included in its basin of origin)
+Storm translation speed and direction and other derived parameters requested by users are available in version v.
+Known Issues
+Check the IBTrACS News Forum for status updates. 
+
+Some early (pre-1950) storms were not correctly matched, so the number of storms in the record is artificially high. For example, SIO storms in 1901 are not matched, so the same storm is tracked by the following identifiers: ds824, td9636, and reunion. This storm is broken into different tracks because of temporal differences in the storm data.
+

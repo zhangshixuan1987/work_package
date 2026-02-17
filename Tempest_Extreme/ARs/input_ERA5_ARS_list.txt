@@ -1,0 +1,1 @@
+/global/cfs/projectdirs/m3522/cmip6/ERA5/e5.oper.an.vinteg/201712/e5.oper.an.vinteg.162_071_viwve.ll025sc.2017120100_2017123123.nc;/global/cfs/projectdirs/m3522/cmip6/ERA5/e5.oper.an.vinteg/201712/e5.oper.an.vinteg.162_072_viwvn.ll025sc.2017120100_2017123123.nc

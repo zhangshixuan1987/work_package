@@ -1,0 +1,1 @@
+/global/cscratch1/sd/zhan391/DARPA_project/darpa_project/TempestExtremes/data/E3SMv2_NDGUVTQ_tau6/E3SMv2_NDGUVTQ_tau6_3hourly_201701010000-201712311500.nc
