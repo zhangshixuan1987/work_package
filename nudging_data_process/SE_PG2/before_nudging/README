@@ -1,0 +1,46 @@
+This directory contains the E3SM nudged simulation data for the machine learing training
+The simulation is the so-called AMIP (Atmospheric only) simulation, meaning that the ocean
+coupling is turned off, and the sea surface temperature (SST) is prescribed with observations.
+
+The data is on Spherical Element (SE) grid, which is roughly 2deg horizonal resolution. This set
+of simulation was run from 2007 to 2017, which contains 11 years simulation in total. The first year
+of data can be treated as model spin up, and the remaining 10-year data are considered as the data to
+be used by the ML model training.  The simulation period is the same as the period for nudged E3SM
+simulation as this set of simulation is our Baseline for the nudged or ML bias corrected simulations.
+
+The nudged E3SM simulations are conducted by constraining model 3-D model state variables towards observations.
+The ERA5 reanalysis data is selected as the best estimates for observations. 
+This dataset archives the following variables at the location of "Before Nudging":
+
+1. 3-D model state of wind (U, V), temperature (T), and humidity (Q). These four variables are targets
+   to be corrected by nudging or machine learning model (online approach). We add "_bf_ndg" in the variable 
+   name to indicate that the variables are for "before nudging"  
+
+2. 2-D model state of surface pressure (PS), surface temperature (TS)
+   wind at bottom model level (Ubot, Vbot), humidity at bottom model level (Qbot)
+   temperature at bottom model level (Tbot), surface geopotential (PHIS = surface height * 9.8)
+
+3. 2-D model diagnostics of sea level pressure (PSL), 2-meter temperature (TREFHT),
+   2-meter humidity (QREFHT)
+
+Note: all variable are instantaneous model output at every 3hr
+
+The file name convension follows 
+-- ${Experiment_name}_${Sampling_freqency}_YYYY1MM1DD1HHHH1-YYYY2MM2DD2HHHH2.nc
+
+For the fllowing file before_nudging/E3SMv2_NDGUV_tau6_3hourly_200701010000-200712312100.nc
+--Experiment_name: E3SMv2_NDGUV
+--Nudging relaxation time scale (tau): 6-hour (6x3600s)
+--Sampling_freqency: 3hourly 
+--YYYY1MM1DD1HHHH1: 2007-01-01 00:00:00
+--YYYY2MM2DD2HHHH2: 2007-12-31 21:00:00
+  
+Size of the data (time x lev x ncol) = 2920 x 72 x 21600. 
+Note: 2920 = 365 x 8 (i.e. 3hourly data throught the 1-year period)
+
+There are five data with different configurations and strategies for nudging:
+     a. E3SMv2_NDGUV_tau6:  E3SMv2 with nudging towards 3-D wind (U, V) from reference 
+     b. E3SMv2_NDGUVT_tau6: E3SMv2 with nudging towards 3-D wind (U, V) and temperature (T) from reference
+     c. E3SMv2_NDGUVTQ_tau6: E3SMv2 with nudging towards 3-D wind (U, V) and temperature (T) and humidity (Q) from reference.  
+     d. E3SMv2_NDGUVTQ_SRF1_tau6: E3SMv2 with nudging towards 3-D wind (U, V) and temperature (T) and humidity (Q) from reference, as well as 2-D surafce wind (U,V at 10-meter), temperature (T at 2-meter ), humidity (Q at 2-meter), surface radiative fluxes (shortwave and longwave radiation).  
+     e. E3SMv2_NDGUVTQ_SRF2_tau6: E3SMv2 with nudging towards 3-D wind (U, V) and temperature (T) and humidity (Q) from reference, as well as 2-D surafce wind (U,V at 10-meter), temperature (T at 2-meter ), humidity (Q at 2-meter), surface radiative fluxes (shortwave and longwave radiation), surface latent heat fluxes (due to evaporation), and surface sensible heat flux (the transfer of heat caused by the difference in temperature between the sea and the air) 

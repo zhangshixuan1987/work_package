@@ -1,0 +1,25 @@
+INFO: Gathering list of files to archive
+INFO: Creating new tar archive 000000.tar
+INFO: Archiving csh1.log
+INFO: Archiving csh2.log
+INFO: Archiving csh3.log
+INFO: Archiving run_extract_time.csh
+INFO: Archiving run_fix_bfndg.csh
+INFO: Archiving run_fix_bfndg1.csh
+INFO: Archiving run_fix_bfndg2.csh
+INFO: Archiving run_fix_clim.csh
+INFO: Archiving time_2007.nc
+INFO: Archiving time_2008.nc
+INFO: Archiving time_2009.nc
+INFO: Archiving time_2010.nc
+INFO: Archiving time_2011.nc
+INFO: Archiving time_2012.nc
+INFO: Archiving time_2013.nc
+INFO: Archiving time_2014.nc
+INFO: Archiving time_2015.nc
+INFO: Archiving time_2016.nc
+INFO: Archiving time_2017.nc
+INFO: Archiving zstash_create.log
+INFO: tar name=000000.tar, tar size=890880, tar md5=26a20da2ce3768c3115c62a8084a0c02
+INFO: Transferring file to HPSS: zstash/000000.tar
+INFO: Transferring file to HPSS: zstash/index.db

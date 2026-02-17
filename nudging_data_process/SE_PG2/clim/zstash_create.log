@@ -1,0 +1,51 @@
+INFO: Transferring file from HPSS: zstash/index.db
+INFO: Gathering list of files to archive
+INFO: Creating new tar archive 000018.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_200701010000-200712312100.nc
+INFO: tar name=000018.tar, tar size=73416673280, tar md5=68813585ada49b0908d2a34439a9d08e
+INFO: Transferring file to HPSS: zstash/000018.tar
+INFO: Creating new tar archive 000019.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_200801010000-200812312100.nc
+INFO: tar name=000019.tar, tar size=73416673280, tar md5=222230686e76d4eda42c41eb4f93385c
+INFO: Transferring file to HPSS: zstash/000019.tar
+INFO: Creating new tar archive 00001a.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_200901010000-200912312100.nc
+INFO: tar name=00001a.tar, tar size=73416673280, tar md5=658b625b8bae3e9c07a9caffa1022e42
+INFO: Transferring file to HPSS: zstash/00001a.tar
+INFO: Creating new tar archive 00001b.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_201001010000-201012312100.nc
+INFO: tar name=00001b.tar, tar size=73416673280, tar md5=70666e2f1c1f77a05feed98f1c73d477
+INFO: Transferring file to HPSS: zstash/00001b.tar
+INFO: Creating new tar archive 00001c.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_201101010000-201112312100.nc
+INFO: tar name=00001c.tar, tar size=73416673280, tar md5=62002cbcabcf8bf36c0212b8a0fa2dad
+INFO: Transferring file to HPSS: zstash/00001c.tar
+INFO: Creating new tar archive 00001d.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_201201010000-201212312100.nc
+INFO: tar name=00001d.tar, tar size=73416673280, tar md5=dae1a81e86928015fc6ea6cab4d52531
+INFO: Transferring file to HPSS: zstash/00001d.tar
+INFO: Creating new tar archive 00001e.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_201301010000-201312312100.nc
+INFO: tar name=00001e.tar, tar size=73416683520, tar md5=b37d991af122d0582e98bf5c1e2fa640
+INFO: Transferring file to HPSS: zstash/00001e.tar
+INFO: Creating new tar archive 00001f.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_201401010000-201412312100.nc
+INFO: tar name=00001f.tar, tar size=73416673280, tar md5=200cfbb8d298aa63a0a38f200ccb05fd
+INFO: Transferring file to HPSS: zstash/00001f.tar
+INFO: Creating new tar archive 000020.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_201501010000-201512312100.nc
+INFO: tar name=000020.tar, tar size=73416673280, tar md5=01ca9063568c74ca0e399fc5555d39e8
+INFO: Transferring file to HPSS: zstash/000020.tar
+INFO: Creating new tar archive 000021.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_201601010000-201612312100.nc
+INFO: tar name=000021.tar, tar size=73416673280, tar md5=004477f05fd7e3a5ce6743406c3819fb
+INFO: Transferring file to HPSS: zstash/000021.tar
+INFO: Creating new tar archive 000022.tar
+INFO: Archiving E3SMv2_CLIM_3hourly_201701010000-201712312100.nc
+INFO: tar name=000022.tar, tar size=73416673280, tar md5=e206dfdb5aa87f1e96f18c373e44b8b4
+INFO: Transferring file to HPSS: zstash/000022.tar
+INFO: Creating new tar archive 000023.tar
+INFO: Archiving zstash_create.log
+INFO: tar name=000023.tar, tar size=10240, tar md5=03e6db0d330ca4ddd509aaf612d028c5
+INFO: Transferring file to HPSS: zstash/000023.tar
+INFO: Transferring file to HPSS: zstash/index.db

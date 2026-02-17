@@ -1,0 +1,6 @@
+INFO: Gathering list of files to archive
+INFO: Creating new tar archive 000001.tar
+INFO: Archiving zstash_create.log
+INFO: tar name=000001.tar, tar size=10240, tar md5=7c5fb2341b984539be79a5c35c1ce9ef
+INFO: Transferring file to HPSS: zstash/000001.tar
+INFO: Transferring file to HPSS: zstash/index.db

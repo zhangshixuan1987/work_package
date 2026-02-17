@@ -1,0 +1,132 @@
+nohup: ignoring input
+rm: cannot remove '../fig_data/CLIM30ML_U_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_V_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_T_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_Q_1979-2014.nc': No such file or directory
+input in flex scanner failed
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+
+
+Variable: flm
+Type: string
+Total Size: 288 bytes
+            36 values
+Number of Dimensions: 1
+Dimensions and sizes:	[36]
+Coordinates: 
+(0)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1979.nc
+(1)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1980.nc
+(2)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1981.nc
+(3)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1982.nc
+(4)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1983.nc
+(5)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1984.nc
+(6)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1985.nc
+(7)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1986.nc
+(8)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1987.nc
+(9)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1988.nc
+(10)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1989.nc
+(11)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1990.nc
+(12)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1991.nc
+(13)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1992.nc
+(14)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1993.nc
+(15)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1994.nc
+(16)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1995.nc
+(17)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1996.nc
+(18)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1997.nc
+(19)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1998.nc
+(20)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.1999.nc
+(21)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2000.nc
+(22)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2001.nc
+(23)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2002.nc
+(24)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2003.nc
+(25)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2004.nc
+(26)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2005.nc
+(27)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2006.nc
+(28)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2007.nc
+(29)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2008.nc
+(30)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2009.nc
+(31)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2010.nc
+(32)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2011.nc
+(33)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2012.nc
+(34)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2013.nc
+(35)	/anvil/scratch/x-szhang3/data_240x120/CLIM30ML/monthly/CLIM30ML.monthly.2014.nc
+
+Variable: x11
+Type: float
+Total Size: 3583180800 bytes
+            895795200 values
+Number of Dimensions: 4
+Dimensions and sizes:	[time | 432] x [lev | 72] x [lat | 120] x [lon | 240]
+Coordinates: 
+            time: [197901..201412]
+            lev: [0.1238254130556168..998.4964394917621]
+            lat: [-89.00007296300058..89.00007296300058]
+            lon: [180.75..179.25]
+Number Of Attributes: 6
+  standard_name :	U
+  units :	m/s
+  long_name :	Zonal wind
+  _FillValue :	9.96921e+36
+  coordinates :	lat lon
+  cell_measures :	area: area
+
+Variable: x11
+Type: float
+Total Size: 3583180800 bytes
+            895795200 values
+Number of Dimensions: 4
+Dimensions and sizes:	[time | 432] x [lev | 72] x [lat | 120] x [lon | 240]
+Coordinates: 
+            time: [197901..201412]
+            lev: [0.1238254130556168..998.4964394917621]
+            lat: [-89.00007296300058..89.00007296300058]
+            lon: [180.75..179.25]
+Number Of Attributes: 6
+  standard_name :	V
+  units :	m/s
+  long_name :	Meridional wind
+  _FillValue :	9.96921e+36
+  coordinates :	lat lon
+  cell_measures :	area: area
+
+Variable: x11
+Type: float
+Total Size: 3583180800 bytes
+            895795200 values
+Number of Dimensions: 4
+Dimensions and sizes:	[time | 432] x [lev | 72] x [lat | 120] x [lon | 240]
+Coordinates: 
+            time: [197901..201412]
+            lev: [0.1238254130556168..998.4964394917621]
+            lat: [-89.00007296300058..89.00007296300058]
+            lon: [180.75..179.25]
+Number Of Attributes: 6
+  standard_name :	T
+  units :	K
+  long_name :	Air temperature
+  _FillValue :	9.96921e+36
+  coordinates :	lat lon
+  cell_measures :	area: area
+
+Variable: x11
+Type: float
+Total Size: 3583180800 bytes
+            895795200 values
+Number of Dimensions: 4
+Dimensions and sizes:	[time | 432] x [lev | 72] x [lat | 120] x [lon | 240]
+Coordinates: 
+            time: [197901..201412]
+            lev: [0.1238254130556168..998.4964394917621]
+            lat: [-89.00007296300058..89.00007296300058]
+            lon: [180.75..179.25]
+Number Of Attributes: 6
+  standard_name :	Q
+  units :	kg/kg
+  long_name :	Specific humidity
+  _FillValue :	9.96921e+36
+  coordinates :	lat lon
+  cell_measures :	area: area

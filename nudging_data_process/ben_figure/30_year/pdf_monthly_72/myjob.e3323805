@@ -1,0 +1,25 @@
+rm: cannot remove '../fig_data/CLIM30ML_CONUS_U_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_CONUS_V_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_CONUS_T_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_CONUS_Q_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30_NEURO_V_lev72_pdf_monthly_1979-2014.nc'rm: : No such file or directorycannot remove '../fig_data/CLIM30_NWP_V_lev72_pdf_monthly_1979-2014.nc'
+: No such file or directory
+rm: cannot remove '../fig_data/CLIM30_NEUS_V_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30_NWP_T_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30_NEURO_T_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30_NEUS_T_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30_NWP_Q_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30_NEURO_Q_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30_NEUS_Q_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_NWP_U_lev72_pdf_monthly_1979-2014.nc'rm: : No such file or directorycannot remove '../fig_data/CLIM30ML_NEURO_U_lev72_pdf_monthly_1979-2014.nc'
+: No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_NEUS_U_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: rm: rm: cannot remove '../fig_data/CLIM30ML_NEUS_V_lev72_pdf_monthly_1979-2014.nc'cannot remove '../fig_data/CLIM30ML_NWP_V_lev72_pdf_monthly_1979-2014.nc'cannot remove '../fig_data/CLIM30ML_NEURO_V_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+: No such file or directory: No such file or directory
+
+rm: cannot remove '../fig_data/CLIM30ML_NWP_T_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_NEURO_T_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_NEUS_T_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_NEURO_Q_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_NEUS_Q_lev72_pdf_monthly_1979-2014.nc': No such file or directory
+rm: cannot remove '../fig_data/CLIM30ML_NWP_Q_lev72_pdf_monthly_1979-2014.nc': No such file or directory

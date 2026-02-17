@@ -1,0 +1,234 @@
+1_gen_data_pdf_mon_CONUS.ncl
+1_gen_data_pdf_mon_global.ncl
+1_gen_data_pdf_mon_midlat.ncl
+1_gen_data_pdf_mon_NEURO.ncl
+1_gen_data_pdf_mon_NEUS.ncl
+1_gen_data_pdf_mon_NWP.ncl
+1_gen_data_pdf_mon_tropics.ncl
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEURO.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 54 in file 1_gen_data_pdf_mon_NWP.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NEUS.ncl
+
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_CONUS.ncl
+
+warning:VarVarWrite: rhs has no coordinate variable for dimension number (0), destroying coordinate var,  use "(/../)" if this is not desired outcome
+warning:["Execute.c":8637]:Execute: Error occurred at or near line 55 in file 1_gen_data_pdf_mon_NWP.ncl
+
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+ Copyright (C) 1995-2019 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.6.2
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
