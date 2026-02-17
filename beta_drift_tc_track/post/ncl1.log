@@ -1,0 +1,12 @@
+nohup: ignoring input
+ Copyright (C) 1995-2018 - All Rights Reserved
+ University Corporation for Atmospheric Research
+ NCAR Command Language Version 6.5.0
+ The use of this software is governed by a License Agreement.
+ See http://www.ncl.ucar.edu/ for more details.
+warning:_NclOpenFile: cannot open file </global/cscratch1/sd/zhan391/DARPA_project/Track_model/out/sythetic_track_forecast_NDGUVT_2007.nc>; No such file or directory
+
+fatal:file (f) isn't defined
+fatal:["Execute.c":8637]:Execute: Error occurred at or near line 75 in file 1_gen_track_density.ncl
+
+input in flex scanner failed
