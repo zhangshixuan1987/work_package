@@ -7,7 +7,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-import xskillscore as xs
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -53,6 +52,7 @@ class ClimatologyMapPlotter:
         ds = xr.open_dataset(path, decode_times=True)
         data_var = var_name if var_name in ds.data_vars else self._find_data_variable(ds, var_name)
         da = ds[data_var]
+        da = self._mask_bad_values(da)
         da = self._normalize_longitude(da)
         da = self._standardize_units(da, var_name)
         scale = self.scale_map.get(var_name)
@@ -60,6 +60,16 @@ class ClimatologyMapPlotter:
             da = scale(da)
         elif scale is not None:
             da = da * scale
+        return da
+
+    @staticmethod
+    def _mask_bad_values(da: xr.DataArray) -> xr.DataArray:
+        da = da.where(np.isfinite(da))
+        da = da.where(np.abs(da) < 1.0e20)
+
+        valid_range = da.attrs.get("valid_range")
+        if valid_range is not None and len(valid_range) == 2:
+            da = da.where((da >= valid_range[0]) & (da <= valid_range[1]))
         return da
 
     @staticmethod
@@ -74,6 +84,10 @@ class ClimatologyMapPlotter:
             da = da * 86400.0
             da.attrs = dict(da.attrs)
             da.attrs["units"] = "mm day-1"
+        elif var_name == "psl" and units in {"pa", "pascal", "pascals"}:
+            da = da / 100.0
+            da.attrs = dict(da.attrs)
+            da.attrs["units"] = "hPa"
         return da
 
     @staticmethod
@@ -99,6 +113,58 @@ class ClimatologyMapPlotter:
         weights = np.cos(np.deg2rad(da["lat"]))
         weights = weights / weights.mean()
         return weights.broadcast_like(da)
+
+    @staticmethod
+    def _finite_pair_weights(
+        model: xr.DataArray, reference: xr.DataArray, weights: xr.DataArray
+    ) -> tuple[xr.DataArray, xr.DataArray, xr.DataArray]:
+        valid = np.isfinite(model) & np.isfinite(reference) & np.isfinite(weights)
+        return model.where(valid), reference.where(valid), weights.where(valid)
+
+    @classmethod
+    def _weighted_rmse(
+        cls, model: xr.DataArray, reference: xr.DataArray, weights: xr.DataArray
+    ) -> float:
+        model, reference, weights = cls._finite_pair_weights(model, reference, weights)
+        weight_sum = weights.sum(dim=["lat", "lon"], skipna=True)
+        weight_sum_value = float(weight_sum)
+        if not np.isfinite(weight_sum_value) or weight_sum_value == 0:
+            return float("nan")
+
+        mse = (((model - reference) ** 2) * weights).sum(
+            dim=["lat", "lon"], skipna=True
+        ) / weight_sum
+        return float(np.sqrt(mse))
+
+    @classmethod
+    def _weighted_pcor(
+        cls, model: xr.DataArray, reference: xr.DataArray, weights: xr.DataArray
+    ) -> float:
+        model, reference, weights = cls._finite_pair_weights(model, reference, weights)
+        weight_sum = weights.sum(dim=["lat", "lon"], skipna=True)
+        weight_sum_value = float(weight_sum)
+        if not np.isfinite(weight_sum_value) or weight_sum_value == 0:
+            return float("nan")
+
+        model_mean = (model * weights).sum(dim=["lat", "lon"], skipna=True) / weight_sum
+        ref_mean = (reference * weights).sum(dim=["lat", "lon"], skipna=True) / weight_sum
+        model_anom = model - model_mean
+        ref_anom = reference - ref_mean
+
+        covariance = (model_anom * ref_anom * weights).sum(
+            dim=["lat", "lon"], skipna=True
+        ) / weight_sum
+        model_variance = (model_anom**2 * weights).sum(
+            dim=["lat", "lon"], skipna=True
+        ) / weight_sum
+        ref_variance = (ref_anom**2 * weights).sum(
+            dim=["lat", "lon"], skipna=True
+        ) / weight_sum
+
+        denominator = float(np.sqrt(model_variance * ref_variance))
+        if not np.isfinite(denominator) or denominator == 0:
+            return float("nan")
+        return float(covariance / denominator)
 
     def _load_components(
         self, tauu_path: Path, tauv_path: Path
@@ -173,6 +239,24 @@ class ClimatologyMapPlotter:
             )
         return seasonal_data
 
+    @staticmethod
+    def _add_horizontal_colorbar(
+        fig: plt.Figure,
+        cax: plt.Axes,
+        im: mpl.cm.ScalarMappable,
+        label: str,
+        font_size: float,
+        label_position: str = "bottom",
+    ) -> None:
+        cbar = fig.colorbar(im, cax=cax, orientation="horizontal", extend="both")
+        if hasattr(im, "levels"):
+            cbar.set_ticks(im.levels)
+        labelpad = 8 if label_position == "top" else 4
+        cbar.set_label(label, fontsize=font_size, labelpad=labelpad)
+        cbar.ax.xaxis.set_label_position(label_position)
+        cbar.ax.xaxis.set_ticks_position(label_position)
+        cbar.ax.tick_params(labelsize=font_size * 0.95)
+
     def plot_variable(
         self,
         var_name: str = "tau_mag",
@@ -186,6 +270,8 @@ class ClimatologyMapPlotter:
         dpi: int = 150,
         show_borders: bool = False,
         ref_label: Optional[str] = None,
+        metric_box_alpha: float = 0.65,
+        panel_layout: str = "model_rows",
     ) -> None:
         ref = self.ref_name
         if ref not in self.exp_dict:
@@ -195,25 +281,62 @@ class ClimatologyMapPlotter:
         all_fields = self._compute_all_fields(var_name)
         ref_data = all_fields[ref]
         model_exps = [exp for exp in self.exp_dict if exp != ref]
-        nrow, ncol = len(model_exps) + 1, len(self.season_order)
+        panel_layout = panel_layout.lower()
+        if panel_layout not in {"model_rows", "season_rows"}:
+            raise ValueError("panel_layout must be 'model_rows' or 'season_rows'.")
 
-        fig, axes = plt.subplots(
-            nrow,
-            ncol,
-            figsize=fig_size,
-            subplot_kw={"projection": ccrs.PlateCarree()},
-            constrained_layout=False,
+        if panel_layout == "season_rows":
+            map_nrow = len(self.season_order)
+            map_ncol = len(model_exps) + 1
+            grid_height_ratios = [1.0] * map_nrow + [0.10, 0.10]
+            map_grid_rows = list(range(map_nrow))
+            ref_cbar_spec = (map_nrow, slice(None))
+            diff_cbar_spec = (map_nrow + 1, slice(None)) if model_exps else None
+            hspace = 0.16
+        else:
+            map_nrow = len(model_exps) + 1
+            map_ncol = len(self.season_order)
+            if model_exps:
+                grid_height_ratios = [1.0, 0.18, *([1.0] * len(model_exps)), 0.10]
+            else:
+                grid_height_ratios = [1.0, 0.12]
+            map_grid_rows = [0] + [i + 1 for i in range(1, map_nrow)]
+            ref_cbar_spec = (1, slice(None))
+            diff_cbar_spec = (-1, slice(None)) if model_exps else None
+            hspace = 0.10
+
+        fig = plt.figure(figsize=fig_size)
+        grid = fig.add_gridspec(
+            len(grid_height_ratios),
+            map_ncol,
+            height_ratios=grid_height_ratios,
+            left=0.05,
+            right=0.95,
+            top=0.94,
+            bottom=0.10,
+            wspace=0.18,
+            hspace=hspace,
         )
 
-        if nrow == 1:
-            axes = np.expand_dims(axes, axis=0)
-        if ncol == 1:
-            axes = np.expand_dims(axes, axis=1)
+        axes = np.empty((map_nrow, map_ncol), dtype=object)
+        for i, grid_row in enumerate(map_grid_rows):
+            for j in range(map_ncol):
+                axes[i, j] = fig.add_subplot(grid[grid_row, j], projection=ccrs.PlateCarree())
 
-        im_handles = []
-        for i, exp in enumerate([ref] + model_exps):
-            row_ims = []
-            for j, season in enumerate(self.season_order):
+        ref_cax = fig.add_subplot(grid[ref_cbar_spec])
+        diff_cax = fig.add_subplot(grid[diff_cbar_spec]) if diff_cbar_spec else None
+
+        ref_im = None
+        diff_im = None
+        for i in range(map_nrow):
+            for j in range(map_ncol):
+                if panel_layout == "season_rows":
+                    season = self.season_order[i]
+                    exp = ref if j == 0 else model_exps[j - 1]
+                else:
+                    exp = ([ref] + model_exps)[i]
+                    season = self.season_order[j]
+
                 if exp == ref:
                     plot_data = ref_data[season]
                     cmap = cmap1
@@ -258,7 +381,10 @@ class ClimatologyMapPlotter:
                     extend="both",
                     **kwargs,
                 )
-                row_ims.append(im)
+                if exp == ref and ref_im is None:
+                    ref_im = im
+                elif exp != ref and diff_im is None:
+                    diff_im = im
 
                 if exp == ref:
                     ax.set_title(f"{ref_display} ({season})", fontsize=font_size)
@@ -267,22 +393,8 @@ class ClimatologyMapPlotter:
                     model_data = all_fields[exp][season]
                     ref_on_model_grid = self._reference_on_model_grid(ref_data[season], model_data)
                     weights = self._area_weights_like(model_data)
-                    rmse = float(
-                        xs.rmse(
-                            model_data,
-                            ref_on_model_grid,
-                            dim=["lat", "lon"],
-                            weights=weights,
-                        )
-                    )
-                    pcor = float(
-                        xs.pearson_r(
-                            model_data,
-                            ref_on_model_grid,
-                            dim=["lat", "lon"],
-                            weights=weights,
-                        )
-                    )
+                    rmse = self._weighted_rmse(model_data, ref_on_model_grid, weights)
+                    pcor = self._weighted_pcor(model_data, ref_on_model_grid, weights)
                     ax.text(
                         0.98,
                         0.02,
@@ -291,30 +403,37 @@ class ClimatologyMapPlotter:
                         fontsize=font_size * 0.90,
                         va="bottom",
                         ha="right",
-                        bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.3"),
+                        bbox=dict(
+                            facecolor=(1.0, 1.0, 1.0, metric_box_alpha),
+                            edgecolor="black",
+                            boxstyle="round,pad=0.3",
+                        ),
                     )
 
-            im_handles.append(next((im for im in row_ims if im is not None), None))
+        unit_label = self.unit_map.get(var_name, var_name)
+        if ref_im is not None:
+            self._add_horizontal_colorbar(
+                fig,
+                ref_cax,
+                ref_im,
+                unit_label,
+                font_size,
+                label_position="top",
+            )
+        else:
+            ref_cax.set_visible(False)
 
-        bar_height = 0.01
-        bar_pad = 0.035
-        for i, im in enumerate(im_handles):
-            if im is None:
-                continue
-            row_bottom = 1.0 - (i + 1) * 0.22 + i * bar_pad
-            cax = fig.add_axes([0.1, row_bottom, 0.6, bar_height])
-            label = self.unit_map.get(var_name, var_name)
-            if center_zero and i > 0:
-                label = f"Bias ({label})"
-            cbar = fig.colorbar(im, cax=cax, orientation="horizontal", extend="both")
-            if hasattr(im, "levels"):
-                cbar.set_ticks(im.levels)
-            cbar.set_label(label, fontsize=font_size)
-            cbar.ax.tick_params(labelsize=font_size * 0.95)
-
-        fig.subplots_adjust(
-            left=0.05, right=0.95, top=0.94, bottom=0.08, wspace=0.2, hspace=0.15
-        )
+        if diff_im is not None and diff_cax is not None:
+            diff_label = f"Bias of {unit_label}" if center_zero else unit_label
+            self._add_horizontal_colorbar(
+                fig,
+                diff_cax,
+                diff_im,
+                diff_label,
+                font_size,
+            )
+        elif diff_cax is not None:
+            diff_cax.set_visible(False)
 
         if self.save_dir:
             self.save_dir.mkdir(parents=True, exist_ok=True)
