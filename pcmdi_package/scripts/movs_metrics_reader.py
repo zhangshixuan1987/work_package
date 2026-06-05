@@ -26,7 +26,7 @@ class MoVsMetricsReader:
         self.test_path = parameter["test_path"]
         
         self.mips = parameter["test_mip"]
-        self.tests = parameter["test_name"]
+        self.tests = parameter.get("test_highlight_models") or parameter["test_name"]
         self.caseids = parameter["test_id"]
 
         self.group = parameter["movs_group"]
@@ -41,6 +41,10 @@ class MoVsMetricsReader:
         self.exclude_models = parameter.get("exclude_models", [])
         self.error_norm = parameter.get("error_norm", "default")
         self.test_model_only = parameter.get("test_model_only", False)
+        self.show_mean_columns = parameter.get(
+            "show_mean_columns",
+            parameter.get("plot_mean_groups", True),
+        )
         
         self.ref_group = parameter["ref_group"]
         self.test_group = parameter["test_group"]
@@ -101,17 +105,19 @@ class MoVsMetricsReader:
         if merged_lib is None:
             raise ValueError("merged_lib is None")
 
-        all_highlights = set()
+        all_highlights: List[str] = []
         for stat, df in list(merged_lib.items()):
             df = pd.DataFrame(df)
             highlight_models = get_highlight_models(df.get("model", []), self.tests)
-            all_highlights.update(highlight_models)
+            for model in highlight_models:
+                if model not in all_highlights:
+                    all_highlights.append(model)
             for model in highlight_models:
                 for idx in df[df["model"] == model].index:
                     df = shift_row_to_bottom(df, idx)
             merged_lib[stat] = df.fillna(np.nan)
 
-        return sorted(all_highlights), merged_lib
+        return all_highlights, merged_lib
     
     def _exclude_models(
             self,
@@ -419,11 +425,11 @@ class MoVsMetricsReader:
 
         # --- Group means ---
         mean_model_list, ref_model_list, test_model_list = [], [], []
-        if ref_df_lib and getattr(self, "mean_group1_name", None):
+        if self.show_mean_columns and ref_df_lib and getattr(self, "mean_group1_name", None):
             merged_lib, ref_model_list = self._add_group_means(merged_lib, ref_df_lib, self.mean_group1_name, True)
             if self.mean_group1_name in ref_model_list:
                 mean_model_list.append(self.mean_group1_name)
-        if test_df_lib and getattr(self, "mean_group2_name", None):
+        if self.show_mean_columns and test_df_lib and getattr(self, "mean_group2_name", None):
             merged_lib, test_model_list = self._add_group_means(merged_lib, test_df_lib, self.mean_group2_name, True)
             if self.mean_group2_name in test_model_list:
                 mean_model_list.append(self.mean_group2_name)

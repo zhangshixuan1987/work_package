@@ -1,0 +1,183 @@
+{
+  "datasets": {
+    "LR": {
+      "name": "v3.LR.amip_0101",
+      "dir": "/lcrc/group/e3sm2/ac.qtang/E3SMv3",
+      "subdir": "post/atm/180x360_aave/cmip_ts/monthly"
+    },
+    "NARRM": {
+      "name": "v3.NARRM.amip_0101",
+      "dir": "/lcrc/group/e3sm2/ac.qtang/E3SMv3",
+      "subdir": "post/atm/180x360_aave/cmip_ts/monthly"
+    },
+    "NARRM_r0125": {
+      "name": "v3.NARRM_r0125.amip_0101",
+      "dir": "/lcrc/group/e3sm2/ac.qtang/E3SMv3",
+      "subdir": "post/atm/180x360_aave/cmip_ts/monthly"
+    },
+    "AMZRRM": {
+      "name": "v3.AMZRRM.amip_0101",
+      "dir": "/lcrc/group/e3sm2/ac.qtang/E3SMv3",
+      "subdir": "post/atm/180x360_aave/cmip_ts/monthly"
+    },
+    "EARRM": {
+      "name": "v3.EARRM.amip_0101",
+      "dir": "/lcrc/group/e3sm2/ac.qtang/E3SMv3",
+      "subdir": "post/atm/180x360_aave/cmip_ts/monthly"
+    }
+  },
+  "modes": {
+    "AMO": {
+      "type": "eof",
+      "eof_num": 1,
+      "var": "ts",
+      "lat_bnds": [0, 70],
+      "lon_bnds": [-80, 0],
+      "season": "annual",
+      "obs": {
+        "name": "HadISST2",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/HadISST2/ts_186901_202212.nc"
+      }
+    },
+    "PDO": {
+      "type": "eof",
+      "eof_num": 1,
+      "var": "ts",
+      "season": "annual",
+      "obs": {
+        "name": "HadISST2",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/HadISST2/ts_186901_202212.nc"
+      }
+    },
+    "NPGO": {
+      "type": "eof",
+      "eof_num": 2,
+      "var": "ts",
+      "season": "annual",
+      "obs": {
+        "name": "HadISST2",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/HadISST2/ts_186901_202212.nc"
+      }
+    },
+    "NAM": {
+      "type": "eof",
+      "eof_num": 1,
+      "var": "psl",
+      "lat_bnds": [20, 90],
+      "lon_bnds": [-180, 180],
+      "season": "DJF",
+      "obs": {
+        "name": "NOAA-20C",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/NOAA-20C/psl_183601_201512.nc"
+      }
+    },
+    "NAO": {
+      "type": "eof",
+      "eof_num": 1,
+      "var": "psl",
+      "lat_bnds": [20, 80],
+      "lon_bnds": [-80, 40],
+      "season": "DJF",
+      "obs": {
+        "name": "NOAA-20C",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/NOAA-20C/psl_183601_201512.nc"
+      }
+    },
+    "NPO": {
+      "type": "eof",
+      "eof_num": 2,
+      "var": "psl",
+      "lat_bnds": [20, 80],
+      "lon_bnds": [120, -120],
+      "season": "DJF",
+      "obs": {
+        "name": "NOAA-20C",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/NOAA-20C/psl_183601_201512.nc"
+      }
+    },
+    "PNA": {
+      "type": "eof",
+      "eof_num": 1,
+      "var": "psl",
+      "lat_bnds": [20, 80],
+      "lon_bnds": [120, -60],
+      "season": "DJF",
+      "obs": {
+        "name": "NOAA-20C",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/NOAA-20C/psl_183601_201512.nc"
+      }
+    },
+    "SAM": {
+      "type": "eof",
+      "eof_num": 1,
+      "var": "psl",
+      "lat_bnds": [-90, -20],
+      "lon_bnds": [-180, 180],
+      "season": "annual",
+      "obs": {
+        "name": "NOAA-20C",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/NOAA-20C/psl_183601_201512.nc"
+      }
+    },
+    "PSA1": {
+      "type": "eof",
+      "eof_num": 2,
+      "var": "psl",
+      "lat_bnds": [-90, -20],
+      "lon_bnds": [120, -60],
+      "season": "annual",
+      "obs": {
+        "name": "NOAA-20C",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/NOAA-20C/psl_183601_201512.nc"
+      }
+    },
+    "PSA2": {
+      "type": "eof",
+      "eof_num": 3,
+      "var": "psl",
+      "lat_bnds": [-90, -20],
+      "lon_bnds": [120, -60],
+      "season": "annual",
+      "obs": {
+        "name": "NOAA-20C",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/NOAA-20C/psl_183601_201512.nc"
+      }
+    },
+    "NINO3.4": {
+      "type": "index",
+      "var": "ts",
+      "lat_bnds": [-5, 5],
+      "lon_bnds": [-170, -120],
+      "season": "monthly",
+      "index_method": "area_mean",
+      "obs": {
+        "name": "HadISST2",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/HadISST2/ts_186901_202212.nc"
+      }
+    },
+    "NINO3": {
+      "type": "index",
+      "var": "ts",
+      "lat_bnds": [-5, 5],
+      "lon_bnds": [-150, -90],
+      "season": "monthly",
+      "index_method": "area_mean",
+      "obs": {
+        "name": "HadISST2",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/HadISST2/ts_186901_202212.nc"
+      }
+    },
+    "NINO4": {
+      "type": "index",
+      "var": "ts",
+      "lat_bnds": [-5, 5],
+      "lon_bnds": [160, -150],
+      "season": "monthly",
+      "index_method": "area_mean",
+      "obs": {
+        "name": "HadISST2",
+        "data": "/lcrc/group/e3sm/diagnostics/observations/obs4MIPs_PCMDI_monthly/HadISST2/ts_186901_202212.nc"
+      }
+    }
+  }
+}

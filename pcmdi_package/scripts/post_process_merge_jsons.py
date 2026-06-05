@@ -36,6 +36,9 @@ class CLIMJSONMerger:
         dry_run: bool = False,
         out_path: str = "./",
         member_dirs: Optional[List[str]] = None,
+        member_model_names: Optional[List[str]] = None,
+        member_case_ids: Optional[List[str]] = None,
+        member_output_names: Optional[List[str]] = None,
     ):
         self.mips = mips or ["cmip6"]
         self.exps = exps or ["historical"]
@@ -46,6 +49,9 @@ class CLIMJSONMerger:
         self.dry_run = dry_run
         self.out_path = Path(out_path)
         self.member_dirs = [Path(p) for p in (member_dirs or [])]
+        self.member_model_names = list(member_model_names or [])
+        self.member_case_ids = list(member_case_ids or [])
+        self.member_output_names = list(member_output_names or [])
         self.model_rename = model_rename
 
         # Fallback input root
@@ -85,8 +91,12 @@ class CLIMJSONMerger:
         var_glob = f"{var}.*.{mip}.{exp}.*.{self.case_id}.json"
 
         if self.member_dirs:
-            for root in self.member_dirs:
+            for idx, root in enumerate(self.member_dirs):
                 if root.is_dir():
+                    if idx < len(self.member_model_names):
+                        raw_case_id = self.member_case_ids[idx] if idx < len(self.member_case_ids) else self.case_id
+                        model_glob = f"{var}.*.{self.member_model_names[idx]}.{raw_case_id}.json"
+                        json_files.extend(sorted(root.glob(model_glob)))
                     json_files.extend(sorted(root.glob(var_glob)))
             in_desc = f"[members x{len(self.member_dirs)}] var={var}"
         else:
@@ -109,6 +119,7 @@ class CLIMJSONMerger:
                 self._log(f"  [{j+1}/{len(jsons)}] {path}")
             with path.open("r") as f:
                 d = json.load(f)
+            self._rename_member_result(d, path)
             if j == 0:
                 merged = d.copy()
             else:
@@ -263,14 +274,19 @@ class CLIMJSONMerger:
         token_glob = f"*.{mip}.{exp}.*.{self.case_id}.json"
 
         if self.member_dirs:
-            for root in self.member_dirs:
+            for idx, root in enumerate(self.member_dirs):
                 if not root.is_dir():
                     self._log(f"[CLIM][WARN] missing dir: {root}")
                     continue
-                for p in root.glob(token_glob):
-                    var = p.name.split(".", 1)[0]
-                    if var:
-                        vars_found.add(var)
+                patterns = [token_glob]
+                if idx < len(self.member_model_names):
+                    raw_case_id = self.member_case_ids[idx] if idx < len(self.member_case_ids) else self.case_id
+                    patterns.insert(0, f"*.{self.member_model_names[idx]}.{raw_case_id}.json")
+                for pattern in patterns:
+                    for p in root.glob(pattern):
+                        var = p.name.split(".", 1)[0]
+                        if var:
+                            vars_found.add(var)
             return sorted(vars_found)
 
         in_dir = Path(str(self.in_root_pattern).format(mip=mip, exp=exp))
@@ -283,6 +299,30 @@ class CLIMJSONMerger:
             if var:
                 vars_found.add(var)
         return sorted(vars_found)
+
+    def _member_index_for_path(self, path: Path) -> Optional[int]:
+        for idx, root in enumerate(self.member_dirs):
+            try:
+                path.relative_to(root)
+                return idx
+            except ValueError:
+                continue
+        return None
+
+    def _rename_member_result(self, data: Dict[str, Any], path: Path) -> None:
+        idx = self._member_index_for_path(path)
+        if idx is None or idx >= len(self.member_output_names):
+            return
+        results = data.get("RESULTS")
+        if not isinstance(results, dict) or not results:
+            return
+        old_keys = list(results.keys())
+        if len(old_keys) != 1:
+            return
+        old_key = old_keys[0]
+        new_key = self.member_output_names[idx]
+        if old_key != new_key:
+            results[new_key] = results.pop(old_key)
 
     @staticmethod
     def _filter_individual_jsons(paths: Iterable[Path]) -> List[Path]:
@@ -341,6 +381,9 @@ class MOVSJSONMerger:
         dry_run: bool = False,
         out_path: str = "./",
         member_dirs: Optional[List[str]] = None,
+        member_model_names: Optional[List[str]] = None,
+        member_case_ids: Optional[List[str]] = None,
+        member_output_names: Optional[List[str]] = None,
     ):
         self.mips = mips or ["cmip6"]
         self.exps = exps or ["historical"]
@@ -349,6 +392,9 @@ class MOVSJSONMerger:
 
         self.model_rename = model_rename
         self.member_dirs = [Path(p) for p in (member_dirs or [])]
+        self.member_model_names = list(member_model_names or [])
+        self.member_case_ids = list(member_case_ids or [])
+        self.member_output_names = list(member_output_names or [])
 
         self.movs_obses = movs_obses or []   # keep your explicit selection
         self.movs_modes = movs_modes or []   # keep your explicit selection
@@ -367,18 +413,27 @@ class MOVSJSONMerger:
     # =========================
     def merge_all(self) -> None:
         """Discover (mode, obs, mip, exp, eof) combos from member_dirs and merge each."""
-        combos = self._discover_combinations(
-            self.movs_modes,
-            self.movs_obses,
-            self.period,
-            self.case_id,
-            self.member_dirs,
-        )
+        if self.member_model_names:
+            combos = [
+                (mode, obs, mip, exp, None)
+                for mip in self.mips
+                for exp in self.exps
+                for mode, obs in zip(self.movs_modes, self.movs_obses)
+            ]
+        else:
+            combos = self._discover_combinations(
+                self.movs_modes,
+                self.movs_obses,
+                self.period,
+                self.case_id,
+                self.member_dirs,
+            )
 
         if self.verbose:
             self._log(f"[MOVS] discovered {len(combos)} (mode,obs,mip,exp,eof) combos")
         for (mode, obs, mip, exp, eof) in sorted(combos):
             try:
+                eof = eof or self._eof_for_mode(mode, obs)
                 final_dir = (self.out_path / mip / exp / self.case_id / mode / obs)  # FIX: Path
                 final_dir.mkdir(parents=True, exist_ok=True)
                 final_name = f"var_mode_{mode}.{eof}.{mip}.{exp}.allModels_allRuns.{self.period}.json"
@@ -392,6 +447,16 @@ class MOVSJSONMerger:
     # =========================
     # Core logic
     # =========================
+    @staticmethod
+    def _eof_for_mode(mode: str, obs: str) -> str:
+        eof_map = {
+            "NPO": "EOF2",
+            "NPGO": "EOF2",
+            "PSA1": "EOF2",
+            "PSA2": "EOF3",
+        }
+        return eof_map.get(mode, "EOF1")
+
     # ==========================================================
     # Rename RESULTS["model"] key (post-merge)
     # ==========================================================
@@ -515,9 +580,14 @@ class MOVSJSONMerger:
         json_files: List[Path] = []
         pattern = self.collect_glob.format(mode=mode, mip=mip, exp=exp, obs=obs, case_id=self.case_id)
 
-        for root in self.member_dirs:
+        for idx, root in enumerate(self.member_dirs):
             search_dir = root / mode / obs  # FIX: include variability_modes
-            json_files.extend(sorted(search_dir.glob(pattern)))
+            if idx < len(self.member_model_names):
+                raw_case_id = self.member_case_ids[idx] if idx < len(self.member_case_ids) else self.case_id
+                model_pattern = f"var_mode_{mode}.*.{self.member_model_names[idx]}.vs.{obs}.{raw_case_id}.json"
+                json_files.extend(sorted(search_dir.glob(model_pattern)))
+            else:
+                json_files.extend(sorted(search_dir.glob(pattern)))
 
         if not json_files:
             self._log(f"[skip] No files for {mip}/{exp}/{mode}/{obs} (pattern: {pattern})")
@@ -537,6 +607,7 @@ class MOVSJSONMerger:
         for idx, path in enumerate(files, start=1):
             with path.open("r") as f:
                 d = json.load(f)
+            self._rename_member_result(d, path)
             if idx == 1:
                 merged = d.copy()
             else:
@@ -617,6 +688,30 @@ class MOVSJSONMerger:
             kept.append(p)
         return kept
 
+    def _member_index_for_path(self, path: Path) -> Optional[int]:
+        for idx, root in enumerate(self.member_dirs):
+            try:
+                path.relative_to(root)
+                return idx
+            except ValueError:
+                continue
+        return None
+
+    def _rename_member_result(self, data: Dict[str, Any], path: Path) -> None:
+        idx = self._member_index_for_path(path)
+        if idx is None or idx >= len(self.member_output_names):
+            return
+        results = data.get("RESULTS")
+        if not isinstance(results, dict) or not results:
+            return
+        old_keys = list(results.keys())
+        if len(old_keys) != 1:
+            return
+        old_key = old_keys[0]
+        new_key = self.member_output_names[idx]
+        if old_key != new_key:
+            results[new_key] = results.pop(old_key)
+
     @staticmethod
     def _dict_merge(dct: Dict[str, Any], merge_dct: Dict[str, Any]) -> None:
         """Recursive dict merge (in-place)."""
@@ -656,6 +751,9 @@ class ENSOJSONMerger:
         skip_tokens: Optional[Iterable[str]] = None,
         out_path: str = "./",
         member_dirs: Optional[List[str]] = None,
+        member_model_names: Optional[List[str]] = None,
+        member_case_ids: Optional[List[str]] = None,
+        member_output_names: Optional[List[str]] = None,
     ):
         self.mips = mips or ["cmip6"]
         self.exps = exps or ["historical"]
@@ -664,6 +762,9 @@ class ENSOJSONMerger:
         self.pmprdir = Path(pmprdir)
         self.out_path = Path(out_path)
         self.member_dirs = [Path(p) for p in (member_dirs or [])]
+        self.member_model_names = list(member_model_names or [])
+        self.member_case_ids = list(member_case_ids or [])
+        self.member_output_names = list(member_output_names or [])
 
         self.model_rename = model_rename
         self.collections = collections or []
@@ -832,10 +933,15 @@ class ENSOJSONMerger:
 
         # Try both {member_dir}/{mc} and {member_dir}/{mc}/{obs}
         json_files: List[Path] = []
-        for root in self.member_dirs:
+        for idx, root in enumerate(self.member_dirs):
+            patterns = [pattern]
+            if idx < len(self.member_model_names):
+                raw_case_id = self.member_case_ids[idx] if idx < len(self.member_case_ids) else case_id
+                patterns.insert(0, f"{mc}.*.{self.member_model_names[idx]}.vs.{obs}.{raw_case_id}.json")
             for search_dir in (root / mc, root / mc / obs):
                 if search_dir.is_dir():
-                    json_files.extend(sorted(search_dir.glob(pattern)))
+                    for candidate_pattern in patterns:
+                        json_files.extend(sorted(search_dir.glob(candidate_pattern)))
 
         if not json_files:
             self._log(f"[ENSO][skip] No files for {mip}/{exp}/{mc}/{obs} (pattern: {pattern})")
@@ -856,6 +962,7 @@ class ENSOJSONMerger:
         for idx, path in enumerate(files, start=1):
             with path.open("r") as f:
                 d = json.load(f)
+            self._rename_member_result(d, path)
             if idx == 1:
                 merged = d.copy()
             else:
@@ -874,6 +981,33 @@ class ENSOJSONMerger:
             )
 
         return out_file
+
+    def _member_index_for_path(self, path: Path) -> Optional[int]:
+        for idx, root in enumerate(self.member_dirs):
+            try:
+                path.relative_to(root)
+                return idx
+            except ValueError:
+                continue
+        return None
+
+    def _rename_member_result(self, data: Dict[str, Any], path: Path) -> None:
+        idx = self._member_index_for_path(path)
+        if idx is None or idx >= len(self.member_output_names):
+            return
+        results_root = data.get("RESULTS")
+        if not isinstance(results_root, dict):
+            return
+        container = results_root.get("model") if isinstance(results_root.get("model"), dict) else results_root
+        if not isinstance(container, dict) or not container:
+            return
+        old_keys = list(container.keys())
+        if len(old_keys) != 1:
+            return
+        old_key = old_keys[0]
+        new_key = self.member_output_names[idx]
+        if old_key != new_key:
+            container[new_key] = container.pop(old_key)
 
     def merge_all(self) -> None:
         """Process all (mip, exp, mc, obs) pairs and write merged JSONs."""

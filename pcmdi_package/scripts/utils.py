@@ -80,20 +80,18 @@ def get_highlight_models(all_models, model_name):
     Returns:
         list: Ordered list of unique models to highlight.
     """
-    highlight_model1 = []
+    all_models = [str(model) for model in all_models]
+    requested_models = [str(model) for model in (model_name or [])]
 
     # First, collect all models that contain "e3sm" (case-insensitive)
     e3sm_models = [m for m in all_models if "e3sm" in m.lower()]
 
-    # Then collect models in model_name that are not already in e3sm_models
+    # Then collect explicit models in the order the caller provided them.
     additional_models = [
-        m for m in all_models if m in model_name and m not in e3sm_models
+        m for m in requested_models if m in all_models and m not in e3sm_models
     ]
 
-    # Combine both lists
-    highlight_model1 = e3sm_models + additional_models
-
-    return highlight_model1
+    return list(dict.fromkeys(e3sm_models + additional_models))
 
 
 def shift_row_to_bottom(df, index_to_shift):
@@ -334,4 +332,3 @@ def realign_cbar_and_legend(
     fig.canvas.draw_idle()
 
     return cbar  # <-- important when cbar_side="left"
-

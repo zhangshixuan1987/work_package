@@ -1,5 +1,7 @@
 import os
 import re
+import json
+import tempfile
 from collections import OrderedDict
 from typing import Any, Dict, List, Iterable, Optional, Tuple, Union
 
@@ -11,6 +13,7 @@ from matplotlib.patches import PathPatch
 from matplotlib.lines import Line2D
 
 from pcmdi_metrics.enso.lib import enso_portrait_plot
+from pcmdi_metrics.enso.lib.summary_plot_lib.plot import load_met_names
 from pcmdi_metrics.graphics import (
     normalize_by_median,
     parallel_coordinate_plot,
@@ -43,6 +46,65 @@ from utils import (
 logger = _setup_child_logger(__name__)
 
 
+def _filter_enso_json_for_supported_plot_metrics(
+    dict_json_path: Dict[str, Dict[str, str]],
+    tmpdir: str,
+) -> Dict[str, Dict[str, str]]:
+    """Copy ENSO JSONs and drop metrics unsupported by PCMDI's label map."""
+    _, met_names = load_met_names()
+    supported_metrics = set(met_names)
+    filtered_paths: Dict[str, Dict[str, str]] = {}
+
+    def filter_payload(obj: Any, removed: set[str]) -> Any:
+        if isinstance(obj, dict):
+            new_obj = {}
+            for key, value in obj.items():
+                if key == "value" and isinstance(value, dict):
+                    kept = {
+                        metric: filter_payload(metric_value, removed)
+                        for metric, metric_value in value.items()
+                        if metric in supported_metrics
+                    }
+                    removed.update(set(value) - set(kept))
+                    new_obj[key] = kept
+                else:
+                    new_obj[key] = filter_payload(value, removed)
+            return new_obj
+        if isinstance(obj, list):
+            return [filter_payload(item, removed) for item in obj]
+        return obj
+
+    for project, collection_paths in dict_json_path.items():
+        filtered_paths[project] = {}
+        for collection, json_path in collection_paths.items():
+            with open(json_path) as handle:
+                data = json.load(handle)
+
+            removed_metrics: set[str] = set()
+            filtered_data = filter_payload(data, removed_metrics)
+
+            out_path = os.path.join(
+                tmpdir,
+                project.replace("/", "_"),
+                collection,
+                os.path.basename(json_path),
+            )
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            with open(out_path, "w") as handle:
+                json.dump(filtered_data, handle, sort_keys=True, indent=4)
+            filtered_paths[project][collection] = out_path
+
+            if removed_metrics:
+                logger.info(
+                    "[enso] Dropped unsupported plot metrics for %s/%s: %s",
+                    project,
+                    collection,
+                    sorted(removed_metrics),
+                )
+
+    return filtered_paths
+
+
 class SyntheticMetricsPlotter:
     def __init__(
         self,
@@ -56,6 +118,7 @@ class SyntheticMetricsPlotter:
         save_data: bool,
         base_test_input_path: str,
         # --- everything after here has defaults ---
+        test_highlight_models: Optional[List[str]] = None,
         font_size: float = 20,
         legend_lw: float = 1.5, 
         figure_size: tuple[float, float] = (50.0, 20.0),
@@ -101,6 +164,8 @@ class SyntheticMetricsPlotter:
         highlight_cmip: bool = False,
         # Setup for visualization
         test_model_only: bool = False,
+        show_mean_columns: bool = True,
+        plot_mean_groups: Optional[bool] = None,
         movs_group: Optional[str] = None,
         exclude_vars: Optional[Dict[str, Any]] = None, 
         mean_group1_name: Optional[str] = None,
@@ -114,6 +179,7 @@ class SyntheticMetricsPlotter:
         self.test_group = test_group 
         self.test_mip = test_mip
         self.test_name = test_name
+        self.test_highlight_models = self._to_list(test_highlight_models)
         self.test_case_id = test_case_id
         self.test_table_id = test_table_id
         self.figure_format = figure_format
@@ -149,6 +215,9 @@ class SyntheticMetricsPlotter:
         self.clim_vars = self._to_list(clim_vars)  # [] => all available
         self.clim_regions = self._to_list(clim_regions)  # [] => all regions
         self.test_model_only = test_model_only
+        if plot_mean_groups is not None:
+            show_mean_columns = plot_mean_groups
+        self.show_mean_columns = bool(show_mean_columns)
         self.exclude_vars = exclude_vars or {}
         self.exclude_models = self._to_list(exclude_models)
         self.error_norm = error_norm if error_norm is not None else "default"
@@ -210,9 +279,11 @@ class SyntheticMetricsPlotter:
         param = OrderedDict({
             "test_mip": parsed_mip_names,
             "test_name": parsed_test_names,
+            "test_highlight_models": self.test_highlight_models or parsed_test_names,
             "test_id": parsed_case_ids,
             "test_tableID": self.test_table_id,
             "test_combined": self.test_combined,
+            "show_mean_columns": self.show_mean_columns,
             "test_group": self.test_group,
             "ref_group" : self.ref_group,
             "mean_group1_name": self.mean_group1_name,
@@ -350,6 +421,12 @@ class SyntheticMetricsPlotter:
             clim_vars=self.clim_vars,
             clim_regions=self.clim_regions,
         )
+        if self.test_highlight_models:
+            e3sm_list = [
+                model
+                for model in self.test_highlight_models
+                if model in set(test_list) or model in set(e3sm_list)
+            ]
         
         # Use the same `metric` variable as before (assuming it's defined in scope)
         for stat, diag_ in self.metric_dict[metric].items():
@@ -428,6 +505,12 @@ class SyntheticMetricsPlotter:
         # Collect metrics
         reader = MoVsMetricsReader(self.parameter)
         merge_lib, norm_lib, mode_season_list, ref_list, test_list, e3sm_list, mean_list = reader.collect_metrics() 
+        if self.test_highlight_models:
+            e3sm_list = [
+                model
+                for model in self.test_highlight_models
+                if model in set(test_list) or model in set(e3sm_list)
+            ]
         
         # Ensure metric exists in dictionary
         if metric not in self.metric_dict:
@@ -919,22 +1002,27 @@ def enso_plot_driver(
 
             outfile = f"{metric}_{stat}_portrait.{fig_format}"
             figure_name = os.path.join(outdir, outfile)
-    
-            fig, ref_info_dict = enso_portrait_plot(
-                metrics_collections, 
-                list_project, 
-                list_obs, 
-                dict_json_path, 
-                figure_name=figure_name, 
-                reduced_set=reduced_set,
-                #met_order=met_order,
-                #mod_order=mod_order,
-                sort_y_names=sort_y_names, 
-                show_proj_means=show_proj_means, 
-                show_ref_row=show_ref_row, 
-                show_alt_obs_rows=show_alt_obs_rows,
-                #highlight_cmip = highlight_cmip,
-            )
+
+            with tempfile.TemporaryDirectory(prefix="enso-plot-json-") as tmpdir:
+                plot_json_path = _filter_enso_json_for_supported_plot_metrics(
+                    dict_json_path,
+                    tmpdir,
+                )
+                fig, ref_info_dict = enso_portrait_plot(
+                    metrics_collections, 
+                    list_project, 
+                    list_obs, 
+                    plot_json_path, 
+                    figure_name=figure_name, 
+                    reduced_set=reduced_set,
+                    #met_order=met_order,
+                    #mod_order=mod_order,
+                    sort_y_names=sort_y_names, 
+                    show_proj_means=show_proj_means, 
+                    show_ref_row=show_ref_row, 
+                    show_alt_obs_rows=show_alt_obs_rows,
+                    #highlight_cmip = highlight_cmip,
+                )
 
     return
 
@@ -1051,18 +1139,30 @@ def portrait_metric_plot(
     for m in meanx_list: 
         if m in run_list and m not in highlight_models:
             highlight_models.append(m)
+    logger.info("[Portrait] Highlighted model order: %s", highlight_models)
     
     # --- REORDER COLUMNS (minimal, but critical for the separator lines) ---
-    # Keep original order for each bucket: regular -> highlighted(non-mean) -> means
+    # Keep regular models in source order, but honor caller-provided order for
+    # highlighted test models and mean columns.
     run_index = {m: i for i, m in enumerate(run_list)}
     hi_set = set(highlight_models)
     mean_set = set(mean_list)
 
     regular = [m for m in run_list if m not in hi_set]
-    hi_non_means = [m for m in run_list if (m in hi_set and m not in mean_set)]
-    means = [m for m in run_list if m in mean_set and m in hi_set]
+    hi_non_means = [
+        m for m in highlight_models
+        if m in run_index and m not in mean_set
+    ]
+    means = [
+        m for m in mean_list
+        if m in run_index and m in hi_set
+    ]
+    remaining_highlights = [
+        m for m in run_list
+        if m in hi_set and m not in set(hi_non_means) and m not in set(means)
+    ]
 
-    new_run_list = regular + hi_non_means + means
+    new_run_list = regular + hi_non_means + remaining_highlights + means
     reindex = [run_index[m] for m in new_run_list]
 
     # Reindex along the last axis (models live on the x-axis)
@@ -1569,5 +1669,3 @@ def parcoord_metric_plot(
     fig.savefig(os.path.join(outdir, outfile), facecolor="w", bbox_inches="tight")
     plt.close(fig)
     return
-
-

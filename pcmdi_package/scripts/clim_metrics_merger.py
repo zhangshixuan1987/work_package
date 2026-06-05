@@ -21,7 +21,7 @@ class ClimMetricsMerger:
         reference_alias: Optional[Dict[str, str]] = None,
         units_all: Optional[Dict[str, str]] = None,
     ):
-        self.model_names = parameter["test_name"]
+        self.model_names = parameter.get("test_highlight_models") or parameter["test_name"]
         self.ref_group = parameter["ref_group"]
         self.test_group = parameter["test_group"]
         self.mean_group1_name = parameter.get("mean_group1_name", self.ref_group)
@@ -29,6 +29,10 @@ class ClimMetricsMerger:
         self.unit_check = parameter.get("unit_check", True)
         self.error_norm = parameter.get("error_norm", "default")
         self.test_model_only = parameter.get("test_model_only", False)
+        self.show_mean_columns = parameter.get(
+            "show_mean_columns",
+            parameter.get("plot_mean_groups", True),
+        )
         
         # set aliases/units, honoring user-provided dicts if given
         if reference_alias is None:
@@ -321,7 +325,7 @@ class ClimMetricsMerger:
         if merged_lib is None:
             raise ValueError("merged_lib is None")
 
-        all_highlights = set()
+        all_highlights: List[str] = []
         for stat, seasons in merged_lib.df_dict.items():
             for season, regions in seasons.items():
                 for region, df in regions.items():
@@ -329,13 +333,15 @@ class ClimMetricsMerger:
                     highlight_models = get_highlight_models(
                         df.get("model", []), self.model_names
                     )
-                    all_highlights.update(highlight_models)
+                    for model in highlight_models:
+                        if model not in all_highlights:
+                            all_highlights.append(model)
                     for model in highlight_models:
                         for idx in df[df["model"] == model].index:
                             df = shift_row_to_bottom(df, idx)
                     merged_lib.df_dict[stat][season][region] = df.fillna(np.nan)
 
-        return sorted(all_highlights), merged_lib
+        return all_highlights, merged_lib
 
     def _add_group_means(self, data_lib, mean_lib, mean_name, overwrite=True):
         """
@@ -448,14 +454,14 @@ class ClimMetricsMerger:
         ref_model_list: List[str] = []    # contributors used for reference mean + mean_name (per your _add_group_means)
         test_model_list: List[str] = []   # contributors used for test mean + mean_name
 
-        if ref_lib is not None and getattr(self, "mean_group1_name", None):
+        if self.show_mean_columns and ref_lib is not None and getattr(self, "mean_group1_name", None):
             merged_lib, ref_model_list = self._add_group_means(
                 merged_lib, ref_lib, mean_name=self.mean_group1_name, overwrite=True
             )
             if self.mean_group1_name in ref_model_list:
                 mean_model_list.append(self.mean_group1_name)
 
-        if model_lib is not None and getattr(self, "mean_group2_name", None):
+        if self.show_mean_columns and model_lib is not None and getattr(self, "mean_group2_name", None):
             merged_lib, test_model_list = self._add_group_means(
                 merged_lib, model_lib, mean_name=self.mean_group2_name, overwrite=True
             )
@@ -477,4 +483,3 @@ class ClimMetricsMerger:
             e3sm_model_list,
             mean_model_list,
         )
-
