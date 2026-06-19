@@ -486,6 +486,38 @@ class ExtrapropicalModeMapPlotter:
             else:
                 pval_panels.append(None)
 
+        # Align all models globally to obs grid first to avoid edge-interpolation artifacts.
+        obs_map_aligned = panels[0][1].transpose(self.lat_name, self.lon_name)
+        panels[0] = (panels[0][0], obs_map_aligned)
+        for idx in range(1, len(panels)):
+            name, da = panels[idx]
+            da = da.transpose(self.lat_name, self.lon_name)
+            if not (
+                da[self.lon_name].size == obs_map_aligned[self.lon_name].size
+                and da[self.lat_name].size == obs_map_aligned[self.lat_name].size
+                and np.allclose(da[self.lon_name].values, obs_map_aligned[self.lon_name].values, atol=1e-6)
+                and np.allclose(da[self.lat_name].values, obs_map_aligned[self.lat_name].values, atol=1e-6)
+            ):
+                da = da.interp({self.lon_name: obs_map_aligned[self.lon_name], self.lat_name: obs_map_aligned[self.lat_name]})
+            else:
+                da = da.assign_coords({self.lon_name: obs_map_aligned[self.lon_name], self.lat_name: obs_map_aligned[self.lat_name]})
+            panels[idx] = (name, da)
+
+        for idx, pval in enumerate(pval_panels):
+            if pval is None:
+                continue
+            pval = pval.transpose(self.lat_name, self.lon_name)
+            if not (
+                pval[self.lon_name].size == obs_map_aligned[self.lon_name].size
+                and pval[self.lat_name].size == obs_map_aligned[self.lat_name].size
+                and np.allclose(pval[self.lon_name].values, obs_map_aligned[self.lon_name].values, atol=1e-6)
+                and np.allclose(pval[self.lat_name].values, obs_map_aligned[self.lat_name].values, atol=1e-6)
+            ):
+                pval = pval.interp({self.lon_name: obs_map_aligned[self.lon_name], self.lat_name: obs_map_aligned[self.lat_name]})
+            else:
+                pval = pval.assign_coords({self.lon_name: obs_map_aligned[self.lon_name], self.lat_name: obs_map_aligned[self.lat_name]})
+            pval_panels[idx] = pval
+
         if region_lat_bounds is None and region_lon_bounds is None:
             obs0 = self._normalize_lon_for_bounds(obs_map, "0_360")
             panels_plot.append((panels[0][0], obs0))
@@ -511,6 +543,38 @@ class ExtrapropicalModeMapPlotter:
                 )
 
         obs_plot = panels_plot[0][1]
+        obs_plot = obs_plot.transpose(self.lat_name, self.lon_name)
+        panels_plot[0] = (panels_plot[0][0], obs_plot)
+        for idx in range(1, len(panels_plot)):
+            name, da = panels_plot[idx]
+            da = da.transpose(self.lat_name, self.lon_name)
+            if not (
+                da[self.lon_name].size == obs_plot[self.lon_name].size
+                and da[self.lat_name].size == obs_plot[self.lat_name].size
+                and np.allclose(da[self.lon_name].values, obs_plot[self.lon_name].values, atol=1e-6)
+                and np.allclose(da[self.lat_name].values, obs_plot[self.lat_name].values, atol=1e-6)
+            ):
+                da = da.interp({self.lon_name: obs_plot[self.lon_name], self.lat_name: obs_plot[self.lat_name]})
+            else:
+                # Snap coordinates exactly to obs grid to avoid downstream mismatches.
+                da = da.assign_coords({self.lon_name: obs_plot[self.lon_name], self.lat_name: obs_plot[self.lat_name]})
+            panels_plot[idx] = (name, da.transpose(self.lat_name, self.lon_name))
+
+        for idx, pval in enumerate(pvals_plot):
+            if pval is None:
+                continue
+            pval = pval.transpose(self.lat_name, self.lon_name)
+            if not (
+                pval[self.lon_name].size == obs_plot[self.lon_name].size
+                and pval[self.lat_name].size == obs_plot[self.lat_name].size
+                and np.allclose(pval[self.lon_name].values, obs_plot[self.lon_name].values, atol=1e-6)
+                and np.allclose(pval[self.lat_name].values, obs_plot[self.lat_name].values, atol=1e-6)
+            ):
+                pval = pval.interp({self.lon_name: obs_plot[self.lon_name], self.lat_name: obs_plot[self.lat_name]})
+            else:
+                pval = pval.assign_coords({self.lon_name: obs_plot[self.lon_name], self.lat_name: obs_plot[self.lat_name]})
+            pvals_plot[idx] = pval.transpose(self.lat_name, self.lon_name)
+
         lat_plot = obs_plot[self.lat_name].values
         lon_plot = obs_plot[self.lon_name].values
 

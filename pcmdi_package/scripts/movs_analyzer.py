@@ -262,6 +262,10 @@ class BaseModeAnalysis:
             return None
 
         out_da = out[var_name]
+        # Copy attributes from original DataArray to preserve units
+        for k, v in da.attrs.items():
+            if k not in out_da.attrs:
+                out_da.attrs[k] = v
         out_da.attrs["_pcmdi_parent_dataset"] = out
         out_da.attrs["preprocessing"] = "pcmdi_metrics.adjust_timeseries"
         return out_da
@@ -295,6 +299,10 @@ class BaseModeAnalysis:
             print(f"  PCMDI region_subset unavailable for this field ({exc}); using local subset.")
             return None
         out_da = out[var_name]
+        # Copy attributes from original DataArray to preserve units
+        for k, v in da.attrs.items():
+            if k not in out_da.attrs:
+                out_da.attrs[k] = v
         out_da.attrs["_pcmdi_parent_dataset"] = out
         return out_da
 
