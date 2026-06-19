@@ -431,6 +431,8 @@ class ExtrapropicalModeMapPlotter:
         obs_map: xr.DataArray,
         model_stack: xr.DataArray,     # (member, lat, lon)
         member_labels: Sequence[str],
+        obs_pval_map: Optional[xr.DataArray] = None,
+        model_pval_stack: Optional[xr.DataArray] = None,
         member_dim: str = "member",
         filename: str = "mode_multimodel.pdf",
         cmap: str = "RdBu_r",
@@ -451,8 +453,15 @@ class ExtrapropicalModeMapPlotter:
         yticks: Optional[np.ndarray] = None,
         mlevels: Optional[Sequence[float]] = None,
         nlevels: int = 17,
+        cbar_ticks: Optional[Sequence[float]] = None,
+        cbar_tick_labels: Optional[Sequence[str]] = None,
         cbar_label: str = "EOF pattern (units as provided)",
         extent_override: Optional[Tuple[float, float, float, float]] = None,
+        show_significance: bool = False,
+        sig_level: float = 0.05,
+        dot_color: str = "k",
+        dot_size: float = 0.8,
+        dot_density: int = 2,
     ):
         """
         Plot Obs + each model in a (nrows x ncols) grid with per-panel r/RMSE annotations.
@@ -460,7 +469,7 @@ class ExtrapropicalModeMapPlotter:
         region_* provided → crop maps and compute stats over that region.
         region_* None     → global plotting + global stats.
         """
-        panels: List[Tuple[str, xr.DataArray]] = [("Obs", obs_map)]
+        panels: List[Tuple[str, xr.DataArray]] = [(self._panel_label(self.obs_key), obs_map)]
         for i in range(model_stack.sizes[member_dim]):
             panels.append((member_labels[i], model_stack.isel({member_dim: i})))
 
@@ -469,15 +478,37 @@ class ExtrapropicalModeMapPlotter:
         nrows = int(math.ceil(n_panels / ncols))
 
         panels_plot: List[Tuple[str, xr.DataArray]] = []
+        pvals_plot: List[Optional[xr.DataArray]] = []
+        pval_panels: List[Optional[xr.DataArray]] = [obs_pval_map]
+        for i in range(model_stack.sizes[member_dim]):
+            if model_pval_stack is not None and i < model_pval_stack.sizes.get(member_dim, 0):
+                pval_panels.append(model_pval_stack.isel({member_dim: i}))
+            else:
+                pval_panels.append(None)
+
         if region_lat_bounds is None and region_lon_bounds is None:
             obs0 = self._normalize_lon_for_bounds(obs_map, "0_360")
-            panels_plot.append(("Obs", obs0))
+            panels_plot.append((panels[0][0], obs0))
+            pvals_plot.append(
+                self._normalize_lon_for_bounds(obs_pval_map, "0_360")
+                if obs_pval_map is not None else None
+            )
             for i in range(model_stack.sizes[member_dim]):
                 da = self._normalize_lon_for_bounds(model_stack.isel({member_dim: i}), "0_360")
                 panels_plot.append((member_labels[i], da))
+                pval = pval_panels[i + 1]
+                pvals_plot.append(
+                    self._normalize_lon_for_bounds(pval, "0_360")
+                    if pval is not None else None
+                )
         else:
-            for name, da in panels:
+            for idx, (name, da) in enumerate(panels):
                 panels_plot.append((name, self._subset_latlon(da, region_lat_bounds, region_lon_bounds, lon_convention)))
+                pval = pval_panels[idx]
+                pvals_plot.append(
+                    self._subset_latlon(pval, region_lat_bounds, region_lon_bounds, lon_convention)
+                    if pval is not None else None
+                )
 
         obs_plot = panels_plot[0][1]
         lat_plot = obs_plot[self.lat_name].values
@@ -536,6 +567,28 @@ class ExtrapropicalModeMapPlotter:
                 lon_plot, lat_plot, da.values,
                 levels=mlevels_arr, colors="k", linewidths=0.3, transform=data_crs,
             )
+            if show_significance and pvals_plot[p] is not None:
+                pval = pvals_plot[p]
+                if not (
+                    np.array_equal(pval[self.lon_name].values, lon_plot)
+                    and np.array_equal(pval[self.lat_name].values, lat_plot)
+                ):
+                    pval = pval.interp({self.lon_name: lon_plot, self.lat_name: lat_plot})
+                sig_mask = np.isfinite(pval.values) & (pval.values < sig_level)
+                lat_idx = np.arange(0, len(lat_plot), max(1, int(dot_density)))
+                lon_idx = np.arange(0, len(lon_plot), max(1, int(dot_density)))
+                mask_sub = sig_mask[np.ix_(lat_idx, lon_idx)]
+                lon2d, lat2d = np.meshgrid(lon_plot[lon_idx], lat_plot[lat_idx])
+                ax.scatter(
+                    lon2d[mask_sub],
+                    lat2d[mask_sub],
+                    s=dot_size,
+                    c=dot_color,
+                    marker=".",
+                    linewidths=0,
+                    transform=data_crs,
+                    zorder=5,
+                )
             ax.coastlines(linewidth=0.6)
             ax.set_extent(extent, crs=data_crs)
             ax.set_xticks(xticks, crs=data_crs)
@@ -548,9 +601,9 @@ class ExtrapropicalModeMapPlotter:
             if p > 0:
                 r0, rmse0 = self._weighted_corr_rmse(panels_plot[0][1].values, da.values, w2d=w2d)
                 ax.text(
-                    0.98, 0.98, f"r = {r0:.2f}\nRMSE = {rmse0:.2f}",
-                    transform=ax.transAxes, ha="right", va="top", fontsize=fontz * 0.9,
-                    bbox=dict(facecolor="white", edgecolor="0.7", alpha=0.9, boxstyle="round,pad=0.25"),
+                    0.05, 0.05, f"PCC = {r0:.2f}\nRMSE = {rmse0:.2f}",
+                    transform=ax.transAxes, ha="left", va="bottom", fontsize=fontz * 0.9,
+                    bbox=dict(facecolor="white", edgecolor="0.7", alpha=0.5, boxstyle="round,pad=0.25"),
                 )
 
             if (p % ncols) == 0:
@@ -559,7 +612,21 @@ class ExtrapropicalModeMapPlotter:
 
         fig.subplots_adjust(left=0.06, right=0.98, top=0.92, bottom=0.12, wspace=wspace, hspace=hspace)
 
-        cbar = fig.colorbar(im_last, ax=axes, orientation="horizontal", fraction=0.05, pad=cb_pad, aspect=45)
+        cbar = fig.colorbar(
+            im_last,
+            ax=axes,
+            orientation="horizontal",
+            fraction=0.05,
+            pad=cb_pad,
+            aspect=45,
+            ticks=cbar_ticks,
+        )
+        if cbar_tick_labels is not None:
+            if cbar_ticks is None:
+                raise ValueError("cbar_tick_labels requires cbar_ticks.")
+            if len(cbar_tick_labels) != len(cbar_ticks):
+                raise ValueError("cbar_tick_labels must have the same length as cbar_ticks.")
+            cbar.ax.set_xticklabels(cbar_tick_labels)
         cbar.ax.tick_params(labelsize=fontz * 0.85)
         cbar.set_label(cbar_label, fontsize=fontz)
 
@@ -585,10 +652,11 @@ class ExtrapropicalModeMapPlotter:
         lon_convention: str = "negpos",
         central_lon: float = 0.0,
         cbar_label: str = "EOF pattern (units as provided)",
+        title: Optional[str] = None,
         **kwargs,
     ):
         return self.plot_multimodel_panel_with_stats(
-            title=f"{mode} pattern — {token}",
+            title=title or f"{mode} pattern — {token}",
             obs_map=obs_map,
             model_stack=model_stack,
             member_labels=member_labels,
@@ -612,10 +680,11 @@ class ExtrapropicalModeMapPlotter:
         filename: str,
         central_lon: float = 180.0,
         cbar_label: str = "Teleconnection slope (units as provided)",
+        title: Optional[str] = None,
         **kwargs,
     ):
         return self.plot_multimodel_panel_with_stats(
-            title=f"{mode} teleconnection — {token}",
+            title=title or f"{mode} teleconnection — {token}",
             obs_map=obs_map,
             model_stack=model_stack,
             member_labels=member_labels,
@@ -627,3 +696,460 @@ class ExtrapropicalModeMapPlotter:
             cbar_label=cbar_label,
             **kwargs,
         )
+
+class MultimodelPCTimeSeriesPlotter:
+    def __init__(
+        self,
+        fig_dir: str,
+        plot_dict: Dict[str, dict],
+        group_order: Sequence[str] = ("hist",),
+        obs_key: str = "reference",
+    ):
+        self.fig_dir = fig_dir
+        self.plot_dict = plot_dict
+        self.group_order = tuple(group_order)
+        self.obs_key = obs_key
+        os.makedirs(self.fig_dir, exist_ok=True)
+
+    def _panel_label(self, key: str) -> str:
+        return self.plot_dict.get(key, {}).get("label", key)
+
+    def plot_multimodel_pc_timeseries_with_stats(
+        self,
+        mode,
+        token,
+        obs_pc,
+        model_stack,
+        member_labels,
+        filename,
+        **kwargs,
+    ):
+        from scipy import stats
+
+        cfg = dict(
+            pc_var="pc_proj",
+            member_dim="member",
+
+            obs_label=None,
+            model_styles={},
+
+            figsize=(14, 6),
+            fontz=18,
+            fig_dpi=400,
+            fig_format="pdf",
+
+            obs_bar_width=0.80,
+            obs_bar_alpha=0.18,
+            obs_bar_color="black",
+            obs_bar_edgecolor="black",
+            obs_bar_linewidth=0.8,
+
+            linewidth_model=2.3,
+            markersize=6.0,
+            markeredgewidth=1.0,
+            alpha_model=0.95,
+
+            use_time_coord=True,
+            time_coord_offset=0,
+            xtick_step=2,
+            xtick_start=None,
+            xtick_end=None,
+            xlim=None,
+            sort_by_corr=True,
+
+            zero_line_color="0.25",
+            zero_linewidth=1.2,
+            zero_linestyle="--",
+            zero_alpha=0.85,
+
+            grid=True,
+            grid_axis="y",
+            grid_linestyle="--",
+            grid_linewidth=0.6,
+            grid_alpha=0.35,
+
+            legend_below=True,
+            legend_frameon=True,
+            legend_edgecolor="black",
+            legend_facecolor="white",
+            legend_framealpha=1.0,
+            legend_ncol=3,
+
+            legend_stat="corr",
+            show_corr=True,
+            show_corr_significance=True,
+            show_corr_pvalue=False,
+
+            ylim=None,
+            xlabel="Time",
+            ylabel="Standardized PC",
+            title=None,
+            corr_prefix="r",
+            corr_fmt="{:.2f}",
+            corr_label_style="paren",
+        )
+        cfg.update(kwargs)
+
+        if cfg["obs_label"] is None:
+            cfg["obs_label"] = self._panel_label(self.obs_key)
+
+        obs_raw = self._as_1d(obs_pc)
+        obs_vals = self._standardize(obs_raw)
+        obs_x = self._time_coord(obs_pc, fallback_size=obs_vals.size) if cfg["use_time_coord"] else np.arange(obs_vals.size)
+        obs_x = self._offset_time_coord(obs_x, cfg["time_coord_offset"])
+
+        fig, ax = plt.subplots(figsize=cfg["figsize"])
+
+        ax.bar(
+            obs_x,
+            obs_vals,
+            width=cfg["obs_bar_width"],
+            color=cfg["obs_bar_color"],
+            edgecolor=cfg["obs_bar_edgecolor"],
+            linewidth=cfg["obs_bar_linewidth"],
+            alpha=cfg["obs_bar_alpha"],
+            label=cfg["obs_label"],
+            zorder=1,
+        )
+
+        model_records = []
+        for i, label in enumerate(member_labels):
+            pc = self._select_member(
+                model_stack,
+                i,
+                label,
+                member_dim=cfg["member_dim"],
+            )
+            model_raw = self._as_1d(pc)
+            model_vals = self._standardize(model_raw)
+            model_x = self._time_coord(pc, fallback_size=model_vals.size) if cfg["use_time_coord"] else np.arange(model_vals.size)
+            model_x = self._offset_time_coord(model_x, cfg["time_coord_offset"])
+            r, p = self._corr_p_aligned(obs_vals, model_vals, obs_x, model_x)
+            std_ratio = self._std_ratio_aligned(obs_raw, model_raw, obs_x, model_x)
+            var_ratio = std_ratio**2 if np.isfinite(std_ratio) else np.nan
+            model_records.append((label, model_x, model_vals, r, p, std_ratio, var_ratio))
+
+        if cfg["sort_by_corr"]:
+            model_records = sorted(
+                model_records,
+                key=lambda item: -999.0 if not np.isfinite(item[3]) else item[3],
+            )
+
+        for label, model_x, model_vals, r, p, std_ratio, var_ratio in model_records:
+            style = cfg["model_styles"].get(label, {})
+            plot_label = self._build_label(
+                label,
+                r,
+                p,
+                std_ratio=std_ratio,
+                var_ratio=var_ratio,
+                legend_stat=cfg["legend_stat"],
+                show_corr=cfg["show_corr"],
+                show_corr_significance=cfg["show_corr_significance"],
+                show_corr_pvalue=cfg["show_corr_pvalue"],
+                corr_prefix=cfg["corr_prefix"],
+                corr_fmt=cfg["corr_fmt"],
+                corr_label_style=cfg["corr_label_style"],
+            )
+
+            ax.plot(
+                model_x,
+                model_vals,
+                color=style.get("color", None),
+                linestyle=style.get("linestyle", "-"),
+                marker=style.get("marker", "o"),
+                linewidth=cfg["linewidth_model"],
+                markersize=cfg["markersize"],
+                markeredgewidth=cfg["markeredgewidth"],
+                alpha=cfg["alpha_model"],
+                label=plot_label,
+                zorder=3,
+            )
+
+        ax.axhline(
+            0.0,
+            color=cfg["zero_line_color"],
+            linewidth=cfg["zero_linewidth"],
+            linestyle=cfg["zero_linestyle"],
+            alpha=cfg["zero_alpha"],
+        )
+        ax.set_xlabel(cfg["xlabel"], fontsize=cfg["fontz"])
+        ax.set_ylabel(cfg["ylabel"], fontsize=cfg["fontz"])
+        ax.tick_params(labelsize=cfg["fontz"] - 2)
+
+        if cfg["ylim"] is not None:
+            ax.set_ylim(cfg["ylim"])
+
+        if cfg["grid"]:
+            ax.grid(
+                True,
+                axis=cfg["grid_axis"],
+                linestyle=cfg["grid_linestyle"],
+                linewidth=cfg["grid_linewidth"],
+                alpha=cfg["grid_alpha"],
+            )
+
+        if cfg["xlim"] is not None:
+            ax.set_xlim(cfg["xlim"])
+
+        self._set_time_ticks(
+            ax,
+            obs_x,
+            cfg["xtick_step"],
+            start=cfg["xtick_start"],
+            end=cfg["xtick_end"],
+            xlim=cfg["xlim"],
+        )
+
+        title = cfg["title"] or f"{mode} {token} standardized {cfg['pc_var']} time series"
+        ax.set_title(title, fontsize=cfg["fontz"])
+
+        self._add_legend(ax, cfg)
+
+        fig.tight_layout()
+        if cfg["legend_below"]:
+            fig.subplots_adjust(bottom=0.25)
+
+        outpath = os.path.join(self.fig_dir, filename)
+        fig.savefig(
+            outpath,
+            dpi=cfg["fig_dpi"],
+            format=cfg["fig_format"],
+            bbox_inches="tight",
+        )
+        plt.close(fig)
+
+        print(f"Saved: {outpath}")
+        return fig, ax
+
+    @staticmethod
+    def _as_1d(da):
+        vals = np.asarray(da).squeeze()
+        return vals.astype(float)
+
+    @staticmethod
+    def _standardize(x):
+        x = np.asarray(x, dtype=float)
+        out = np.full(x.shape, np.nan)
+        mask = np.isfinite(x)
+
+        if mask.sum() < 2:
+            return out
+
+        std = x[mask].std()
+        if not np.isfinite(std) or std == 0:
+            return out
+
+        out[mask] = (x[mask] - x[mask].mean()) / std
+        return out
+
+    @staticmethod
+    def _corr_p(x, y):
+        from scipy import stats
+
+        mask = np.isfinite(x) & np.isfinite(y)
+        if mask.sum() < 3:
+            return np.nan, np.nan
+
+        r, p = stats.pearsonr(x[mask], y[mask])
+        return r, p
+
+    @classmethod
+    def _corr_p_aligned(cls, ref_vals, test_vals, ref_time, test_time):
+        ref_vals = np.asarray(ref_vals, dtype=float).ravel()
+        test_vals = np.asarray(test_vals, dtype=float).ravel()
+        ref_time = np.asarray(ref_time).ravel()
+        test_time = np.asarray(test_time).ravel()
+
+        if ref_time.size == ref_vals.size and test_time.size == test_vals.size:
+            common_time = np.intersect1d(ref_time, test_time)
+            if common_time.size >= 3:
+                ref_by_time = dict(zip(ref_time, ref_vals))
+                test_by_time = dict(zip(test_time, test_vals))
+                ref_aligned = np.asarray([ref_by_time[t] for t in common_time], dtype=float)
+                test_aligned = np.asarray([test_by_time[t] for t in common_time], dtype=float)
+                return cls._corr_p(ref_aligned, test_aligned)
+
+        n = min(ref_vals.size, test_vals.size)
+        return cls._corr_p(ref_vals[:n], test_vals[:n])
+
+    @classmethod
+    def _std_ratio_aligned(cls, ref_vals, test_vals, ref_time, test_time):
+        ref_vals, test_vals = cls._align_by_time_or_length(ref_vals, test_vals, ref_time, test_time)
+        mask = np.isfinite(ref_vals) & np.isfinite(test_vals)
+        if mask.sum() < 2:
+            return np.nan
+
+        ref_std = np.nanstd(ref_vals[mask])
+        test_std = np.nanstd(test_vals[mask])
+        if not np.isfinite(ref_std) or ref_std == 0 or not np.isfinite(test_std):
+            return np.nan
+
+        return test_std / ref_std
+
+    @staticmethod
+    def _align_by_time_or_length(ref_vals, test_vals, ref_time, test_time):
+        ref_vals = np.asarray(ref_vals, dtype=float).ravel()
+        test_vals = np.asarray(test_vals, dtype=float).ravel()
+        ref_time = np.asarray(ref_time).ravel()
+        test_time = np.asarray(test_time).ravel()
+
+        if ref_time.size == ref_vals.size and test_time.size == test_vals.size:
+            common_time = np.intersect1d(ref_time, test_time)
+            if common_time.size >= 2:
+                ref_by_time = dict(zip(ref_time, ref_vals))
+                test_by_time = dict(zip(test_time, test_vals))
+                return (
+                    np.asarray([ref_by_time[t] for t in common_time], dtype=float),
+                    np.asarray([test_by_time[t] for t in common_time], dtype=float),
+                )
+
+        n = min(ref_vals.size, test_vals.size)
+        return ref_vals[:n], test_vals[:n]
+
+    @staticmethod
+    def _sig_marker(p):
+        if not np.isfinite(p):
+            return ""
+        if p < 0.05:
+            return "**"
+        if p < 0.10:
+            return "*"
+        return ""
+
+    def _build_label(
+        self,
+        label,
+        r,
+        p,
+        *,
+        std_ratio=np.nan,
+        var_ratio=np.nan,
+        legend_stat="corr",
+        show_corr=True,
+        show_corr_significance=True,
+        show_corr_pvalue=False,
+        corr_prefix="r",
+        corr_fmt="{:.2f}",
+        corr_label_style="paren",
+    ):
+        plot_label = str(label)
+        
+        if legend_stat == "std_ratio":
+            if not np.isfinite(std_ratio):
+                return label
+            return rf"{label} ($\sigma/\sigma_{{\mathrm{{obs}}}}={std_ratio:.2f}$)"
+
+        if legend_stat == "var_ratio":
+            if not np.isfinite(var_ratio):
+                return plot_label
+            return f"{label} (Var Ratio={var_ratio:.2f})"
+
+        if legend_stat in ("none", None):
+            return plot_label
+
+        if not show_corr:
+            return plot_label
+
+        if not np.isfinite(r):
+            return plot_label
+
+        corr_text = corr_fmt.format(r)
+        if corr_label_style == "raw":
+            corr_label = f"{corr_prefix}={corr_text}"
+            if show_corr_significance:
+                corr_label += self._sig_marker(p)
+            if show_corr_pvalue:
+                corr_label += f" (p={p:.3f})"
+            return f"{label} ({corr_label})"
+
+        if show_corr_pvalue:
+            return f"{label} ({corr_prefix}={corr_text}, p={p:.3f})"
+
+        if show_corr_significance:
+            return f"{label} ({corr_prefix}={corr_text}{self._sig_marker(p)})"
+
+        return f"{label} ({corr_prefix}={corr_text})"
+
+    @staticmethod
+    def _select_member(model_stack, i, label, member_dim="member"):
+        if hasattr(model_stack, "dims") and member_dim in model_stack.dims:
+            return model_stack.isel({member_dim: i})
+
+        if hasattr(model_stack, "sel"):
+            return model_stack.sel({member_dim: label})
+
+        return model_stack[i]
+
+    @staticmethod
+    def _time_coord(da, fallback_size):
+        if hasattr(da, "coords") and "time" in da.coords:
+            time = np.asarray(da.time.values).ravel()
+            if time.size == fallback_size:
+                if np.issubdtype(time.dtype, np.datetime64):
+                    return time.astype("datetime64[Y]").astype(int) + 1970
+                if time.size > 0 and hasattr(time[0], "year"):
+                    return np.asarray([t.year for t in time])
+                return time
+        return np.arange(fallback_size)
+
+    @staticmethod
+    def _offset_time_coord(x, offset):
+        if offset in (None, 0):
+            return x
+        vals = np.asarray(x)
+        if np.issubdtype(vals.dtype, np.number):
+            return vals + offset
+        return x
+
+    @staticmethod
+    def _set_time_ticks(ax, x, step, *, start=None, end=None, xlim=None):
+        if step is None:
+            return
+
+        try:
+            vals = np.asarray(x)
+            if vals.size == 0 or not np.issubdtype(vals.dtype, np.number):
+                return
+
+            step = int(step)
+            if step <= 0:
+                return
+
+            if start is not None or end is not None or xlim is not None:
+                if start is None:
+                    start = xlim[0] if xlim is not None else np.nanmin(vals)
+                if end is None:
+                    end = xlim[1] if xlim is not None else np.nanmax(vals)
+                ticks = np.arange(np.ceil(start), np.floor(end) + 1e-9, step)
+            else:
+                ticks = vals[::step]
+
+            ax.set_xticks(ticks)
+            ax.set_xticklabels([str(int(t)) if float(t).is_integer() else str(t) for t in ticks])
+        except Exception:
+            return
+
+    @staticmethod
+    def _add_legend(ax, cfg):
+        if cfg["legend_below"]:
+            leg = ax.legend(
+                loc="upper center",
+                bbox_to_anchor=(0.5, -0.18),
+                ncol=cfg["legend_ncol"],
+                fontsize=cfg["fontz"] - 4,
+                frameon=cfg["legend_frameon"],
+            )
+        else:
+            leg = ax.legend(
+                loc="best",
+                ncol=cfg["legend_ncol"],
+                fontsize=cfg["fontz"] - 4,
+                frameon=cfg["legend_frameon"],
+            )
+
+        if leg is not None and cfg["legend_frameon"]:
+            frame = leg.get_frame()
+            frame.set_edgecolor(cfg["legend_edgecolor"])
+            frame.set_facecolor(cfg["legend_facecolor"])
+            frame.set_alpha(cfg["legend_framealpha"])

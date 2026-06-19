@@ -183,6 +183,21 @@ class EMOVDiagReader:
             da = ds["pc"].load()
         return da  # pc is 1D time series; keep original time coord
 
+    def read_variable(
+        self,
+        path: str,
+        *,
+        which: str = "eof",
+    ) -> xr.DataArray:
+        """Read a known map or time-series variable from a single PMP file."""
+        if which in self.MAP_VARS:
+            return self.read_map(path, which=which)
+        if which in self.TS_VARS:
+            return self.read_pc(path)
+        raise ValueError(
+            f"Unsupported variable {which!r}; expected one of {self.MAP_VARS + self.TS_VARS}."
+        )
+
     def read_frac(self, path: str) -> float:
         """Read variance fraction scalar 'frac' from a single PMP file."""
         with self._open_dataset(path) as ds:
@@ -232,23 +247,42 @@ class EMOVDiagReader:
     ) -> xr.DataArray:
         return self.read_map(self.model_path(model_tag, spec), which=which)
 
+    def read_reference_variable(
+        self,
+        model_tag: str,
+        spec: ModeFileSpec,
+        *,
+        which: str = "eof",
+    ) -> xr.DataArray:
+        return self.read_variable(self.obs_path(model_tag, spec), which=which)
+
+    def read_model_variable(
+        self,
+        model_tag: str,
+        spec: ModeFileSpec,
+        *,
+        which: str = "eof",
+    ) -> xr.DataArray:
+        return self.read_variable(self.model_path(model_tag, spec), which=which)
+
     def build_multimodel_stack(
         self,
         model_tags: Sequence[str],
         spec: ModeFileSpec,
         *,
-        which: Literal["eof", "slope", "intercept"] = "eof",
+        which: str = "eof",
         member_dim: str = "member",
     ) -> Dict[str, xr.DataArray]:
         """
         Returns:
-          {"reference": (lat,lon), "hist": (member,lat,lon)}
-        where hist stacks across model_tags.
+          {"reference": DataArray, "hist": DataArray}
+        where hist stacks across model_tags. For map variables this is
+        (member, lat, lon); for pc it is (member, time).
         """
         if not model_tags:
             raise ValueError("model_tags is empty")
 
-        ref = self.read_reference_map(model_tags[0], spec, which=which)
-        mods = [self.read_model_map(mt, spec, which=which) for mt in model_tags]
+        ref = self.read_reference_variable(model_tags[0], spec, which=which)
+        mods = [self.read_model_variable(mt, spec, which=which) for mt in model_tags]
         ens = xr.concat(mods, dim=member_dim).assign_coords({member_dim: list(model_tags)})
         return {"reference": ref, "hist": ens}
