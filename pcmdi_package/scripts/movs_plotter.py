@@ -288,6 +288,14 @@ class ExtrapropicalModeMapPlotter:
         fig_format: str = "pdf",
         fig_dpi: int = 300,
         fig_idx_start: int = 0,
+        left: float = 0.06,
+        right: float = 0.98,
+        bottom: float = 0.06,
+        top: float = 0.93,
+        hspace: float = 0.12,
+        wspace: float = 0.12,
+        row_cbar_pad: float = 0.028,
+        row_cbar_height: float = 0.018,
     ):
         """
         Make a single figure for (mode, season) with multiple rows of map products.
@@ -337,8 +345,6 @@ class ExtrapropicalModeMapPlotter:
 
         fig.suptitle(f"{mode} — {season}", fontsize=fontz * 1.25, y=0.98)
 
-        left, right, bottom, top = 0.06, 0.98, 0.06, 0.93
-        hspace, wspace = 0.12, 0.12
         if not one_colorbar_per_row:
             right = 0.92
 
@@ -404,7 +410,7 @@ class ExtrapropicalModeMapPlotter:
             for r, pk in enumerate(product_order):
                 row_height = (top - bottom - hspace * (nrows - 1)) / nrows
                 row_bottom = top - (r + 1) * row_height - r * hspace
-                cax = fig.add_axes([left, row_bottom - 0.028, right - left, 0.018])
+                cax = fig.add_axes([left, row_bottom - row_cbar_pad, right - left, row_cbar_height])
                 cbar = fig.colorbar(ims[pk], cax=cax, orientation="horizontal")
                 cbar.ax.tick_params(labelsize=fontz * 0.85)
                 cbar.set_label(cb_labels_by_product.get(pk, "Map value"), fontsize=fontz * 0.9)

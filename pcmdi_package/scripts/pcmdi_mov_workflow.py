@@ -613,16 +613,20 @@ def plot_eof_difference_significance(
         "use_cache": True,
         "save_cache": True,
         "overwrite_cache": False,
+        "compute_missing_cache": True,
         "cache_dir_name": "eof_diff_sig_cache",
         "dot_density": 2,
         "dot_size": 8,
         "pattern_levels": np.linspace(-5, 5, 11),
+        "plot_field": "pattern",
         "cmap": "RdBu_r",
         "font_size": 18,
         "ncols": 2,
         "figsize_per_panel": (6, 4),
         "xtick_step": 20.0,
         "ytick_step": 10.0,
+        "axis_label_size": None,
+        "axis_label_pad": 4,
         "fig_prefix": None,
         "fig_format": "pdf",
         "dpi": 300,
@@ -630,9 +634,19 @@ def plot_eof_difference_significance(
         "model_pattern_var": "eof",
         "ref_frac_var": "frac",
         "model_frac_var": "frac",
+        "pvalue_source": "bootstrap",
+        "ref_pval_var": None,
+        "model_pval_var": None,
+        "pval_fallback_var": None,
     }
     if config is not None:
         cfg.update(dict(config))
+    plot_field = str(cfg["plot_field"]).lower()
+    if plot_field not in {"difference", "pattern"}:
+        raise ValueError("config['plot_field'] must be 'difference' or 'pattern'.")
+    pvalue_source = str(cfg["pvalue_source"]).lower()
+    if pvalue_source not in {"auto", "dataset", "bootstrap"}:
+        raise ValueError("config['pvalue_source'] must be 'auto', 'dataset', or 'bootstrap'.")
 
     ref_case = cfg["ref_case"]
     ref_is_obs = str(ref_case).lower() in {"obs", "observation", "observations", "reference"}
@@ -652,7 +666,7 @@ def plot_eof_difference_significance(
     eof_num = int(mode_info.get("eof_num", 1))
     anom_key = f"{field_var}_anom"
     ref_ds = obs_ds if ref_is_obs else model_results[ref_case]
-    if anom_key not in ref_ds:
+    if pvalue_source == "bootstrap" and anom_key not in ref_ds:
         raise KeyError(f"{anom_key!r} is required for EOF bootstrap but was not saved for {ref_label}.")
 
     ref_target = subset_latlon_domain(
@@ -660,7 +674,9 @@ def plot_eof_difference_significance(
         lat_bnds=lat_bnds,
         lon_bnds=lon_bnds,
     )
-    ref_anom = subset_latlon_domain(ref_ds[anom_key] * unit_scale, lat_bnds=lat_bnds, lon_bnds=lon_bnds)
+    ref_anom = None
+    if anom_key in ref_ds:
+        ref_anom = subset_latlon_domain(ref_ds[anom_key] * unit_scale, lat_bnds=lat_bnds, lon_bnds=lon_bnds)
     ref_frac = float(dataset_var(ref_ds, cfg["ref_frac_var"])) * 100 if cfg["ref_frac_var"] in ref_ds else None
 
     lat_plot = ref_target.lat.values
@@ -668,7 +684,12 @@ def plot_eof_difference_significance(
     w = np.cos(np.deg2rad(lat_plot)).astype(float)
     w = w / np.nanmean(w)
     w2d = w[:, None] * np.ones((lat_plot.size, lon_plot.size), dtype=float)
-    plot_records = [(ref_label, ref_target, None, ref_frac)]
+    if plot_field == "difference":
+        ref_plot = xr.zeros_like(ref_target)
+    else:
+        ref_plot = ref_target
+    plot_records = [(ref_label, ref_plot, None, ref_frac)]
+    stat_targets = [ref_target]
     cache_dir = os.path.join(fig_dir, cfg["cache_dir_name"])
 
     def cache_path(case_name: str, seed: int) -> str:
@@ -678,10 +699,13 @@ def plot_eof_difference_significance(
             "field": str(field_var).replace(" ", "_"),
             "case": str(case_name).replace(" ", "_"),
             "ref": str(ref_label).replace(" ", "_"),
+            "ref_pattern": str(cfg["ref_pattern_var"]).replace(" ", "_"),
+            "model_pattern": str(cfg["model_pattern_var"]).replace(" ", "_"),
         }
         fname = (
             f"{safe['mode']}_{safe['season']}_{safe['field']}_"
             f"{safe['case']}_vs_{safe['ref']}_eof{eof_num}_"
+            f"{safe['ref_pattern']}_to_{safe['model_pattern']}_"
             f"nboot{int(cfg['n_boot'])}_seed{seed}_pval.nc"
         )
         return os.path.join(cache_dir, fname)
@@ -693,6 +717,8 @@ def plot_eof_difference_significance(
             "mode": str(mode),
             "season": str(season),
             "field_var": str(field_var),
+            "ref_pattern_var": str(cfg["ref_pattern_var"]),
+            "model_pattern_var": str(cfg["model_pattern_var"]),
             "eof_num": eof_num,
             "n_boot": int(cfg["n_boot"]),
             "seed": int(seed),
@@ -706,7 +732,33 @@ def plot_eof_difference_significance(
             and np.array_equal(pval.lat.values, target.lat.values)
         )
 
-    def get_pvalue(case_name: str, case_anom: xr.DataArray, case_target: xr.DataArray, seed: int) -> xr.DataArray:
+    def get_dataset_pvalue(ds: xr.Dataset, pval_var: Optional[str], case_name: str) -> Optional[xr.DataArray]:
+        candidates = [pval_var, cfg["pval_fallback_var"]]
+        for candidate in candidates:
+            if candidate and candidate in ds:
+                pval = subset_latlon_domain(ds[candidate], lat_bnds=lat_bnds, lon_bnds=lon_bnds)
+                if not (
+                    np.array_equal(pval.lon.values, ref_target.lon.values)
+                    and np.array_equal(pval.lat.values, ref_target.lat.values)
+                ):
+                    pval = pval.interp(lon=ref_target.lon, lat=ref_target.lat)
+                print(f"Loading saved p-values for {case_name} from dataset variable {candidate!r}")
+                return pval
+        return None
+
+    def get_pvalue(case_name: str, case_ds: xr.Dataset, case_anom: Optional[xr.DataArray], case_target: xr.DataArray, seed: int) -> Optional[xr.DataArray]:
+        if pvalue_source in {"auto", "dataset"}:
+            pval = get_dataset_pvalue(case_ds, cfg["model_pval_var"], case_name)
+            if pval is not None:
+                return pval
+            if pvalue_source == "dataset":
+                raise KeyError(
+                    f"No saved p-value variable found for {case_name}. "
+                    f"Tried {cfg['model_pval_var']!r} and {cfg['pval_fallback_var']!r}."
+                )
+
+        if ref_anom is None or case_anom is None:
+            raise KeyError(f"{anom_key!r} is required for EOF bootstrap but was not saved for {case_name} or {ref_label}.")
         os.makedirs(cache_dir, exist_ok=True)
         path = cache_path(case_name, seed)
         if cfg["use_cache"] and os.path.exists(path) and not cfg["overwrite_cache"]:
@@ -720,6 +772,10 @@ def plot_eof_difference_significance(
                 print(f"Ignoring incompatible cached EOF-difference p-values -> {path}")
             except Exception as exc:
                 print(f"Could not read cached EOF-difference p-values ({exc}); recomputing -> {path}")
+
+        if cfg["use_cache"] and not cfg["overwrite_cache"] and not cfg["compute_missing_cache"]:
+            print(f"No compatible cached EOF-difference p-values found for {case_name}; skipping recompute.")
+            return None
 
         print(f"Computing EOF-difference p-values -> {path}")
         pval = bootstrap_diff_pvalue(
@@ -739,6 +795,8 @@ def plot_eof_difference_significance(
                 "mode": str(mode),
                 "season": str(season),
                 "field_var": str(field_var),
+                "ref_pattern_var": str(cfg["ref_pattern_var"]),
+                "model_pattern_var": str(cfg["model_pattern_var"]),
                 "eof_num": eof_num,
                 "n_boot": int(cfg["n_boot"]),
                 "seed": int(seed),
@@ -752,26 +810,34 @@ def plot_eof_difference_significance(
 
     for case_name in compare_cases:
         case_ds = model_results[case_name]
-        if anom_key not in case_ds:
+        if pvalue_source == "bootstrap" and anom_key not in case_ds:
             raise KeyError(f"{anom_key!r} is required for EOF bootstrap but was not saved for {case_name}.")
         case_target = subset_latlon_domain(
             dataset_var(case_ds, cfg["model_pattern_var"]) * unit_scale,
             lat_bnds=lat_bnds,
             lon_bnds=lon_bnds,
         )
-        case_anom = subset_latlon_domain(case_ds[anom_key] * unit_scale, lat_bnds=lat_bnds, lon_bnds=lon_bnds)
+        case_anom = None
+        if anom_key in case_ds:
+            case_anom = subset_latlon_domain(case_ds[anom_key] * unit_scale, lat_bnds=lat_bnds, lon_bnds=lon_bnds)
         if not (
             np.array_equal(case_target.lon.values, ref_target.lon.values)
             and np.array_equal(case_target.lat.values, ref_target.lat.values)
         ):
             case_target = case_target.interp(lon=ref_target.lon, lat=ref_target.lat)
-            case_anom = case_anom.interp(lon=ref_target.lon, lat=ref_target.lat)
+            if case_anom is not None:
+                case_anom = case_anom.interp(lon=ref_target.lon, lat=ref_target.lat)
         seed = int(cfg["random_seed"]) + len(plot_records)
-        pval = get_pvalue(case_name, case_anom, case_target, seed)
+        pval = get_pvalue(case_name, case_ds, case_anom, case_target, seed)
         frac = float(dataset_var(case_ds, cfg["model_frac_var"])) * 100 if cfg["model_frac_var"] in case_ds else None
-        plot_records.append((case_name, case_target, pval, frac))
-        sig_pct = float(np.nanmean(pval.values < float(cfg["sig_level"])) * 100.0)
-        print(f"{case_name} - {ref_label}: significant grid cells p<{float(cfg['sig_level']):.2f}: {sig_pct:.1f}%")
+        plot_target = case_target - ref_target if plot_field == "difference" else case_target
+        plot_records.append((case_name, plot_target, pval, frac))
+        stat_targets.append(case_target)
+        if pval is not None:
+            sig_pct = float(np.nanmean(pval.values < float(cfg["sig_level"])) * 100.0)
+            print(f"{case_name} - {ref_label}: significant grid cells p<{float(cfg['sig_level']):.2f}: {sig_pct:.1f}%")
+        else:
+            print(f"{case_name} - {ref_label}: no EOF-difference p-values available; no stippling.")
 
     levels = cfg["pattern_levels"]
     if levels is None:
@@ -811,6 +877,8 @@ def plot_eof_difference_significance(
     )
 
     font_size = float(cfg["font_size"])
+    axis_label_size = float(cfg["axis_label_size"]) if cfg["axis_label_size"] is not None else font_size * 0.85
+    axis_label_pad = float(cfg["axis_label_pad"])
     panel_labels = list(string.ascii_lowercase)
     im = None
     for idx, ax in enumerate(axes):
@@ -855,12 +923,16 @@ def plot_eof_difference_significance(
         ax.tick_params(labelsize=font_size * 0.85)
         ax.gridlines(linewidth=0.4, color="gray", alpha=0.5, linestyle="--", draw_labels=False)
         if idx % ncols == 0:
-            ax.set_ylabel("Latitude")
-        ax.set_xlabel("Longitude")
+            ax.set_ylabel("Latitude", fontsize=axis_label_size, labelpad=axis_label_pad)
+        ax.set_xlabel("Longitude", fontsize=axis_label_size, labelpad=axis_label_pad)
         frac_str = f" ({frac:.1f}%)" if frac is not None and np.isfinite(frac) else ""
-        ax.set_title(f"({panel_labels[idx]}) {case_name}{frac_str}", fontsize=font_size, loc="left", pad=6)
+        if plot_field == "difference" and idx != 0:
+            title_name = f"{case_name} - {ref_label}"
+        else:
+            title_name = case_name
+        ax.set_title(f"({panel_labels[idx]}) {title_name}{frac_str}", fontsize=font_size, loc="left", pad=6)
         if idx != 0:
-            pcorr, rmse = calc_pattern_corr_rmse(ref_target.values, eof_field.values, w2d=w2d)
+            pcorr, rmse = calc_pattern_corr_rmse(ref_target.values, stat_targets[idx].values, w2d=w2d)
             print(f"{case_name} vs {ref_label}: PCC={pcorr:.3f}, RMSE={rmse:.3f}")
             ax.text(
                 0.05,
@@ -875,12 +947,19 @@ def plot_eof_difference_significance(
             )
 
     cbar = fig.colorbar(im, ax=axes, orientation="horizontal", fraction=0.05, pad=0.10, aspect=45, ticks=levels)
-    cbar.set_label(f"EOF amplitude ({unit_label})" if unit_label else "EOF amplitude", fontsize=font_size)
+    if plot_field == "difference":
+        cbar_base_label = "EOF amplitude difference"
+    else:
+        cbar_base_label = "EOF amplitude"
+    cbar.set_label(f"{cbar_base_label} ({unit_label})" if unit_label else cbar_base_label, fontsize=font_size)
     cbar.ax.tick_params(labelsize=font_size * 0.85)
 
     fig_prefix = cfg["fig_prefix"]
     if fig_prefix is None:
-        fig_prefix = f"{mode}_{season}_eof_pattern_model_sig_vs_{ref_label}_bootstrap_p{cfg['sig_level']}"
+        if plot_field == "difference":
+            fig_prefix = f"{mode}_{season}_eof_pattern_diff_sig_vs_{ref_label}_bootstrap_p{cfg['sig_level']}"
+        else:
+            fig_prefix = f"{mode}_{season}_eof_pattern_model_sig_vs_{ref_label}_bootstrap_p{cfg['sig_level']}"
     fig_path = os.path.join(fig_dir, f"{fig_prefix}.{cfg['fig_format']}")
     fig.savefig(fig_path, dpi=int(cfg["dpi"]), bbox_inches="tight", pad_inches=0.05)
     print(f"Saved -> {fig_path}")
