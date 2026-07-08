@@ -1,0 +1,5 @@
+inithist            = 'ENDOFRUN'
+inithist_all        = .true.
+do_clubb_int        = .false.
+do_output_clubb_int = .false.
+

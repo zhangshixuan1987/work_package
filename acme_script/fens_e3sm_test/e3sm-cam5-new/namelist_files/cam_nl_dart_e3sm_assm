@@ -1,0 +1,2 @@
+inithist            = '6-HOURLY'
+inithist_all        = .true.

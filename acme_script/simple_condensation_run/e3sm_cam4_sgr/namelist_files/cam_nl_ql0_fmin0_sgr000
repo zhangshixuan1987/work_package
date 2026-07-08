@@ -1,0 +1,7 @@
+ql_incld_opt      = 0
+fmin              = 1.0E-4
+l_use_sgr         = .true.
+l_sgr_fextrap     = .true.
+qv_sgr_deg        = 0
+ql_sgr_deg        = 0
+ltend_sgr_deg     = 0

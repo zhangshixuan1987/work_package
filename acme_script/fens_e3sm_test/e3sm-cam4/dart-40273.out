@@ -1,0 +1,267 @@
+Sat Oct 19 03:44:21 PDT 2019 -- BEGIN CAM_ASSIMILATE
+/compyfs/zhan391/run_script/fens_e3sm_test
+DART_SCRIPTS_DIR = /compyfs/zhan391/code/DART_E3SM/models/E3SM/shell_scripts/e3sm_cam5
+
+This model is not configured for WACCM
+COMPSET is 20TR_CAM5_CLM45%SPBC_CICE%PRES_DOCN%DOM_SROF_SGLC_SWAV
+Sat Oct 19 03:44:26 PDT 2019 -- BEGIN COPY BLOCK
+Sat Oct 19 03:44:26 PDT 2019 -- END COPY BLOCK
+removed ‘input.nml.203532’
+stages_except_output = {preassim}
+stages_all = {preassim,output}
+valid time of model is 2009 1 1 21600 (seconds)
+valid time of model is 2009 1 1 6 (hours)
+OBS_FILE = /compyfs/zhan391/acme_init/Observations/PREBUFR/200901_6H_E3SM/obs_seq2009010106
+inf_flavor(1) = 2, using namelist values.
+Posterior Inflation not requested for this assimilation.
+input_state_file_list cam_init_files
+Sat Oct 19 03:44:26 PDT 2019 -- BEGIN FILTER
+ 
+ --------------------------------------
+ Starting ... at YYYY MM DD HH MM SS = 
+                 2019 10 19  3 44 29
+ Program Filter
+ --------------------------------------
+ 
+  set_nml_output Echo NML values to log file only
+ PE 0: initialize_mpi_utilities:  Running with           10  MPI processes.
+ 
+ --------------------------------------------------------
+ -------------- ASSIMILATE_THESE_OBS_TYPES --------------
+    RADIOSONDE_U_WIND_COMPONENT
+    RADIOSONDE_V_WIND_COMPONENT
+    RADIOSONDE_TEMPERATURE
+    AIRCRAFT_U_WIND_COMPONENT
+    AIRCRAFT_V_WIND_COMPONENT
+    AIRCRAFT_TEMPERATURE
+    ACARS_U_WIND_COMPONENT
+    ACARS_V_WIND_COMPONENT
+    ACARS_TEMPERATURE
+    SAT_U_WIND_COMPONENT
+    SAT_V_WIND_COMPONENT
+    GPSRO_REFRACTIVITY
+ --------------------------------------------------------
+ -------------- EVALUATE_THESE_OBS_TYPES   --------------
+    RADIOSONDE_SPECIFIC_HUMIDITY
+ --------------------------------------------------------
+ ---------- USE_PRECOMPUTED_FO_OBS_TYPES   --------------
+    none
+ --------------------------------------------------------
+ 
+ PE 0: location_mod: using code with optimized cutoffs
+ PE 0: location_mod: Including vertical separation when computing distances:
+ PE 0: location_mod:        # pascals ~ 1 horiz radian:       20000.00000
+ PE 0: location_mod:         # meters ~ 1 horiz radian:       10000.00000
+ PE 0: location_mod:   # model levels ~ 1 horiz radian:          20.00000
+ PE 0: location_mod:  # scale heights ~ 1 horiz radian:           1.50000
+ PE 0: location_mod: Using table-lookup approximation for distance computations
+ PE 0: init_discard_high_obs Discarding observations higher than model level    
+  5
+ PE 0: init_discard_high_obs  ... which is equivalent to pressure level   3826.8
+ 2998 Pascals
+ PE 0: init_discard_high_obs  ... which is equivalent to height          22362.3
+ 6933 meters
+ PE 0: init_discard_high_obs  ... which is equivalent to scale height        3.2
+ 6313
+ PE 0: quality_control_mod: Will reject obs with Data QC larger than    3
+ PE 0: quality_control_mod: Will reject obs values more than    3.000000 sigma f
+ rom mean
+ PE 0: assim_tools_init: Selected filter type is Ensemble Adjustment Kalman Filt
+ er (EAKF)
+ PE 0: assim_tools_init: The cutoff namelist value is           0.150000
+ PE 0: assim_tools_init: ... cutoff is the localization half-width parameter,
+ PE 0: assim_tools_init: ... so the effective localization radius is           0
+ .300000
+ PE 0: assim_tools_init: Replicating a copy of the ensemble mean on every task
+ PE 0: assim_tools_init: ... uses more memory per task but may run faster if doi
+ ng vertical
+ PE 0: assim_tools_init: ... coordinate conversion; controlled by namelist item 
+ "distribute_mean"
+ PE 0: assim_tools_init: Doing vertical localization, vertical coordinate conver
+ sion may be required
+ PE 0: assim_tools_init: ... Converting all state vector verticals only as neede
+ d.
+ PE 0: assim_tools_init: ... Converting all observation verticals to localizatio
+ n coordinate first.
+ PE 0:  filter trace: Filter start
+ Filter start TIME: 2019/10/19 03:44:29
+ PE 0: filter_main: running with an ensemble size of    10
+ PE 0:  filter trace: Before initializing inflation
+ PE 0: filter_main: Prior inflation damping of     0.900000 will be used
+ PE 0:  filter trace: After  initializing inflation
+ PE 0: parse_stages_to_write:  filter will write stage : preassim
+ PE 0: parse_stages_to_write:  filter will write stage : output
+ PE 0:  filter trace: Before setting up space for observations
+ Before setting up space for observations TIME: 2019/10/19 03:44:29
+ After  setting up space for observations TIME: 2019/10/19 03:44:31
+ PE 0:  filter trace: After  setting up space for observations
+ PE 0:  filter trace: Before setting up space for ensembles
+ PE 0: filter_main: running with distributed state; model states stay distribute
+ d across all tasks for the entire run
+ PE 0:  filter trace: After  setting up space for ensembles
+ PE 0: filter_main: skipping computation of posterior forward operators
+ PE 0:  filter trace: Before reading in ensemble restart files
+ Before reading in ensemble restart files TIME: 2019/10/19 03:44:31
+ PE 0: set_member_file_metadata no file list given for stage "preassim" so using
+  default names
+ PE 0: Prior inflation: deterministic, time-adaptive, spatially-varying, state-s
+ pace
+ PE 0: Prior inflation: inf mean   from namelist, value:    1.000
+ PE 0: Prior inflation: inf stddev from namelist, value:    0.600
+ PE 0: Posterior inflation: None
+ PE 0: filter_main: Reading in a single member and perturbing data for the other
+  ensemble members
+ After  reading in ensemble restart files TIME: 2019/10/19 03:44:31
+ PE 0:  filter trace: After  reading in ensemble restart files
+ PE 0:  filter trace: Before initializing output files
+ Before initializing output files TIME: 2019/10/19 03:44:31
+ After  initializing output files TIME: 2019/10/19 03:44:31
+ PE 0:  filter trace: After  initializing output files
+ PE 0:  filter trace: Before trimming obs seq if start/stop time specified
+ PE 0:  filter trace: After  trimming obs seq if start/stop time specified
+ PE 0:  filter trace: Top of main advance time loop
+ PE 0:
+ PE 0: filter: Main assimilation loop, starting iteration    0
+ PE 0:  filter trace: Before move_ahead checks time of data and next obs
+ PE 0: shortest_time_between_assimilations:  assimilation period is            0
+   days        21600  seconds
+ PE 0: move_ahead Current model data time            is:  day=  149019 sec= 2160
+ 0
+ PE 0: move_ahead Current assimilation window starts at:  day=  149019 sec= 1080
+ 1
+ PE 0: move_ahead Next available observation time    is:  day=  149019 sec= 1086
+ 1
+ PE 0: move_ahead Current assimilation window ends   at:  day=  149019 sec= 3240
+ 0
+ PE 0: shortest_time_between_assimilations:  assimilation period is            0
+   days        21600  seconds
+ PE 0: move_ahead Next available observation time    is:  day=  149019 sec= 1086
+ 1
+ PE 0: move_ahead Within current assimilation window, model does not need advanc
+ e.
+ PE 0: move_ahead Next assimilation window contains up to   124485 observations
+ PE 0:  filter trace: After  move_ahead checks time of data and next obs
+ PE 0: filter: Model does not need to run; data already at required time
+ PE 0:  filter trace: Before setup for next group of observations
+ PE 0:  filter trace: Number of observations to be assimilated 124485
+ filter trace: Time of first observation in window day=149019, sec=10861
+ filter trace: Time of last  observation in window day=149019, sec=32400
+ PE 0:  filter trace: After  setup for next group of observations
+ PE 0:  filter trace: Before prior inflation damping and prep
+ PE 0:  filter trace: After  prior inflation damping and prep
+ PE 0:  filter trace: Before computing prior observation values
+ Before computing prior observation values TIME: 2019/10/19 03:44:31
+ After  computing prior observation values TIME: 2019/10/19 03:44:32
+ PE 0:  filter trace: After  computing prior observation values
+ PE 0:  filter trace: Before preassim state space output
+ Before preassim state space output TIME: 2019/10/19 03:44:32
+ PE 0: create_and_open_state_output:  Creating output file preassim_member_0001.
+ nc
+ PE     7: create_and_open_state_output:  Creating output file preassim_member_0
+ 008.nc
+ PE     2: create_and_open_state_output:  Creating output file preassim_member_0
+ 003.nc
+ PE     8: create_and_open_state_output:  Creating output file preassim_member_0
+ 009.nc
+ PE     5: create_and_open_state_output:  Creating output file preassim_member_0
+ 006.nc
+ PE     1: create_and_open_state_output:  Creating output file preassim_member_0
+ 002.nc
+ PE     3: create_and_open_state_output:  Creating output file preassim_member_0
+ 004.nc
+ PE     4: create_and_open_state_output:  Creating output file preassim_member_0
+ 005.nc
+ PE     6: create_and_open_state_output:  Creating output file preassim_member_0
+ 007.nc
+ PE     9: create_and_open_state_output:  Creating output file preassim_member_0
+ 010.nc
+ PE 0: create_and_open_state_output:  Creating output file preassim_mean.nc
+ PE     1: create_and_open_state_output:  Creating output file preassim_sd.nc
+ PE     2: create_and_open_state_output:  Creating output file preassim_priorinf
+ _mean.nc
+ PE     3: create_and_open_state_output:  Creating output file preassim_priorinf
+ _sd.nc
+ After  preassim state space output TIME: 2019/10/19 03:44:33
+ PE 0:  filter trace: After  preassim state space output
+ PE 0:  filter trace: Before observation space diagnostics
+ PE 0:  filter trace: After  observation space diagnostics
+ PE 0: filter: Ready to assimilate up to  124485 observations
+ PE 0:  filter trace: Before observation assimilation
+ Before observation assimilation TIME: 2019/10/19 03:44:33
+ PE 0: comp_cov_factor: Standard Gaspari Cohn localization selected
+Processing observation    10000 of   124485 TIME: 2019/10/19 03:44:35
+Processing observation    20000 of   124485 TIME: 2019/10/19 03:44:40
+Processing observation    30000 of   124485 TIME: 2019/10/19 03:44:44
+Processing observation    40000 of   124485 TIME: 2019/10/19 03:44:47
+Processing observation    50000 of   124485 TIME: 2019/10/19 03:44:50
+Processing observation    60000 of   124485 TIME: 2019/10/19 03:44:55
+Processing observation    70000 of   124485 TIME: 2019/10/19 03:44:59
+Processing observation    80000 of   124485 TIME: 2019/10/19 03:45:04
+Processing observation    90000 of   124485 TIME: 2019/10/19 03:45:07
+Processing observation   100000 of   124485 TIME: 2019/10/19 03:45:11
+Processing observation   110000 of   124485 TIME: 2019/10/19 03:45:13
+Processing observation   120000 of   124485 TIME: 2019/10/19 03:45:14
+ PE 0: filter_assim: Processed  124485 total observations
+ Total number of calls made    to get_close_obs for obs/states:           88504
+ Total number of calls avoided to get_close_obs for obs/states:           67298
+ Percent saved:    43.1945674638323     
+ After  observation assimilation TIME: 2019/10/19 03:45:15
+ PE 0:  filter trace: After  observation assimilation
+ PE 0:  filter trace: Near bottom of main loop, cleaning up obs space
+ PE 0:  filter trace: Bottom of main advance time loop
+ PE 0:  filter trace: Top of main advance time loop
+ PE 0:
+ PE 0: filter: Main assimilation loop, starting iteration    1
+ PE 0:  filter trace: Before move_ahead checks time of data and next obs
+ PE 0:  filter trace: After  move_ahead checks time of data and next obs
+ PE 0: filter: No more obs to assimilate, exiting main loop
+ PE 0: filter: End of main filter assimilation loop, starting cleanup
+ PE 0:  filter trace: Before state space output
+ Before state space output TIME: 2019/10/19 03:45:15
+ PE     1: create_and_open_state_output:  Creating output file output_sd.nc
+ PE     3: create_and_open_state_output:  Creating output file output_priorinf_s
+ d.nc
+ PE 0: create_and_open_state_output:  Creating output file output_mean.nc
+ PE     2: create_and_open_state_output:  Creating output file output_priorinf_m
+ ean.nc
+ After  state space output TIME: 2019/10/19 03:45:15
+ PE 0:  filter trace: After  state space output
+ PE 0:  filter trace: Before writing output sequence file
+ Before writing output sequence file TIME: 2019/10/19 03:45:15
+ PE 0: write_obs_seq  opening formatted observation sequence file "obs_seq.final
+ "
+ PE 0: write_obs_seq  closed observation sequence file "obs_seq.final"
+ After  writing output sequence file TIME: 2019/10/19 03:45:17
+ PE 0:  filter trace: After  writing output sequence file
+ PE 0:  filter trace: Before end_model call
+ PE 0:  filter trace: After  end_model call
+ PE 0:  filter trace: Before ensemble and obs memory cleanup
+ PE 0:  filter trace: After  ensemble and obs memory cleanup
+ PE 0:  filter trace: Filter done
+ Filter done TIME: 2019/10/19 03:45:17
+ 
+ --------------------------------------
+ Finished ... at YYYY MM DD HH MM SS = 
+                 2019 10 19  3 45 17
+ Program Filter
+ --------------------------------------
+ 
+Sat Oct 19 03:45:17 PDT 2019 -- END FILTER
+moving preassim_member_0001.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0001.e.preassim.2009-01-01-21600.nc
+moving preassim_member_0002.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0002.e.preassim.2009-01-01-21600.nc
+moving preassim_member_0003.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0003.e.preassim.2009-01-01-21600.nc
+moving preassim_member_0004.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0004.e.preassim.2009-01-01-21600.nc
+moving preassim_member_0005.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0005.e.preassim.2009-01-01-21600.nc
+moving preassim_member_0006.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0006.e.preassim.2009-01-01-21600.nc
+moving preassim_member_0007.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0007.e.preassim.2009-01-01-21600.nc
+moving preassim_member_0008.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0008.e.preassim.2009-01-01-21600.nc
+moving preassim_member_0009.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0009.e.preassim.2009-01-01-21600.nc
+moving preassim_member_0010.nc DENS_F20TRC5-AMIP_f19_g16_DT1800.cam_0010.e.preassim.2009-01-01-21600.nc
+output_mean.nc
+output_sd.nc
+Moved output_priorinf_mean.nc  DENS_F20TRC5-AMIP_f19_g16_DT1800.dart.rh.cam_output_priorinf_mean.2009-01-01-21600.nc
+Moved output_priorinf_sd.nc  DENS_F20TRC5-AMIP_f19_g16_DT1800.dart.rh.cam_output_priorinf_sd.2009-01-01-21600.nc
+Moved preassim_priorinf_mean.nc  DENS_F20TRC5-AMIP_f19_g16_DT1800.dart.rh.cam_preassim_priorinf_mean.2009-01-01-21600.nc
+Moved preassim_priorinf_sd.nc  DENS_F20TRC5-AMIP_f19_g16_DT1800.dart.rh.cam_preassim_priorinf_sd.2009-01-01-21600.nc
+Sat Oct 19 03:45:17 PDT 2019
+Sat Oct 19 03:45:17 PDT 2019 -- END CAM_ASSIMILATE

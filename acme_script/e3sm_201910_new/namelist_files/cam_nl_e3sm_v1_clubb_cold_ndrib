@@ -1,0 +1,2 @@
+inithist            = 'ENDOFRUN'
+inithist_all        = .true.

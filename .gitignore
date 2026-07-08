@@ -1,0 +1,21 @@
+# Logs and runtime traces
+*.log
+*.Log
+*.LOG
+*.log.*
+nohup.out
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*~
+
+# Editor swap/backup files
+*.swp
+*.swo
+.#*
+
+# OS-generated clutter
+.DS_Store
+Thumbs.db
