@@ -209,6 +209,9 @@ def realign_cbar_and_legend(
     min_buffer_frac=0.002,      # tiny buffer so cbar never touches axes
     auto_nudge=True,            # derive position from tight bbox of axes
     label_clearance_in=0.06,    # inches between labels and colorbar
+    cbar_y_shift_in=0.0,        # positive moves the colorbar upward
+    legend_y_shift_in=0.0,      # positive moves the seasonal key upward
+    legend_x_shift_in=0.0,      # positive moves the seasonal key rightward
 ):
     """
     Align colorbar with ax height; optionally rebuild it on the LEFT; then place
@@ -231,6 +234,9 @@ def realign_cbar_and_legend(
     rpad   = right_pad_in / fig_w_in
     buf    = max(0.0, float(min_buffer_frac))
     clearance = max(0.0, label_clearance_in) / fig_w_in
+    cbar_y_shift = float(cbar_y_shift_in) / fig_h_in
+    legend_y_shift = float(legend_y_shift_in) / fig_h_in
+    legend_x_shift = float(legend_x_shift_in) / fig_w_in
 
     # tight bbox of axes (includes tick labels), in figure coords
     tight_fig = None
@@ -263,7 +269,9 @@ def realign_cbar_and_legend(
         cbar_x1 = max(cbar_w + buf, min(1.0 - rpad, target_x1))
         cbar_x0 = cbar_x1 - cbar_w
 
-        new_cax = fig.add_axes([cbar_x0, ax_box.y0, cbar_w, ax_box.height])
+        new_cax = fig.add_axes(
+            [cbar_x0, ax_box.y0 + cbar_y_shift, cbar_w, ax_box.height]
+        )
         cbar = mpl_colorbar.Colorbar(new_cax, mappable=mappable, orientation="vertical")
         if label:
             cbar.set_label(label)
@@ -285,7 +293,9 @@ def realign_cbar_and_legend(
         cbar_x0 = max(buf, min(1.0 - rpad - cbar_w, target_x0))
         cbar_x1 = cbar_x0 + cbar_w
 
-        cbar.ax.set_position([cbar_x0, ax_box.y0, cbar_w, ax_box.height])
+        cbar.ax.set_position(
+            [cbar_x0, ax_box.y0 + cbar_y_shift, cbar_w, ax_box.height]
+        )
         needed_right = cbar_x1 + rpad
         needed_left  = None
 
@@ -293,7 +303,10 @@ def realign_cbar_and_legend(
     leg = ax.get_legend()
     if leg is not None:
         leg.set_loc("lower center")
-        leg.set_bbox_to_anchor((0.5, 1.0 + y_gap), transform=cbar.ax.transAxes)
+        leg.set_bbox_to_anchor(
+            (0.5 + legend_x_shift, 1.0 + y_gap + legend_y_shift),
+            transform=cbar.ax.transAxes,
+        )
     else:
         # find the small square-ish inset
         candidates = []
@@ -310,8 +323,14 @@ def realign_cbar_and_legend(
             w, h = ib.width, ib.height
             cb = cbar.ax.get_position()
             cx = 0.5 * (cb.x0 + cb.x1)
-            x0 = max(0.0, min(1.0 - w, cx - w / 2.0))
-            y0 = min(0.995 - h, max(0.0, cb.y1 + y_gap))
+            x0 = max(
+                0.0,
+                min(1.0 - w, cx - w / 2.0 + legend_x_shift),
+            )
+            y0 = min(
+                0.995 - h,
+                max(0.0, cb.y1 + y_gap + legend_y_shift),
+            )
             inset.set_position([x0, y0, w, h])
 
     # --- 3) Adjust margins if needed ---

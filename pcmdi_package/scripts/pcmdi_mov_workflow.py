@@ -91,6 +91,10 @@ def plot_pcmdi_mode_outputs(
         cfg = dict(pattern_config)
         which = cfg.pop("which", "eof")
         member_dim = cfg.pop("member_dim", "member")
+        # PCMDI products do not contain the raw resamples/p-value maps needed
+        # for an EOF-pattern significance overlay.
+        for key in ("show_significance", "sig_level", "dot_density", "dot_size"):
+            cfg.pop(key, None)
         filename = format_mode_filename(
             cfg.pop("filename_template", "{mode}_{token}_{var}_{eof}_MODE_PATTERN_region.pdf"),
             mode=mode,
@@ -116,7 +120,10 @@ def plot_pcmdi_mode_outputs(
     if teleconnection_config is not None:
         cfg = dict(teleconnection_config)
         which = cfg.pop("which", "slope")
+        cfg.pop("raw_var", None)
         member_dim = cfg.pop("member_dim", "member")
+        for key in ("show_significance", "sig_level", "dot_density", "dot_size"):
+            cfg.pop(key, None)
         filename = format_mode_filename(
             cfg.pop("filename_template", "{mode}_{token}_{var}_{eof}_TELECONNECTION_global.pdf"),
             mode=mode,
@@ -414,6 +421,122 @@ def plot_raw_pc_timeseries(
         pc_var=pc_var,
         **plot_kwargs,
     )
+
+
+def run_mode_pattern_workflow(
+    *,
+    method: str,
+    mode: str,
+    token: str,
+    period: Tuple[int, int],
+    mode_dict: Mapping[str, Mapping[str, Any]],
+    model_labels: Sequence[str],
+    map_plotter: ExtrapropicalModeMapPlotter,
+    pattern_config: Mapping[str, Any],
+    teleconnection_config: Mapping[str, Any],
+    pcmdi_reader: Optional[EMOVDiagReader] = None,
+    pcmdi_model_tags: Optional[Sequence[str]] = None,
+    analyzer: Optional[Any] = None,
+    raw_model_names: Optional[Sequence[str]] = None,
+    data_dir: Optional[str] = None,
+    overwrite: bool = False,
+    custom_obs_path: Optional[str] = None,
+    custom_obs_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Run one mode through either PCMDI products or raw EOF analysis.
+
+    Both methods return the resolved configuration, loaded/derived data, and
+    saved plot paths/objects in one dictionary.
+    """
+    selected = method.strip().lower()
+    if selected not in {"pcmdi", "raw"}:
+        raise ValueError("method must be 'pcmdi' or 'raw'")
+    if mode not in mode_dict:
+        raise KeyError(f"Unknown mode {mode!r}; choose from {list(mode_dict)}")
+
+    cfg = mode_dict[mode]
+    if selected == "pcmdi":
+        if pcmdi_reader is None or not pcmdi_model_tags:
+            raise ValueError("pcmdi_reader and pcmdi_model_tags are required for method='pcmdi'")
+        outputs = plot_pcmdi_mode_outputs(
+            reader=pcmdi_reader,
+            map_plotter=map_plotter,
+            pc_plotter=None,
+            model_tags=pcmdi_model_tags,
+            member_labels=model_labels,
+            mode_dict=mode_dict,
+            mode=mode,
+            token=token,
+            period=period,
+            pattern_config=pattern_config,
+            teleconnection_config=teleconnection_config,
+        )
+        outputs.update(method=selected, mode_config=cfg)
+        return outputs
+
+    if analyzer is None or not raw_model_names or data_dir is None:
+        raise ValueError("analyzer, raw_model_names, and data_dir are required for method='raw'")
+    raw_cfg = analyzer.cfg.get_mode_info(mode)
+    obs_ds, model_results = analyzer.analyze_or_load_all(
+        mode_name=mode,
+        model_list=list(raw_model_names),
+        out_dir=data_dir,
+        custom_obs_path=custom_obs_path,
+        custom_obs_name=custom_obs_name,
+        period=period,
+        season=token,
+        overwrite=overwrite,
+    )
+    obs_info = raw_cfg.get("obs", {})
+    obs_label = custom_obs_name or (
+        obs_info.get("name") if isinstance(obs_info, dict) else str(obs_info)
+    ) or "Obs"
+    all_cases = [(obs_label, obs_ds), *model_results.items()]
+    field_var = raw_cfg.get("var", "")
+    analysis_units = str(obs_ds.attrs.get("analysis_units", ""))
+    unit_scale = 1e-2 if field_var == "psl" and analysis_units.lower() != "hpa" else 1.0
+
+    pattern = dict(pattern_config)
+    pattern.pop("which", None)
+    pattern.pop("member_dim", None)
+    pattern_filename = format_mode_filename(
+        pattern.pop("filename_template", "{mode}_{token}_{var}_{eof}_MODE_PATTERN_region.pdf"),
+        mode=mode, token=token, var=cfg["var"], eof=cfg["eof"],
+    )
+    pattern_result = plot_raw_mode_pattern(
+        map_plotter=map_plotter, all_cases=all_cases, mode=mode, token=token,
+        filename=pattern_filename, region_lat_bounds=raw_cfg.get("lat_bnds"),
+        region_lon_bounds=raw_cfg.get("lon_bnds"), obs_var="eof_lr",
+        model_var="eof_lr_proj", obs_fallback="slope", model_fallback="slope_proj",
+        pval_obs_var="slope_pval", pval_model_var="slope_pval_proj",
+        unit_scale=unit_scale, **pattern,
+    )
+
+    tele = dict(teleconnection_config)
+    tele.pop("which", None)
+    tele.pop("member_dim", None)
+    tele_filename = format_mode_filename(
+        tele.pop("filename_template", "{mode}_{token}_{var}_{eof}_TELECONNECTION_global.pdf"),
+        mode=mode, token=token, var=cfg["var"], eof=cfg["eof"],
+    )
+    tele_var = tele.pop("raw_var", "slope_proj")
+    tele_result = plot_raw_teleconnection(
+        map_plotter=map_plotter, all_cases=all_cases, mode=mode, token=token,
+        filename=tele_filename, obs_var=tele_var, model_var=tele_var,
+        obs_fallback="slope", model_fallback="slope",
+        pval_obs_var=tele_var.replace("slope", "slope_pval"),
+        pval_model_var=tele_var.replace("slope", "slope_pval"),
+        pval_obs_fallback="slope_pval", pval_model_fallback="slope_pval",
+        unit_scale=unit_scale, **tele,
+    )
+    return {
+        "method": selected,
+        "mode_config": cfg,
+        "observation": obs_ds,
+        "models": model_results,
+        "pattern": pattern_result,
+        "teleconnection": tele_result,
+    }
 
 
 def wrap_lon_180(da: xr.DataArray, lon_name: str = "lon") -> xr.DataArray:

@@ -45,6 +45,25 @@ from utils import (
 
 logger = _setup_child_logger(__name__)
 
+DISPLAY_FIGURES = False
+
+
+def set_display_figures(enabled: bool) -> None:
+    """Control inline display without changing file-saving behavior."""
+    global DISPLAY_FIGURES
+    DISPLAY_FIGURES = bool(enabled)
+
+
+def _display_figure(fig) -> None:
+    if not DISPLAY_FIGURES:
+        return
+    try:
+        from IPython.display import display
+
+        display(fig)
+    except ImportError:
+        fig.show()
+
 
 def _filter_enso_json_for_supported_plot_metrics(
     dict_json_path: Dict[str, Dict[str, str]],
@@ -122,6 +141,9 @@ class SyntheticMetricsPlotter:
         font_size: float = 20,
         legend_lw: float = 1.5, 
         figure_size: tuple[float, float] = (50.0, 20.0),
+        portrait_figure_size: Optional[tuple[float, float]] = None,
+        parcoord_figure_size: Optional[tuple[float, float]] = None,
+        parcoord_legend_y_offset: float = -0.08,
         figure_title: Optional[str] = None, 
         # Test data (combined )
         test_combined: bool = False,
@@ -185,6 +207,9 @@ class SyntheticMetricsPlotter:
         self.figure_format = figure_format
         self.font_size = font_size
         self.figure_size = figure_size
+        self.portrait_figure_size = portrait_figure_size or figure_size
+        self.parcoord_figure_size = parcoord_figure_size or figure_size
+        self.parcoord_legend_y_offset = float(parcoord_legend_y_offset)
         self.legend_lw = legend_lw
         self.figure_title = figure_title 
         self.metric_dict = metric_dict
@@ -299,10 +324,10 @@ class SyntheticMetricsPlotter:
     
     @staticmethod
     def _to_list(value: Optional[Union[List[str], str]]) -> List[str]:
-        """Accept None | list[str] | comma/space-separated str -> List[str]."""
+        """Accept None, a sequence, or a comma/space-separated string."""
         if value is None:
             return []
-        if isinstance(value, list):
+        if isinstance(value, (list, tuple)):
             return [str(v).strip() for v in value if str(v).strip()]
         s = str(value).strip()
         if not s:
@@ -455,7 +480,10 @@ class SyntheticMetricsPlotter:
                 self.font_size,
                 self.figure_size,
                 self.legend_lw,
-                self.figure_title
+                self.figure_title,
+                portrait_figure_size=self.portrait_figure_size,
+                parcoord_figure_size=self.parcoord_figure_size,
+                parcoord_legend_y_offset=self.parcoord_legend_y_offset,
             )
 
     def _handle_variability_modes(self, metric: str) -> None:
@@ -548,7 +576,10 @@ class SyntheticMetricsPlotter:
                 self.font_size,
                 self.figure_size,
                 self.legend_lw,
-                self.figure_title
+                self.figure_title,
+                portrait_figure_size=self.portrait_figure_size,
+                parcoord_figure_size=self.parcoord_figure_size,
+                parcoord_legend_y_offset=self.parcoord_legend_y_offset,
             )
               
     def _handle_enso_metric(self, metric: str, debug: bool = False) -> None:
@@ -621,6 +652,7 @@ class SyntheticMetricsPlotter:
                     self.show_ref_row, 
                     self.show_alt_obs_rows,
                     self.highlight_cmip,
+                    self.figure_size,
                 )
                 logger.debug(f"[enso] Plotted stat='{stat}' successfully.")
             except Exception as e:
@@ -650,7 +682,10 @@ def mean_climate_plot_driver(
     font_size,
     figure_size,
     legend_lw,
-    figure_title, 
+    figure_title,
+    portrait_figure_size=None,
+    parcoord_figure_size=None,
+    parcoord_legend_y_offset=-0.08,
 ):
     """Driver Function for the mean climate metrics plot"""
     mout_name = f"{test_group}_vs_{ref_group}"
@@ -757,7 +792,7 @@ def mean_climate_plot_driver(
                     mean_list=mean_model_list,
                     meanx_list=meanx_model_list,
                     base_fontsize=font_size,
-                    base_figsize=figure_size,
+                    base_figsize=portrait_figure_size or figure_size,
                     base_legend_lw=legend_lw,
                     base_title=figure_title, 
                 )
@@ -782,6 +817,15 @@ def mean_climate_plot_driver(
                             var_list.copy(),
                             var_unit_list.copy(),
                         )
+
+                        # Keep the notebook's requested variable sequence as
+                        # the authoritative parallel-coordinate x-axis order.
+                        unit_by_name = dict(zip(var_list, var_unit_list or []))
+                        var_names = [
+                            name for name in var_list
+                            if name in data_dict.columns and name in ref_dict.columns
+                        ]
+                        var_units = [unit_by_name.get(name, "") for name in var_names]
                                 
                         if save_data:
                             outdir = os.path.join(out_path, metric, region)
@@ -819,9 +863,10 @@ def mean_climate_plot_driver(
                             mean_list=mean_model_list,
                             meanx_list=meanx_model_list,
                             base_fontsize=font_size,
-                            base_figsize=figure_size,
+                            base_figsize=parcoord_figure_size or figure_size,
                             base_legend_lw=legend_lw,
                             base_title=figure_title, 
+                            legend_y_offset=parcoord_legend_y_offset,
                         )
     return
 
@@ -845,7 +890,10 @@ def variability_modes_plot_driver(
     font_size,
     figure_size,
     legend_lw,
-    figure_title, 
+    figure_title,
+    portrait_figure_size=None,
+    parcoord_figure_size=None,
+    parcoord_legend_y_offset=-0.08,
 ):
     """Driver Function for the modes variability metrics plot"""
     season = "all"
@@ -918,7 +966,7 @@ def variability_modes_plot_driver(
                     mean_list=mean_model_list,
                     meanx_list=meanx_model_list,
                     base_fontsize=font_size,
-                    base_figsize=figure_size,
+                    base_figsize=portrait_figure_size or figure_size,
                     base_legend_lw=legend_lw,
                     base_title=figure_title, 
                 )
@@ -959,9 +1007,10 @@ def variability_modes_plot_driver(
                 mean_list=mean_model_list,
                 meanx_list=meanx_model_list,
                 base_fontsize=font_size,
-                base_figsize=figure_size,
+                base_figsize=parcoord_figure_size or figure_size,
                 base_legend_lw=legend_lw,
                 base_title=figure_title, 
+                legend_y_offset=parcoord_legend_y_offset,
             )
 
     return
@@ -982,6 +1031,7 @@ def enso_plot_driver(
         show_ref_row=False, 
         show_alt_obs_rows=False,
         highlight_cmip=False,
+        figure_size=None,
 ):
     """
     Driver function to plot ENSO metrics based on specified type (e.g., portrait).
@@ -1015,14 +1065,19 @@ def enso_plot_driver(
                     plot_json_path, 
                     figure_name=figure_name, 
                     reduced_set=reduced_set,
-                    #met_order=met_order,
-                    #mod_order=mod_order,
+                    met_order=met_order,
+                    mod_order=mod_order,
                     sort_y_names=sort_y_names, 
                     show_proj_means=show_proj_means, 
                     show_ref_row=show_ref_row, 
                     show_alt_obs_rows=show_alt_obs_rows,
                     #highlight_cmip = highlight_cmip,
                 )
+                if figure_size is not None:
+                    fig.set_size_inches(*figure_size, forward=True)
+                    fig.savefig(figure_name, facecolor="w", bbox_inches="tight")
+                _display_figure(fig)
+                plt.close(fig)
 
     return
 
@@ -1059,7 +1114,7 @@ def portrait_metric_plot(
     fscale = len(var_list) / 35.0
     fscale = max(0.5, min(fscale, 1.5))
     fontsize = base_fontsize
-    figsize = (base_figsize[0], base_figsize[0] / 2.0)
+    figsize = tuple(base_figsize)
     legend_box_xy = (1.025, 0.98)
     legend_box_size = 4 * fscale
     legend_lw = base_legend_lw * fscale
@@ -1346,6 +1401,9 @@ def portrait_metric_plot(
         label_clearance_in=0.02,   # how much space beyond labels
         min_buffer_frac=0.0002,    # 0.0002 × 50 in ≈ 0.01"
         y_gap_above_cbar_in=0.005,
+        cbar_y_shift_in=-0.10,
+        legend_y_shift_in=0.35,
+        legend_x_shift_in=0.35,
         top_guard=0.98,
     )
     
@@ -1353,6 +1411,7 @@ def portrait_metric_plot(
     os.makedirs(outdir, exist_ok=True)
     outfile = f"{stat}_{region}_portrait_{group}.{fig_format}"
     fig.savefig(os.path.join(outdir, outfile), facecolor="w", bbox_inches="tight")
+    _display_figure(fig)
     plt.close(fig)
     
     return
@@ -1381,6 +1440,7 @@ def parcoord_metric_plot(
     base_figsize=(50, 20),
     base_legend_lw=1.5,
     base_title = None,
+    legend_y_offset=-0.08,
     xcolors=None,
     style_cycle=None,
     color_map="tab20_r",
@@ -1518,7 +1578,8 @@ def parcoord_metric_plot(
     legend_ncol = max(1, int(7 * figsize[0] / 40.0))
     y_offset = -0.25 * figsize[0] / 40.0
     y_offset = min(y_offset, -0.10)   
-    legend_position = (0.50, y_offset)
+    # Keep the bottom legend clear of the rotated variable labels.
+    legend_position = (0.50, y_offset + legend_y_offset)
 
     # determine core title based on metric / region
     if "mean_climate" in (metric, region):
@@ -1667,5 +1728,6 @@ def parcoord_metric_plot(
     os.makedirs(outdir, exist_ok=True)
     outfile = "{}_{}_parcoord_{}.{}".format(stat, region, metric, fig_format)
     fig.savefig(os.path.join(outdir, outfile), facecolor="w", bbox_inches="tight")
+    _display_figure(fig)
     plt.close(fig)
     return

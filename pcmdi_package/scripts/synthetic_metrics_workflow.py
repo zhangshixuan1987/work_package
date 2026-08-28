@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import importlib
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 try:
     from .logger import _setup_child_logger, _setup_root_logger
+    from .environment import configure_proj_data
 except ImportError:
     from logger import _setup_child_logger, _setup_root_logger
+    from environment import configure_proj_data
 
 os.environ.setdefault(
     "MPLCONFIGDIR", str(Path("/tmp") / f"matplotlib-{os.environ.get('USER', 'user')}")
@@ -68,6 +71,9 @@ class PlotStyle:
     out_dir: Path
     font_size: float
     figure_size: tuple[float, float]
+    portrait_figure_size: Optional[tuple[float, float]] = None
+    parcoord_figure_size: Optional[tuple[float, float]] = None
+    parcoord_legend_y_offset: float = -0.08
     legend_lw: float = 1.5
 
 
@@ -111,6 +117,21 @@ class SyntheticPlotsParameters:
     run_type: str = "model_vs_obs"
     save_all_data: bool = True
     figure_format: str = "pdf"
+    clim_figure_size: tuple[float, float] = (50.0, 20.0)
+    clim_portrait_figure_size: Optional[tuple[float, float]] = None
+    clim_parcoord_figure_size: Optional[tuple[float, float]] = None
+    mov_figure_size: tuple[float, float] = (80.0, 30.0)
+    mov_portrait_figure_size: Optional[tuple[float, float]] = None
+    mov_parcoord_figure_size: Optional[tuple[float, float]] = None
+    mov_parcoord_legend_y_offset: float = -0.08
+    enso_figure_size: tuple[float, float] = (30.0, 18.0)
+    enso_reduced_set: bool = False
+    enso_metric_order: Optional[List[str]] = None
+    enso_model_order: Optional[List[str] | str] = None
+    enso_sort_y_names: bool = False
+    enso_show_project_means: bool = False
+    enso_show_ref_row: bool = False
+    enso_show_alt_obs_rows: bool = False
 
     clim_viewer: bool = False
     mova_viewer: bool = False
@@ -203,6 +224,33 @@ def load_metric_dict(metric_file: Path = DEFAULT_METRIC_FILE) -> Dict[str, Any]:
         return json.load(handle)
 
 
+def select_metric_definitions(
+    metric_dict: Mapping[str, Any],
+    selection: Optional[Mapping[str, Iterable[str]]] = None,
+) -> Dict[str, Any]:
+    """Return metric definitions restricted to explicit notebook selections."""
+    selected = dict(metric_dict)
+    if selection is None:
+        return selected
+
+    for figure_set, metric_names in selection.items():
+        if figure_set not in metric_dict:
+            raise KeyError(
+                f"Unknown metric figure set {figure_set!r}; "
+                f"available sets: {list(metric_dict)}"
+            )
+        definitions = metric_dict[figure_set]
+        names = list(metric_names)
+        unknown = [name for name in names if name not in definitions]
+        if unknown:
+            raise KeyError(
+                f"Unknown metrics for {figure_set!r}: {unknown}; "
+                f"available metrics: {list(definitions)}"
+            )
+        selected[figure_set] = {name: definitions[name] for name in names}
+    return selected
+
+
 def dataset_for_group(
     group: str, case_id: str, root: Path = PCMDI_METRICS_ROOT
 ) -> MetricsDataset:
@@ -287,7 +335,9 @@ def figure_styles(
         "mean_climate": PlotStyle(
             title=f"{panel_label} {title_label} (Mean Climate)",
             font_size=40,
-            figure_size=(50.0, 20.0),
+            figure_size=parameters.clim_figure_size,
+            portrait_figure_size=parameters.clim_portrait_figure_size,
+            parcoord_figure_size=parameters.clim_parcoord_figure_size,
             out_dir=parameters.out_dir
             / f"clim_vs_{parameters.error_norm}_{clim_scope}_nocmip"
             / parameters.run_type
@@ -296,7 +346,10 @@ def figure_styles(
         "variability": PlotStyle(
             title=f"{panel_label} {title_label} (Variability Modes)",
             font_size=40,
-            figure_size=(80.0, 30.0),
+            figure_size=parameters.mov_figure_size,
+            portrait_figure_size=parameters.mov_portrait_figure_size,
+            parcoord_figure_size=parameters.mov_parcoord_figure_size,
+            parcoord_legend_y_offset=parameters.mov_parcoord_legend_y_offset,
             out_dir=parameters.out_dir
             / f"movs_{parameters.atm_obs}_{parameters.cpl_obs}_{parameters.movs_group}_nocmip"
             / parameters.run_type
@@ -305,7 +358,7 @@ def figure_styles(
         "enso": PlotStyle(
             title=f"{panel_label} {title_label} (ENSO)",
             font_size=40,
-            figure_size=(50.0, 20.0),
+            figure_size=parameters.enso_figure_size,
             out_dir=parameters.out_dir
             / "enso_with_feedback_nocmip"
             / parameters.run_type
@@ -351,6 +404,21 @@ def make_parameters(
     out_dir: Optional[Path] = None,
     run_type: str = "model_vs_obs",
     figure_format: str = "pdf",
+    clim_figure_size: tuple[float, float] = (50.0, 20.0),
+    clim_portrait_figure_size: Optional[tuple[float, float]] = None,
+    clim_parcoord_figure_size: Optional[tuple[float, float]] = None,
+    mov_figure_size: tuple[float, float] = (80.0, 30.0),
+    mov_portrait_figure_size: Optional[tuple[float, float]] = None,
+    mov_parcoord_figure_size: Optional[tuple[float, float]] = None,
+    mov_parcoord_legend_y_offset: float = -0.08,
+    enso_figure_size: tuple[float, float] = (30.0, 18.0),
+    enso_reduced_set: bool = False,
+    enso_metric_order: Optional[List[str]] = None,
+    enso_model_order: Optional[List[str] | str] = None,
+    enso_sort_y_names: bool = False,
+    enso_show_project_means: bool = False,
+    enso_show_ref_row: bool = False,
+    enso_show_alt_obs_rows: bool = False,
     mean_group1_name: Optional[str] = None,
     mean_group2_name: Optional[str] = None,
     extra_groups_name: Optional[List[str]] = None,
@@ -393,6 +461,21 @@ def make_parameters(
         run_type=run_type,
         save_all_data=True,
         figure_format=figure_format,
+        clim_figure_size=clim_figure_size,
+        clim_portrait_figure_size=clim_portrait_figure_size,
+        clim_parcoord_figure_size=clim_parcoord_figure_size,
+        mov_figure_size=mov_figure_size,
+        mov_portrait_figure_size=mov_portrait_figure_size,
+        mov_parcoord_figure_size=mov_parcoord_figure_size,
+        mov_parcoord_legend_y_offset=mov_parcoord_legend_y_offset,
+        enso_figure_size=enso_figure_size,
+        enso_reduced_set=enso_reduced_set,
+        enso_metric_order=enso_metric_order,
+        enso_model_order=enso_model_order,
+        enso_sort_y_names=enso_sort_y_names,
+        enso_show_project_means=enso_show_project_means,
+        enso_show_ref_row=enso_show_ref_row,
+        enso_show_alt_obs_rows=enso_show_alt_obs_rows,
         clim_viewer=clim_viewer,
         mova_viewer=mova_viewer,
         movc_viewer=movc_viewer,
@@ -453,13 +536,13 @@ def make_plotter(
         from synthetic_metrics_plotter import SyntheticMetricsPlotter
 
     enso_options = {
-        "reduced_set": False,
-        "met_order": None,
-        "mod_order": None,
-        "sort_y_names": False,
-        "show_proj_means": False,
-        "show_ref_row": False,
-        "show_alt_obs_rows": False,
+        "reduced_set": parameters.enso_reduced_set,
+        "met_order": parameters.enso_metric_order,
+        "mod_order": parameters.enso_model_order,
+        "sort_y_names": parameters.enso_sort_y_names,
+        "show_proj_means": parameters.enso_show_project_means,
+        "show_ref_row": parameters.enso_show_ref_row,
+        "show_alt_obs_rows": parameters.enso_show_alt_obs_rows,
         "highlight_cmip": True,
     }
 
@@ -510,6 +593,9 @@ def make_plotter(
         font_size=style.font_size,
         legend_lw=style.legend_lw,
         figure_size=style.figure_size,
+        portrait_figure_size=style.portrait_figure_size,
+        parcoord_figure_size=style.parcoord_figure_size,
+        parcoord_legend_y_offset=style.parcoord_legend_y_offset,
         figure_title=style.title,
         out_dir=str(style.out_dir),
         **enso_options,
@@ -521,23 +607,42 @@ def run_synthetic_plots(
     *,
     title_label: str,
     metric_file: Path = DEFAULT_METRIC_FILE,
+    metric_selection: Optional[Mapping[str, Iterable[str]]] = None,
+    show_figures: bool = False,
     debug: bool = True,
 ) -> None:
     """Generate all enabled synthetic metric figures."""
-    metric_dict = load_metric_dict(metric_file)
+    configure_proj_data(verbose=debug)
+    metric_dict = select_metric_definitions(
+        load_metric_dict(metric_file), metric_selection
+    )
     figure_sets = active_figure_sets(parameters)
     styles = figure_styles(parameters, title_label)
+
+    plotter_module_name = (
+        f"{__package__}.synthetic_metrics_plotter"
+        if __package__
+        else "synthetic_metrics_plotter"
+    )
+    plotter_module = importlib.import_module(plotter_module_name)
+    if not hasattr(plotter_module, "set_display_figures"):
+        # A notebook may have cached the module before inline display support
+        # was added. Reload only in that compatibility case.
+        plotter_module = importlib.reload(plotter_module)
+    plotter_module.set_display_figures(show_figures)
 
     parameters.summary()
     logger.info("Generating synthetic metrics plots for case_id=%s", parameters.test_case_id)
 
     for figure_set in figure_sets:
         style = styles[figure_set]
+        selected_metrics = list(metric_dict.get(figure_set, {}))
         logger.info(
-            "Generating figure_set=%s for case_id=%s",
+            "Generating figure_set=%s metrics=%s for case_id=%s",
             figure_set,
+            selected_metrics,
             parameters.test_case_id,
         )
-        print(figure_set)
+        print(f"{figure_set}: {selected_metrics}")
         plotter = make_plotter(parameters, metric_dict, style)
         plotter.generate(figure_sets=[figure_set], debug=debug)

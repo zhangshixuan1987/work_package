@@ -162,6 +162,20 @@ class ClimMetricsMerger:
         return lib
 
     @staticmethod
+    def _model_names(lib) -> List[str]:
+        """Collect model names without requiring group-mean columns."""
+        names = set()
+        if lib is None:
+            return []
+        for seasons in getattr(lib, "df_dict", {}).values():
+            for regions in seasons.values():
+                for frame in regions.values():
+                    df = pd.DataFrame(frame)
+                    if "model" in df.columns:
+                        names.update(df["model"].dropna().astype(str))
+        return sorted(names)
+
+    @staticmethod
     def _safe_merge_libs(lib1, lib2):
         """
         Merge two data libraries with nested dicts of DataFrames,
@@ -451,8 +465,10 @@ class ClimMetricsMerger:
 
         # 6) Append group means computed from ref_lib / model_lib into merged_lib
         mean_model_list: List[str] = []   # names of the mean entries to highlight (e.g., ["CMIP (mean)", "E3SMv3-LE (mean)"])
-        ref_model_list: List[str] = []    # contributors used for reference mean + mean_name (per your _add_group_means)
-        test_model_list: List[str] = []   # contributors used for test mean + mean_name
+        # Group membership is needed for highlighting even when mean columns
+        # are hidden.  Adding means below may append each group's mean name.
+        ref_model_list: List[str] = self._model_names(ref_lib)
+        test_model_list: List[str] = self._model_names(model_lib)
 
         if self.show_mean_columns and ref_lib is not None and getattr(self, "mean_group1_name", None):
             merged_lib, ref_model_list = self._add_group_means(

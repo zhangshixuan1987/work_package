@@ -283,6 +283,15 @@ class ExtrapropicalModeMapPlotter:
         spread_quantile: float = 0.75,
         spread_level_by_product: Optional[Dict[str, float]] = None,
         hatch: str = "....",
+        significance_by_product: Optional[Dict[str, Dict[str, xr.DataArray]]] = None,
+        sig_level: float = 0.05,
+        sig_dot_color: str = "k",
+        sig_dot_size: float = 2.0,
+        sig_dot_density: int = 2,
+        annotate_stats: bool = False,
+        stats_area_weight: bool = True,
+        stats_font_scale: float = 0.78,
+        hide_inner_ylabels: bool = False,
         cb_labels_by_product: Optional[Dict[str, str]] = None,
         one_colorbar_per_row: bool = True,
         fig_format: str = "pdf",
@@ -313,6 +322,7 @@ class ExtrapropicalModeMapPlotter:
         cb_labels_by_product = cb_labels_by_product or {}
         mlevels_by_product = mlevels_by_product or {}
         spread_level_by_product = spread_level_by_product or {}
+        significance_by_product = significance_by_product or {}
 
         panel_keys = [self.obs_key] + list(self.group_order)
         ncols = len(panel_keys)
@@ -332,10 +342,13 @@ class ExtrapropicalModeMapPlotter:
 
         if yticks is None:
             yticks = np.arange(-90, 91, 30)
-        xticks = np.arange(np.floor(lon.min()), np.ceil(lon.max()) + 1e-9, xtick_step)
-
         if extent is None:
             extent = (float(lon.min()), float(lon.max()), float(lat.min()), float(lat.max()))
+        xticks = np.arange(
+            np.ceil(extent[0] / xtick_step) * xtick_step,
+            extent[1] + 1e-9,
+            xtick_step,
+        )
 
         fig = plt.figure(figsize=figsize)
         proj = ccrs.PlateCarree(central_longitude=central_lon)
@@ -394,14 +407,70 @@ class ExtrapropicalModeMapPlotter:
                         hatches=[hatch], colors="none", transform=data_crs,
                     )
 
+                pval = significance_by_product.get(pk, {}).get(key)
+                if pval is not None:
+                    pval = pval.transpose(self.lat_name, self.lon_name)
+                    if not (
+                        pval[self.lat_name].size == da_map[self.lat_name].size
+                        and pval[self.lon_name].size == da_map[self.lon_name].size
+                        and np.allclose(pval[self.lat_name], da_map[self.lat_name])
+                        and np.allclose(pval[self.lon_name], da_map[self.lon_name])
+                    ):
+                        pval = pval.interp({
+                            self.lat_name: da_map[self.lat_name],
+                            self.lon_name: da_map[self.lon_name],
+                        })
+                    add_sig_dots(
+                        ax, pval.rename({self.lat_name: "lat", self.lon_name: "lon"}),
+                        sig_level=sig_level, dot_color=sig_dot_color,
+                        dot_size=sig_dot_size, dot_density=sig_dot_density,
+                        transform=data_crs,
+                    )
+
                 panel_letter = chr(97 + (idx - 1 + fig_idx_start))
                 ax.set_title(f"({panel_letter}) {self._panel_label(key)}", loc="left", fontsize=fontz)
-                if c == ncols - 1:
-                    ax.set_title(product_labels.get(pk, pk), loc="right", fontsize=fontz)
+                product_title = product_labels.get(pk, pk)
+                if c == ncols - 1 and product_title:
+                    ax.set_title(product_title, loc="right", fontsize=fontz)
+
+                if annotate_stats and key != self.obs_key:
+                    lon_convention = "negpos" if extent[0] < 0 else "0_360"
+                    ref_stats = self._normalize_lon_for_bounds(mp[self.obs_key], lon_convention)
+                    map_stats = self._normalize_lon_for_bounds(da_map, lon_convention)
+                    lat_lo, lat_hi = sorted((extent[2], extent[3]))
+                    lon_lo, lon_hi = sorted((extent[0], extent[1]))
+                    ref_stats = ref_stats.sel({
+                        self.lat_name: slice(lat_lo, lat_hi),
+                        self.lon_name: slice(lon_lo, lon_hi),
+                    }).transpose(self.lat_name, self.lon_name)
+                    map_stats = map_stats.interp({
+                        self.lat_name: ref_stats[self.lat_name],
+                        self.lon_name: ref_stats[self.lon_name],
+                    }).transpose(self.lat_name, self.lon_name)
+                    if stats_area_weight:
+                        weights = np.cos(np.deg2rad(ref_stats[self.lat_name].values))
+                        weights_2d = weights[:, None] * np.ones(ref_stats.shape, dtype=float)
+                    else:
+                        weights_2d = None
+                    pcc, rmsd = self._weighted_corr_rmse(
+                        ref_stats.values, map_stats.values, w2d=weights_2d,
+                    )
+                    ax.text(
+                        0.03, 0.04, f"PCC = {pcc:.2f}\nRMSD = {rmsd:.2f}",
+                        transform=ax.transAxes, ha="left", va="bottom",
+                        fontsize=fontz * stats_font_scale,
+                        bbox=dict(
+                            facecolor="white", edgecolor="0.7", alpha=0.65,
+                            boxstyle="round,pad=0.22",
+                        ),
+                        zorder=7,
+                    )
 
                 ax.tick_params(labelsize=fontz * 0.9)
                 if c == 0:
                     ax.set_ylabel("Latitude", fontsize=fontz)
+                elif hide_inner_ylabels:
+                    ax.tick_params(axis="y", labelleft=False)
                 ax.set_xlabel("Longitude", fontsize=fontz)
 
         fig.subplots_adjust(left=left, right=right, bottom=bottom, top=top, hspace=hspace, wspace=wspace)
@@ -669,9 +738,9 @@ class ExtrapropicalModeMapPlotter:
             ax.set_title(f"({chr(97 + p)}) {name}", loc="left", fontsize=fontz)
 
             if p > 0:
-                r0, rmse0 = self._weighted_corr_rmse(panels_plot[0][1].values, da.values, w2d=w2d)
+                r0, rmsd0 = self._weighted_corr_rmse(panels_plot[0][1].values, da.values, w2d=w2d)
                 ax.text(
-                    0.05, 0.05, f"PCC = {r0:.2f}\nRMSE = {rmse0:.2f}",
+                    0.05, 0.05, f"PCC = {r0:.2f}\nRMSD = {rmsd0:.2f}",
                     transform=ax.transAxes, ha="left", va="bottom", fontsize=fontz * 0.9,
                     bbox=dict(facecolor="white", edgecolor="0.7", alpha=0.5, boxstyle="round,pad=0.25"),
                 )
