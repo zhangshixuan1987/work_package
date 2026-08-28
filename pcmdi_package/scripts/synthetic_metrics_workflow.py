@@ -117,9 +117,11 @@ class SyntheticPlotsParameters:
     run_type: str = "model_vs_obs"
     save_all_data: bool = True
     figure_format: str = "pdf"
+    clim_font_size: float = 40
     clim_figure_size: tuple[float, float] = (50.0, 20.0)
     clim_portrait_figure_size: Optional[tuple[float, float]] = None
     clim_parcoord_figure_size: Optional[tuple[float, float]] = None
+    mov_font_size: float = 40
     mov_figure_size: tuple[float, float] = (80.0, 30.0)
     mov_portrait_figure_size: Optional[tuple[float, float]] = None
     mov_parcoord_figure_size: Optional[tuple[float, float]] = None
@@ -334,7 +336,7 @@ def figure_styles(
     return {
         "mean_climate": PlotStyle(
             title=f"{panel_label} {title_label} (Mean Climate)",
-            font_size=40,
+            font_size=parameters.clim_font_size,
             figure_size=parameters.clim_figure_size,
             portrait_figure_size=parameters.clim_portrait_figure_size,
             parcoord_figure_size=parameters.clim_parcoord_figure_size,
@@ -345,7 +347,7 @@ def figure_styles(
         ),
         "variability": PlotStyle(
             title=f"{panel_label} {title_label} (Variability Modes)",
-            font_size=40,
+            font_size=parameters.mov_font_size,
             figure_size=parameters.mov_figure_size,
             portrait_figure_size=parameters.mov_portrait_figure_size,
             parcoord_figure_size=parameters.mov_parcoord_figure_size,
@@ -404,9 +406,11 @@ def make_parameters(
     out_dir: Optional[Path] = None,
     run_type: str = "model_vs_obs",
     figure_format: str = "pdf",
+    clim_font_size: float = 40,
     clim_figure_size: tuple[float, float] = (50.0, 20.0),
     clim_portrait_figure_size: Optional[tuple[float, float]] = None,
     clim_parcoord_figure_size: Optional[tuple[float, float]] = None,
+    mov_font_size: float = 40,
     mov_figure_size: tuple[float, float] = (80.0, 30.0),
     mov_portrait_figure_size: Optional[tuple[float, float]] = None,
     mov_parcoord_figure_size: Optional[tuple[float, float]] = None,
@@ -461,9 +465,11 @@ def make_parameters(
         run_type=run_type,
         save_all_data=True,
         figure_format=figure_format,
+        clim_font_size=clim_font_size,
         clim_figure_size=clim_figure_size,
         clim_portrait_figure_size=clim_portrait_figure_size,
         clim_parcoord_figure_size=clim_parcoord_figure_size,
+        mov_font_size=mov_font_size,
         mov_figure_size=mov_figure_size,
         mov_portrait_figure_size=mov_portrait_figure_size,
         mov_parcoord_figure_size=mov_parcoord_figure_size,

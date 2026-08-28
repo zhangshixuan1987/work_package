@@ -1149,10 +1149,7 @@ def portrait_metric_plot(
         logger.warning("[Portrait]: No reference models to plot (ref_list empty).")
     if not e3sm_list:
         logger.warning("[Portrait]: No e3sm models to plot (e3sm_list empty).")
-    if not mean_list:
-        logger.warning("[Portrait]: No groupd mean models to plot (mean_list empty).")
-    if not meanx_list: 
-        logger.warning("[Portrait]: No extra mean models to plot (meanx_list empty).")
+    # Empty mean lists are valid when mean columns are intentionally disabled.
     
     # --- Build data array ---
     if group == "mean_climate":

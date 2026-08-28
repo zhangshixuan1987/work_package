@@ -423,8 +423,24 @@ class MoVsMetricsReader:
         # --- Highlight and reorder models ---
         e3sm_model_list, merged_lib = self._highlight_and_sort_models(merged_lib)
 
-        # --- Group means ---
-        mean_model_list, ref_model_list, test_model_list = [], [], []
+        # Group membership is needed by the parallel-coordinate plot even when
+        # mean columns are disabled. Preserve source order across statistic tables.
+        def _model_names(data_lib):
+            names = []
+            for table in data_lib.values():
+                df = pd.DataFrame(table)
+                if "model" not in df.columns:
+                    continue
+                for name in df["model"].dropna().astype(str):
+                    if name not in names:
+                        names.append(name)
+            return names
+
+        ref_model_list = _model_names(ref_df_lib)
+        test_model_list = _model_names(test_df_lib)
+
+        # --- Optional group means ---
+        mean_model_list = []
         if self.show_mean_columns and ref_df_lib and getattr(self, "mean_group1_name", None):
             merged_lib, ref_model_list = self._add_group_means(merged_lib, ref_df_lib, self.mean_group1_name, True)
             if self.mean_group1_name in ref_model_list:
