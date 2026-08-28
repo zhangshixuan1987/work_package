@@ -5,6 +5,7 @@ from typing import Callable, Mapping, Optional, Sequence
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import xarray as xr
 
@@ -175,6 +176,14 @@ class ClimatologyMapPlotter:
 
     @staticmethod
     def _find_data_variable(ds: xr.Dataset, var_name: str) -> str:
+        aliases = {
+            "tas": ("tas", "TREFHT", "T2M", "t2m"),
+            "pr": ("pr", "PRECT", "TP", "tp"),
+            "psl": ("psl", "PSL", "MSL", "msl"),
+        }
+        for alias in aliases.get(var_name, (var_name,)):
+            if alias in ds.data_vars:
+                return alias
         candidates = [
             name
             for name, da in ds.data_vars.items()
@@ -193,6 +202,21 @@ class ClimatologyMapPlotter:
         if not candidates:
             raise ValueError(f"Could not find a time-dependent variable for {var_name!r}.")
         return candidates[0]
+
+    def _load_seasonal_directory(
+        self, directory: Path, var_name: str
+    ) -> dict[str, xr.DataArray]:
+        """Load ANN/DJF/MAM/JJA/SON from E3SM postprocessed climo files."""
+        seasonal = {}
+        for season in self.season_order:
+            matches = sorted(directory.glob(f"*_{season}_*_climo.nc"))
+            if not matches:
+                raise FileNotFoundError(
+                    f"No {season} climatology file found in {directory}"
+                )
+            da = self._load_variable(matches[0], var_name).squeeze(drop=True)
+            seasonal[season] = da
+        return seasonal
 
     @staticmethod
     def _find_tau_variable(ds: xr.Dataset) -> str:
@@ -234,9 +258,13 @@ class ClimatologyMapPlotter:
 
             if var_name not in paths:
                 raise ValueError(f"Missing path for variable {var_name!r} in experiment {exp!r}.")
-            seasonal_data[exp] = self._compute_seasonal_means(
-                self._load_variable(paths[var_name], var_name)
-            )
+            path = paths[var_name]
+            if path.is_dir():
+                seasonal_data[exp] = self._load_seasonal_directory(path, var_name)
+            else:
+                seasonal_data[exp] = self._compute_seasonal_means(
+                    self._load_variable(path, var_name)
+                )
         return seasonal_data
 
     @staticmethod
@@ -442,3 +470,235 @@ class ClimatologyMapPlotter:
             print(f"[INFO] Saved {out_file}")
 
         plt.show()
+
+def plot_bias_only_by_model(
+    plotter,
+    var_name,
+    *,
+    cmap="RdBu_r",
+    levels=None,
+    font_size=14,
+    fig_size=None,
+    dpi=150,
+    ref_label=None,
+    metric_box_alpha=0.65,
+    show_borders=False,
+    colorbar_width=0.045,
+    longitude_labels=None,
+    title_pad=3,
+    suptitle_y=0.985,
+    grid_kwargs=None,
+):
+    ref = plotter.ref_name
+    if ref not in plotter.exp_dict:
+        raise ValueError(f"Reference {ref!r} is not in exp_dict.")
+
+    all_fields = plotter._compute_all_fields(var_name)
+    ref_data = all_fields[ref]
+    model_exps = [exp for exp in plotter.exp_dict if exp != ref]
+    if not model_exps:
+        raise ValueError("No model experiments found after removing the reference.")
+
+    seasons = plotter.season_order
+    unit_label = plotter.unit_map.get(var_name, var_name)
+    ref_display = ref_label or ref
+    fig_size = fig_size or (4.4 * len(model_exps) + 1.0, 2.8 * len(seasons))
+    grid_kwargs = {
+        "left": 0.05,
+        "right": 0.95,
+        "top": 0.93,
+        "bottom": 0.07,
+        "wspace": 0.08,
+        "hspace": 0.12,
+        **(grid_kwargs or {}),
+    }
+
+    fig = plt.figure(figsize=fig_size)
+    grid = fig.add_gridspec(
+        len(seasons),
+        len(model_exps) + 1,
+        width_ratios=[1.0] * len(model_exps) + [colorbar_width],
+        **grid_kwargs,
+    )
+
+    norm = None
+    contour_kwargs = {}
+    if levels is not None:
+        norm = mpl.colors.BoundaryNorm(boundaries=levels, ncolors=plt.get_cmap(cmap).N)
+        contour_kwargs.update({"levels": levels, "vmin": levels[0], "vmax": levels[-1]})
+    else:
+        contour_kwargs["levels"] = 20
+
+    for i, season in enumerate(seasons):
+        row_im = None
+        for j, exp in enumerate(model_exps):
+            ax = fig.add_subplot(grid[i, j], projection=ccrs.PlateCarree())
+            model_data = all_fields[exp][season]
+            ref_on_model_grid = plotter._reference_on_model_grid(ref_data[season], model_data)
+            bias = model_data - ref_on_model_grid
+
+            ax.set_global()
+            ax.coastlines()
+            if show_borders:
+                ax.add_feature(cfeature.BORDERS, linewidth=0.3)
+            gl = ax.gridlines(draw_labels=True, linewidth=0.2, alpha=0.5)
+            gl.top_labels = False
+            gl.right_labels = False
+            gl.left_labels = j == 0
+            gl.bottom_labels = True
+            if longitude_labels is not None:
+                gl.xlocator = mticker.FixedLocator(longitude_labels)
+            gl.xlabel_style = {"size": font_size * 0.75}
+            gl.ylabel_style = {"size": font_size * 0.75}
+
+            row_im = ax.contourf(
+                bias["lon"].values,
+                bias["lat"].values,
+                bias,
+                transform=ccrs.PlateCarree(),
+                cmap=cmap,
+                norm=norm,
+                extend="both",
+                **contour_kwargs,
+            )
+
+            ax.set_title(f"{exp} ({season})", fontsize=font_size, pad=title_pad)
+
+            weights = plotter._area_weights_like(model_data)
+            rmse = plotter._weighted_rmse(model_data, ref_on_model_grid, weights)
+            pcor = plotter._weighted_pcor(model_data, ref_on_model_grid, weights)
+            ax.text(
+                0.98,
+                0.02,
+                f"RMSE={rmse:.2f}\nPCOR={pcor:.2f}",
+                transform=ax.transAxes,
+                fontsize=font_size * 0.75,
+                va="bottom",
+                ha="right",
+                bbox=dict(
+                    facecolor=(1.0, 1.0, 1.0, metric_box_alpha),
+                    edgecolor="black",
+                    boxstyle="round,pad=0.25",
+                ),
+            )
+
+        cax = fig.add_subplot(grid[i, -1])
+        cbar = fig.colorbar(row_im, cax=cax, orientation="vertical", extend="both")
+        if levels is not None:
+            cbar.set_ticks(levels)
+        cbar.set_label(f"Bias of {unit_label}", fontsize=font_size * 0.9)
+        cbar.ax.tick_params(labelsize=font_size * 0.75)
+
+    fig.suptitle(
+        f"{var_name}: model bias relative to {ref_display}",
+        fontsize=font_size * 1.2,
+        y=suptitle_y,
+    )
+
+    if plotter.save_dir:
+        plotter.save_dir.mkdir(parents=True, exist_ok=True)
+        out_file = plotter.save_dir / f"climatology_bias_only_{var_name}.png"
+        plt.savefig(out_file, dpi=dpi, bbox_inches="tight")
+        print(f"[INFO] Saved {out_file}")
+
+    plt.show()
+
+
+def plot_climatology_comparison(
+    experiments,
+    *,
+    variables,
+    variable_levels,
+    ref_name,
+    reference_labels,
+    output_dir,
+    unit_map=None,
+    scale_map=None,
+    font_size=16,
+    fig_size=(24, 20),
+    dpi=300,
+    metric_box_alpha=0.45,
+    panel_layout="season_rows",
+):
+    """Create full climatology/reference panels for configured variables."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plotter = ClimatologyMapPlotter(
+        experiments,
+        save_dir=output_dir,
+        ref_name=ref_name,
+        unit_map=unit_map,
+        scale_map=scale_map,
+    )
+    default_levels = variable_levels["default"]
+    for var_name in variables:
+        levels = variable_levels.get(var_name, default_levels)
+        plotter.plot_variable(
+            var_name=var_name,
+            cmap1=levels["cmap_raw"],
+            cmap2=levels["cmap_diff"],
+            levels1=levels["raw_levels"],
+            levels2=levels["diff_levels"],
+            font_size=font_size,
+            fig_size=fig_size,
+            dpi=dpi,
+            ref_label=reference_labels.get(var_name, ref_name),
+            metric_box_alpha=metric_box_alpha,
+            panel_layout=panel_layout,
+        )
+    return plotter
+
+
+def plot_bias_only_comparison(
+    experiments,
+    *,
+    variables,
+    variable_levels,
+    ref_name,
+    reference_labels,
+    output_dir,
+    unit_map=None,
+    scale_map=None,
+    font_size=14,
+    fig_size=(19, 14),
+    dpi=150,
+    metric_box_alpha=0.45,
+    show_borders=False,
+    colorbar_width=0.045,
+    longitude_labels=None,
+    title_pad=3,
+    suptitle_y=0.985,
+    grid_kwargs=None,
+):
+    """Create bias-only panels for configured variables."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plotter = ClimatologyMapPlotter(
+        experiments,
+        save_dir=output_dir,
+        ref_name=ref_name,
+        unit_map=unit_map,
+        scale_map=scale_map,
+    )
+    default_levels = variable_levels["default"]
+    for var_name in variables:
+        levels = variable_levels.get(var_name, default_levels)
+        plot_bias_only_by_model(
+            plotter,
+            var_name,
+            cmap=levels["cmap_diff"],
+            levels=levels["diff_levels"],
+            font_size=font_size,
+            fig_size=fig_size,
+            dpi=dpi,
+            ref_label=reference_labels.get(var_name, ref_name),
+            metric_box_alpha=metric_box_alpha,
+            show_borders=show_borders,
+            colorbar_width=colorbar_width,
+            longitude_labels=longitude_labels,
+            title_pad=title_pad,
+            suptitle_y=suptitle_y,
+            grid_kwargs=grid_kwargs,
+        )
+    return plotter
+

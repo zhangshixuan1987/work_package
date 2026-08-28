@@ -66,6 +66,17 @@ def _find_local_climo_file(directory: Path, variable: str) -> Optional[Path]:
     return None
 
 
+def _find_seasonal_climo_directory(
+    search_roots: Iterable[str | Path],
+) -> Optional[Path]:
+    """Find an E3SM postprocessed directory containing seasonal climo files."""
+    for root in search_roots:
+        root = Path(root)
+        if root.is_dir() and any(root.glob("*_ANN_*_climo.nc")):
+            return root
+    return None
+
+
 def _find_metric_json(
     mean_climate_dir: Path,
     variable: str,
@@ -135,7 +146,11 @@ def build_experiments_from_pcmdi_runs(
                 if model_path is not None:
                     experiments[label][variable] = model_path
                 else:
-                    print(f"[WARN] Could not resolve {label}/{variable}: {model_file_name}")
+                    seasonal_dir = _find_seasonal_climo_directory(extra_roots)
+                    if seasonal_dir is not None:
+                        experiments[label][variable] = seasonal_dir
+                    else:
+                        print(f"[WARN] Could not resolve {label}/{variable}: {model_file_name}")
 
             if include_reference:
                 if variable in experiments.get(reference_name, {}):
@@ -157,3 +172,79 @@ def build_experiments_from_pcmdi_runs(
             **{name: paths for name, paths in experiments.items() if name != reference_name},
         }
     return experiments
+
+
+def resolve_climatology_runs(
+    runs: Iterable[PCMDIRun],
+    variables: Iterable[str],
+    *,
+    run_type: str = "model_vs_obs",
+    ref_name: str = "OBS",
+    include_reference: bool = True,
+    search_roots: Iterable[str | Path] = (),
+    search_roots_by_model: Optional[Mapping[str, Iterable[str | Path]]] = None,
+    strict: bool = False,
+    extra_experiments: Optional[Mapping[str, Mapping[str, str | Path]]] = None,
+) -> dict[str, dict[str, Path]]:
+    """Resolve and summarize climatology inputs for a collection of PCMDI runs."""
+    variable_names = list(variables)
+    experiments = build_experiments_from_pcmdi_runs(
+        runs,
+        variable_names,
+        run_type=run_type,
+        search_roots=search_roots,
+        search_roots_by_model=search_roots_by_model,
+        include_reference=include_reference,
+        reference_name=ref_name,
+        strict=strict,
+    )
+    if extra_experiments:
+        experiments.update(
+            {
+                name: {variable: Path(path) for variable, path in paths.items()}
+                for name, paths in extra_experiments.items()
+            }
+        )
+
+    print("Resolved climatology files:")
+    for experiment, paths in experiments.items():
+        print(f"  {experiment}")
+        for variable in variable_names:
+            path = paths.get(variable)
+            print(f"    {variable}: {path if path else 'MISSING'}")
+
+    if ref_name not in experiments:
+        print(
+            f"[WARN] Reference {ref_name!r} was not resolved. Choose a model label "
+            "or add the required reference search root."
+        )
+    return experiments
+
+
+def missing_climatology_inputs(
+    experiments: Mapping[str, Mapping[str, str | Path]],
+    variables: Iterable[str],
+) -> list[tuple[str, str]]:
+    """Return experiment/variable pairs that do not have a resolved input."""
+    return [
+        (name, variable)
+        for name, paths in experiments.items()
+        for variable in variables
+        if variable not in paths or not Path(paths[variable]).exists()
+    ]
+
+
+def validate_climatology_inputs(
+    experiments: Mapping[str, Mapping[str, str | Path]],
+    variables: Iterable[str],
+    *,
+    ref_name: str,
+    search_setting: str = "search_roots",
+) -> None:
+    """Raise a focused error when a reference or configured variable is missing."""
+    missing = missing_climatology_inputs(experiments, variables)
+    if ref_name not in experiments or missing:
+        raise FileNotFoundError(
+            "Climatology inputs are incomplete. Add their directories to "
+            f"{search_setting}; unresolved entries: {missing}"
+        )

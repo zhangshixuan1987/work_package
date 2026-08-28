@@ -200,6 +200,7 @@ class ENSODiagReader:
         member_dir: str,
         enso_group: str,
         suffix: str,
+        case_id: Optional[str] = None,
     ) -> str:
         """
         Find the NetCDF file in the enso_group directory whose name ends with
@@ -217,10 +218,13 @@ class ENSODiagReader:
         if not os.path.isdir(enso_root):
             raise FileNotFoundError(f"ENSO directory not found: {enso_root}")
 
-        pattern = os.path.join(enso_root, f"*_{suffix}.nc")
+        if case_id is None:
+            pattern = os.path.join(enso_root, f"*_{suffix}.nc")
+        else:
+            pattern = os.path.join(enso_root, f"*{case_id}*_{suffix}.nc")
         matches = sorted(glob.glob(pattern))
         if not matches:
-            raise FileNotFoundError(f"No file matching *_{suffix}.nc in {enso_root}")
+            raise FileNotFoundError(f"No file matching {pattern}")
         if len(matches) > 1:
             # In practice you likely have only one; if multiple, take the last.
             return matches[-1]
@@ -318,6 +322,7 @@ class ENSODiagReader:
         period: str = "hist",
         nc_var: Optional[str] = None,
         ref_tag: Optional[str] = None,
+        case_id: Optional[str] = None,
     ) -> xr.DataArray:
         """
         Load a given ENSO diagnostic for all members of one period.
@@ -361,7 +366,7 @@ class ENSODiagReader:
             base = os.path.basename(mdir)  # e.g. v3.LR.historical_0051
             mstr = "{:02d}".format(i)
             
-            nc_path = self._find_nc_file(mdir, enso_group, suffix)
+            nc_path = self._find_nc_file(mdir, enso_group, suffix, case_id=case_id)
             ds = xr.open_dataset(nc_path,decode_times=False)
 
             data_vars = list(ds.data_vars)
@@ -417,6 +422,7 @@ class ENSODiagReader:
         nc_var: Optional[str] = None,
         ref_dict: Optional[dict] = None,
         period_list: Optional[list] = None,
+        case_id: Optional[str] = None,
     ) -> xr.Dataset:
         """
         Convenience wrapper: load one or more periods and return a Dataset
@@ -446,7 +452,12 @@ class ENSODiagReader:
         for per in periods:
             print(f"processing period: {per}")
             dm, do = self.load(
-                enso_group, var_name, period=per, nc_var=nc_var, ref_tag=ref_dict[per]
+                enso_group,
+                var_name,
+                period=per,
+                nc_var=nc_var,
+                ref_tag=ref_dict[per],
+                case_id=case_id,
             )
             dm_list[per] = dm 
             do_list[per] = do 
