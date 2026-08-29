@@ -1,0 +1,9 @@
+Net TOA,W m~S~-2~N~,RESTOM,global,ceres_ebaf_toa_v4.1
+SW CRE,W m~S~-2~N~,SWCF,global,ceres_ebaf_toa_v4.1
+LW CRE,W m~S~-2~N~,LWCF,global,ceres_ebaf_toa_v4.1
+prec,mm day~S~-1~N~,PRECT,global,GPCP_v2.3
+tas land,K,TREFHT,land,ERA5
+SLP,hPa,PSL,global,ERA5
+u-200,m s~S~-1~N~,U-200mb,global,ERA5
+u-850,m s~S~-1~N~,U-850mb,global,ERA5
+Zg-500,hm,Z3-500mb,global,ERA5
