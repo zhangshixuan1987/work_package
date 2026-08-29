@@ -7,6 +7,8 @@ nohup.out
 slurm-*.out
 err_*.[0-9]*
 out_*.[0-9]*
+myjob.e[0-9]*
+myjob.o[0-9]*
 
 # Temporary files
 *.tmp
