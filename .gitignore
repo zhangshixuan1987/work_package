@@ -4,6 +4,9 @@
 *.LOG
 *.log.*
 nohup.out
+slurm-*.out
+err_*.[0-9]*
+out_*.[0-9]*
 
 # Temporary files
 *.tmp
@@ -19,3 +22,15 @@ nohup.out
 # OS-generated clutter
 .DS_Store
 Thumbs.db
+
+# Python and notebook caches
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Generated figures and animations
+*.png
+*.gif
+*.pdf
+*.eps
