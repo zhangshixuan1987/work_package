@@ -1,0 +1,62 @@
+# Replace the file patterns below with user-provided external data locations.
+datasets:
+  CTRL:
+    files: /path/to/CTRL/*.nc
+  UNET:
+    files: /path/to/UNET/*.nc
+  UNETXTR:
+    files: /path/to/UNETXTR/*.nc
+  reference:
+    files: /path/to/reference/*.nc
+
+dataset_options:
+  chunks:
+    time: 8
+  # Standardize source dimensions before analysis. Add model-specific aliases.
+  rename:
+    latitude: lat
+    longitude: lon
+    ncol_d: ncol
+
+analysis:
+  start_date: "YYYY-MM-DD"
+  end_date: "YYYY-MM-DD"
+  pressure_levels_hpa: [1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100]
+  atmospheric_variables: [U, V, T, Q]
+  spatial_selections:
+    T500: [T, 500]
+    U200: [U, 200]
+    U850: [U, 850]
+    Q850: [Q, 850]
+  tendency_variables: [Nudge_U, Nudge_V, Nudge_T, Nudge_Q]
+  area_variable: area
+  land_fraction_variable: LANDFRAC
+  level_dimension: lev
+  pressure_coordinate: null  # Set to a pressure field, or use E3SM hybrid coefficients.
+  hybrid_pressure:
+    ps: PS
+    hyam: hyam
+    hybm: hybm
+    p0: P0
+  minimum_control_rmse: 1.0e-12
+
+# Canonical analysis name: source dataset variable name. Customize per dataset
+# with dataset-specific preprocessing if experiment names differ.
+variables:
+  U: U
+  V: V
+  T: T
+  Q: Q
+  PS: PS
+  TMQ: TMQ
+  FSNT: FSNT
+  FLNT: FLNT
+  Nudge_U: Nudge_U
+  Nudge_V: Nudge_V
+  Nudge_T: Nudge_T
+  Nudge_Q: Nudge_Q
+  area: area
+  LANDFRAC: LANDFRAC
+
+output_root: /global/cfs/cdirs/m1867/zhan391/paper_work/online_ml/ml_implement_paper
+
