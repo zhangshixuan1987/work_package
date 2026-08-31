@@ -1,0 +1,4 @@
+# Default location for generated artifacts. Analysis scripts also expose this
+# setting through --output-root so runs remain portable.
+output_root = "/global/cfs/cdirs/m1867/zhan391/paper_work/green_function"
+

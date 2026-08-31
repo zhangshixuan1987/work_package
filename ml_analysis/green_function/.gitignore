@@ -1,0 +1,20 @@
+# Input data are user supplied; retain only their documentation.
+data/*
+!data/README.md
+
+# Python and notebook scratch files.
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Generated artifacts must live under the configured external output root.
+outputs/
+figures/
+logs/
+*.log
+*.nc
+*.pkl
+*.png
+*.pdf
+*.svg
+
