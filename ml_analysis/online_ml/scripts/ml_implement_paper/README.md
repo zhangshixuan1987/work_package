@@ -11,8 +11,17 @@ kept in `src/`.
    model-specific variable/dimension names.
 2. Ensure the environment provides `xarray`, `dask`, `netCDF4` or `h5netcdf`,
    `numpy`, `pandas`, `matplotlib`, `PyYAML`, and optionally `cartopy`.
-3. Open `notebooks/ml_online_bias_correction_analysis.ipynb` and run it from
-   top to bottom.
+3. Run the figure-specific notebooks independently:
+
+   - `notebooks/fig01_global_rmse.ipynb`
+   - `notebooks/fig02_vertical_rmse.ipynb`
+   - `notebooks/fig03_spatial_error_reduction.ipynb`
+   - `notebooks/fig04_stability_ml_forcing.ipynb`
+
+Each notebook loads only the variables needed for its diagnostic, runs
+Dask-backed quality control, writes its processed NetCDF product, and reloads
+that product in a separate plotting section. Figure 3 also writes the combined
+summary table after loading the Figure 1 diagnostic product.
 
 The workflow assumes experiment and reference fields are already on a common
 horizontal grid. It matches common timestamps and interpolates three-dimensional
@@ -40,4 +49,3 @@ If the data have a one-dimensional pressure coordinate on `lev`, the workflow
 uses it directly. For native E3SM hybrid levels, it calculates pressure from
 `hyam`, `hybm`, `P0`, and surface pressure. Update these names in the YAML file
 when the input convention differs.
-
