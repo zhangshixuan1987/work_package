@@ -81,6 +81,20 @@ def spatial_rmse(experiment: xr.DataArray, reference: xr.DataArray) -> xr.DataAr
     return np.sqrt(((experiment - reference) ** 2).mean("time", skipna=True))
 
 
+def temporal_pearson_correlation(
+    experiment: xr.DataArray,
+    reference: xr.DataArray,
+) -> xr.DataArray:
+    """Pearson correlation over time at each horizontal grid cell."""
+    experiment_anomaly = experiment - experiment.mean("time", skipna=True)
+    reference_anomaly = reference - reference.mean("time", skipna=True)
+    covariance = (experiment_anomaly * reference_anomaly).mean("time", skipna=True)
+    experiment_std = np.sqrt((experiment_anomaly**2).mean("time", skipna=True))
+    reference_std = np.sqrt((reference_anomaly**2).mean("time", skipna=True))
+    denominator = experiment_std * reference_std
+    return covariance / denominator.where(denominator > 0)
+
+
 def rmse_ratio(ml_rmse: xr.DataArray, control_rmse: xr.DataArray) -> xr.DataArray:
     return ml_rmse / control_rmse.where(control_rmse > 0)
 

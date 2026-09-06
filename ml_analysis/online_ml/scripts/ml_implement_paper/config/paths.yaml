@@ -19,8 +19,8 @@ dataset_options:
     ncol_d: ncol
 
 analysis:
-  start_date: "YYYY-MM-DD"
-  end_date: "YYYY-MM-DD"
+  start_date: "2012-01-01"
+  end_date: "2012-12-31"
   pressure_levels_hpa: [1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100]
   atmospheric_variables: [U, V, T, Q]
   spatial_selections:
@@ -58,5 +58,4 @@ variables:
   area: area
   LANDFRAC: LANDFRAC
 
-output_root: /global/cfs/cdirs/m1867/zhan391/paper_work/online_ml/ml_implement_paper
-
+output_root: /global/cfs/cdirs/e3sm/www/zhan391/sea_crogs/online_diag
