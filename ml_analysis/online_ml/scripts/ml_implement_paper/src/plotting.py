@@ -25,15 +25,15 @@ COLORS = {
 }
 
 
-def set_publication_style() -> None:
+def set_publication_style(closed_spines: bool = False) -> None:
     plt.rcParams.update({
         "figure.dpi": 120,
         "savefig.dpi": 300,
         "font.size": 10,
         "axes.grid": True,
         "grid.alpha": 0.25,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
+        "axes.spines.top": closed_spines,
+        "axes.spines.right": closed_spines,
     })
 
 
@@ -276,24 +276,39 @@ def plot_stability(
     dataset: xr.Dataset,
     path: str | Path,
     *,
-    figsize: tuple[float, float] = (11, 7),
+    figsize: tuple[float, float] = (12, 8),
     colors: Mapping[str, str] | None = None,
-    title: str = "Physical stability and ML forcing",
+    title: str = "Physical stability",
     state_fields: Sequence[tuple[str, str]] | None = None,
     tendency_title: str = "Normalized ML tendency RMS",
     legend_frame: bool = False,
     tendency_legend_fontsize: float = 7,
     tendency_legend_columns: int = 2,
     linewidth: float = 1.5,
-    font_size: float = 10,
+    font_size: float = 11,
 ):
+    import matplotlib.dates as mdates
+
     set_publication_style()
     plt.rcParams.update({"font.size": font_size})
     plot_colors = COLORS if colors is None else colors
     figure, axes = plt.subplots(2, 2, figsize=figsize, sharex=True)
+
     if state_fields is None:
-        state_fields = [("PS_anomaly", "Surface pressure anomaly"), ("TMQ_anomaly", "TMQ anomaly"), ("TOA_imbalance", "FSNT − FLNT")]
+        state_fields = [
+            ("PS_anomaly", "Surface Pressure Anomaly"),
+            ("TMQ_anomaly", "Total Precipitable Water (TMQ) Anomaly"),
+            ("TOA_imbalance", "Net TOA Flux Imbalance (FSNT − FLNT)"),
+        ]
+
+    y_units = {
+        "PS_anomaly": "Pa",
+        "TMQ_anomaly": "kg m⁻²",
+        "TOA_imbalance": "W m⁻²",
+    }
+
     for axis, (field_name, panel_title) in zip(axes.flat[:3], state_fields):
+        axis.axhline(0, color="0.6", linestyle="--", linewidth=0.8, zorder=1)
         for experiment in dataset.experiment.values:
             if field_name in dataset:
                 values = dataset[field_name].sel(experiment=experiment)
@@ -304,8 +319,16 @@ def plot_stability(
                     label=experiment_name,
                     color=plot_colors.get(experiment_name),
                     linewidth=linewidth,
+                    zorder=2,
                 )
-        axis.set_title(panel_title)
+        axis.set_title(panel_title, fontsize=font_size + 1, fontweight="semibold")
+        unit = y_units.get(field_name, "")
+        if unit:
+            axis.set_ylabel(f"[{unit}]")
+        axis.grid(True, linestyle=":", alpha=0.5, linewidth=0.6)
+        axis.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+        axis.xaxis.set_major_formatter(mdates.DateFormatter("%b"))
+
     if "normalized_tendency_rms" in dataset:
         for experiment in dataset.experiment.values:
             for tendency in dataset.tendency.values:
@@ -316,12 +339,24 @@ def plot_stability(
                     label=f"{experiment} {tendency}",
                     alpha=0.8,
                 )
-        axes[1, 1].set_title(tendency_title)
+        axes[1, 1].set_title(tendency_title, fontsize=font_size + 1, fontweight="semibold")
         axes[1, 1].legend(frameon=legend_frame, fontsize=tendency_legend_fontsize, ncol=tendency_legend_columns)
+        axes[0, 0].legend(frameon=legend_frame)
     else:
-        axes[1, 1].set_visible(False)
-    axes[0, 0].legend(frameon=legend_frame)
-    figure.suptitle(title)
+        axes[1, 1].set_axis_off()
+        axes[0, 1].tick_params(labelbottom=True)
+        axes[0, 1].xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+        axes[0, 1].xaxis.set_major_formatter(mdates.DateFormatter("%b"))
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+        axes[1, 1].legend(
+            handles, labels,
+            loc="center", frameon=legend_frame,
+            fontsize=font_size - 1, ncol=1,
+            title="Experiments", title_fontproperties={"weight": "semibold"},
+        )
+
+    figure.suptitle(title, fontsize=font_size + 3, fontweight="semibold")
+    figure.tight_layout()
     return save_figure(figure, path)
 
 
@@ -376,6 +411,11 @@ def plot_monthly_vertical_bias(
     cmap: str = 'RdBu_r',
     pressure_scale: str = 'log',
     font_size: float = 12,
+    closed_axis: bool = True,
+    use_log_scale: bool | None = None,
+    pressure_ticks: Sequence[float] | None = None,
+    top_pressure: float | None = None,
+    bottom_pressure: float | None = None,
 ):
     """Latitude-pressure biases with row labels and dedicated column colorbars.
 
@@ -385,7 +425,14 @@ def plot_monthly_vertical_bias(
     from matplotlib.ticker import FixedLocator, FuncFormatter, NullLocator
     from .monthly_bias import cross_section_statistics
 
-    set_publication_style()
+    if use_log_scale is not None:
+        is_log = bool(use_log_scale)
+    elif isinstance(pressure_scale, bool):
+        is_log = pressure_scale
+    else:
+        is_log = str(pressure_scale).strip().lower() in {'log', 'logarithmic', 'true'}
+
+    set_publication_style(closed_spines=closed_axis)
     plt.rcParams.update({'font.size': font_size})
     required_fields = [field for variable in variables
                        for field in (variable, f'{variable}_model', f'{variable}_reference')]
@@ -399,6 +446,17 @@ def plot_monthly_vertical_bias(
     else:
         fields = dataset[required_fields].sel(month=month)
         label = str(month)
+
+    if top_pressure is not None or bottom_pressure is not None:
+        p_top = float(top_pressure) if top_pressure is not None else float(fields.plev.min())
+        p_bottom = float(bottom_pressure) if bottom_pressure is not None else float(fields.plev.max())
+        p_min = min(p_top, p_bottom)
+        p_max = max(p_top, p_bottom)
+        sel_plevs = [p for p in fields.plev.values if p_min <= p <= p_max]
+        if not sel_plevs:
+            raise ValueError(f"No pressure levels found within [{p_min}, {p_max}] hPa")
+        fields = fields.sel(plev=sel_plevs)
+
     nrows, ncols = dataset.sizes['experiment'], len(variables)
     figure = plt.figure(
         figsize=figsize or (2.4 + 4 * ncols, 2.2 * nrows + 1.6),
@@ -452,20 +510,37 @@ def plot_monthly_vertical_bias(
                       fontsize=0.78 * font_size,
                       bbox={'facecolor': 'white', 'edgecolor': 'none', 'alpha': 0.85, 'pad': 1.5},
                       zorder=10)
-            axis.set_yscale(pressure_scale)
-            bottom, top = float(field.plev.max()), float(field.plev.min())
+            axis.set_yscale('log' if is_log else 'linear')
+            bottom = float(bottom_pressure) if bottom_pressure is not None else float(field.plev.max())
+            top = float(top_pressure) if top_pressure is not None else float(field.plev.min())
             axis.set_ylim(bottom, top)
-            tick_candidates = (1, 3, 10, 30, 100, 300, 1000) if top < 100 else (100, 200, 300, 500, 700, 1000)
-            pressure_ticks = [p for p in tick_candidates if top <= p <= bottom]
-            axis.yaxis.set_major_locator(FixedLocator(pressure_ticks))
+            if pressure_ticks is not None:
+                yticks = [p for p in pressure_ticks if min(bottom, top) <= p <= max(bottom, top)]
+            elif is_log:
+                tick_candidates = (1, 3, 10, 30, 100, 300, 1000) if top < 100 else (100, 200, 300, 500, 700, 1000)
+                yticks = [p for p in tick_candidates if top <= p <= bottom]
+            else:
+                tick_candidates = (1, 200, 400, 600, 800, 1000) if top < 50 else (100, 200, 400, 600, 800, 1000)
+                yticks = [p for p in tick_candidates if top <= p <= bottom]
+            axis.yaxis.set_major_locator(FixedLocator(yticks))
             axis.yaxis.set_major_formatter(FuncFormatter(lambda value, pos: f'{value:g}'))
             axis.yaxis.set_minor_locator(NullLocator())
             axis.xaxis.set_major_locator(FixedLocator([-90, -60, -30, 0, 30, 60, 90]))
             axis.xaxis.set_major_formatter(FuncFormatter(
                 lambda value, pos: '0°' if value == 0 else f'{abs(value):g}°{"S" if value < 0 else "N"}'
             ))
-            axis.tick_params(labelleft=col == 0, labelbottom=row == nrows - 1,
-                             labelsize=font_size - 1, length=3)
+            if closed_axis:
+                for spine in axis.spines.values():
+                    spine.set_visible(True)
+                    spine.set_color('black')
+                    spine.set_linewidth(0.8)
+                axis.tick_params(top=True, right=True, which='both',
+                                 labelleft=col == 0, labelbottom=row == nrows - 1,
+                                 labeltop=False, labelright=False,
+                                 labelsize=font_size - 1, length=3.5)
+            else:
+                axis.tick_params(labelleft=col == 0, labelbottom=row == nrows - 1,
+                                 labelsize=font_size - 1, length=3)
             axis.grid(True, color='0.4', linewidth=0.4, alpha=0.2)
             if row == 0:
                 axis.set_title(variable, fontsize=font_size + 2, fontweight='semibold', pad=9)
@@ -478,9 +553,20 @@ def plot_monthly_vertical_bias(
             panel, cax=colorbar_axis, orientation='horizontal',
             ticks=np.linspace(-limit, limit, 5), format='%.2g',
         )
+        if closed_axis:
+            colorbar.outline.set_visible(True)
+            colorbar.outline.set_linewidth(0.8)
+            colorbar.outline.set_edgecolor('black')
         colorbar.set_label(f'{variable} bias [{units}]', fontsize=font_size)
         colorbar.ax.tick_params(labelsize=font_size - 1, length=3)
     reference_label = dataset.attrs.get('reference_label', 'REF')
     figure.suptitle(f'Monthly zonal-mean bias (experiment − {reference_label})\n{label}',
                    fontsize=font_size + 2)
     return save_figure(figure, path)
+
+
+def plot_spatial_mapping(*args, **kwargs):
+    """Forwarding wrapper to spatial_mapping.plot_spatial_mapping."""
+    from .spatial_mapping import plot_spatial_mapping as _plot
+    return _plot(*args, **kwargs)
+
