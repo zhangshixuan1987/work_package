@@ -39,7 +39,7 @@ Analysis-initialization diagnostics live in `jupyter/analysis_atm_init/`:
 
 1. `01_compute_and_plot_horizontal_maps.ipynb` handles surface and selected-level bias, RMSE, and spread maps.
 2. `02_compute_and_plot_vertical_cross_sections.ipynb` handles latitude–level or longitude–level bias, RMSE, and spread sections for 3-D variables.
-3. `03_compute_and_plot_analysis_increments.ipynb` handles DA-only posterior-minus-prior maps without a reference dataset.
+3. `03_compute_and_plot_analysis_increments.ipynb` handles cached DA-only posterior-minus-prior maps and time-mean vertical increment/posterior-spread sections without a reference dataset.
 
 Each notebook reads raw fields only for missing or forced products. Existing request-keyed NetCDF products are reused unless `force_compute = True`.
 
@@ -57,8 +57,8 @@ Active data-assimilation diagnostic workflow drivers live in `jupyter/analysis_a
 
 1. `01_obs_distribution.ipynb` - inspect and plot DART obs_seq observation distributions.
 2. `02_obs_diag_check.ipynb` - compare overlapping obs_diag products numerically and visually.
-3. `03_obs_diag_compare.ipynb` - compare obs_diag time-series diagnostics; switch modes with `PLOT_MODE`.
-4. `04_obs_profile_diagnostics.ipynb` - plot vertical profile diagnostics; switch modes with `PROFILE_MODE`.
+3. `03_obs_diag_compare.ipynb` - compare obs_diag bias, RMSE, total spread, spread/RMSE, and rejection-rate time series; switch modes with `PLOT_MODE`.
+4. `04_obs_profile_diagnostics.ipynb` - plot bias, RMSE, total spread, spread/RMSE, and rejection-rate profiles; switch modes with `PROFILE_MODE`.
 5. `05_obs_multilevel_diagnostics.ipynb` - compare diagnostics across multiple pressure layers and regions.
 
 Initial-land diagnostics follow the same notebook-driver layout:

@@ -1181,3 +1181,169 @@ def plot_cached_cross_sections(
         fig.suptitle(title, fontsize=14)
         fig.subplots_adjust(top=0.94)
     return fig
+
+
+def increment_cross_section_cache_path(
+    cache_dir, experiment, timestamp, variable, horizontal_axis, increment_mode
+):
+    """Return the request-keyed DA-increment cross-section cache path."""
+    if horizontal_axis not in {"latitude", "longitude"}:
+        raise ValueError("horizontal_axis must be latitude or longitude.")
+    if increment_mode not in {"signed", "absolute"}:
+        raise ValueError("increment_mode must be signed or absolute.")
+    return Path(cache_dir) / (
+        f"{experiment}_{timestamp}_cross-section_{horizontal_axis}_"
+        f"{variable}_{increment_mode}-increment.nc"
+    )
+
+
+def derive_increment_cross_section(
+    dao, variable, lat_range, lon_range, horizontal_axis="latitude",
+    increment_mode="absolute",
+):
+    """Derive an increment and posterior-spread vertical cross-section."""
+    if horizontal_axis not in {"latitude", "longitude"}:
+        raise ValueError("horizontal_axis must be latitude or longitude.")
+    if increment_mode not in {"signed", "absolute"}:
+        raise ValueError("increment_mode must be signed or absolute.")
+
+    prior = dao.subset_region(dao.prior_mean[[variable]], lat_range, lon_range)
+    posterior = dao.subset_region(dao.post_mean[[variable]], lat_range, lon_range)
+    posterior_spread = dao.subset_region(
+        dao.post_sd[[variable]], lat_range, lon_range
+    )
+    prior, posterior, posterior_spread = xr.align(
+        prior, posterior, posterior_spread, join="inner"
+    )
+
+    level_name = dao._guess_lev_name(posterior)
+    if level_name is None:
+        raise ValueError(f"{variable} has no vertical coordinate.")
+    latitude_name = dao._guess_lat_name(posterior)
+    longitude_name = dao._guess_lon_name(posterior)
+
+    if float(posterior[longitude_name].max()) > 180.0:
+        prior = dao.normalize_longitude(prior, longitude_name)
+        posterior = dao.normalize_longitude(posterior, longitude_name)
+        posterior_spread = dao.normalize_longitude(
+            posterior_spread, longitude_name
+        )
+
+    increment = posterior[variable] - prior[variable]
+    if increment_mode == "absolute":
+        increment = np.abs(increment)
+
+    retained_name = (
+        latitude_name if horizontal_axis == "latitude" else longitude_name
+    )
+    reduced_name = (
+        longitude_name if horizontal_axis == "latitude" else latitude_name
+    )
+
+    def _to_section(field):
+        field = field.mean(reduced_name, skipna=True)
+        extra_dimensions = [
+            dimension for dimension in field.dims
+            if dimension not in (level_name, retained_name)
+        ]
+        if extra_dimensions:
+            field = field.mean(extra_dimensions, skipna=True)
+        return field.transpose(level_name, retained_name)
+
+    dataset = xr.Dataset(
+        {
+            "increment": _to_section(increment),
+            "posterior_spread": _to_section(posterior_spread[variable]),
+        }
+    )
+    dataset.attrs.update(
+        {
+            "experiment": dao.name,
+            "analysis_time": dao.analysis_time,
+            "variable": variable,
+            "metric": "increment",
+            "increment_mode": increment_mode,
+            "product_type": "vertical_increment_cross_section",
+            "horizontal_axis": horizontal_axis,
+        }
+    )
+    return dataset
+
+
+def cache_increment_cross_section(
+    path, dao, variable, lat_range, lon_range, horizontal_axis="latitude",
+    increment_mode="absolute", force_compute=False,
+):
+    """Load an increment section cache, deriving it only when required."""
+    path = Path(path)
+    if path.exists() and not force_compute:
+        return xr.load_dataset(path)
+    dataset = derive_increment_cross_section(
+        dao, variable, lat_range, lon_range,
+        horizontal_axis=horizontal_axis, increment_mode=increment_mode,
+    )
+    _atomic_to_netcdf(dataset, path)
+    return dataset
+
+
+def plot_cached_increment_cross_sections(
+    datasets, variable, increment_mode="absolute", label_map=None, title="",
+):
+    """Plot cached increment and posterior-spread sections by experiment."""
+    if increment_mode not in {"signed", "absolute"}:
+        raise ValueError("increment_mode must be signed or absolute.")
+    experiment_names = list(datasets)
+    if not experiment_names:
+        raise ValueError("datasets is empty; nothing to plot.")
+
+    fields_by_column = {
+        key: [datasets[name][key] for name in experiment_names]
+        for key in ("increment", "posterior_spread")
+    }
+    limits = {}
+    for key, fields in fields_by_column.items():
+        minimum = min(float(field.min(skipna=True)) for field in fields)
+        maximum = max(float(field.max(skipna=True)) for field in fields)
+        if key == "increment" and increment_mode == "signed":
+            magnitude = max(abs(minimum), abs(maximum))
+            minimum, maximum = -magnitude, magnitude
+        elif minimum >= 0:
+            minimum = 0.0
+        if np.isclose(minimum, maximum):
+            maximum = minimum + 1.0
+        limits[key] = (minimum, maximum)
+
+    fig, axes = plt.subplots(
+        len(experiment_names), 2,
+        figsize=(12, 4 * len(experiment_names)), squeeze=False,
+    )
+    images = [None, None]
+    for row, experiment in enumerate(experiment_names):
+        dataset = datasets[experiment]
+        for column, key in enumerate(("increment", "posterior_spread")):
+            axis = axes[row, column]
+            field = dataset[key]
+            level_name = next(
+                dimension for dimension in field.dims
+                if dimension.lower() in ("lev", "plev", "level")
+            )
+            horizontal_name = next(
+                dimension for dimension in field.dims if dimension != level_name
+            )
+            images[column] = axis.pcolormesh(
+                field[horizontal_name], field[level_name], field, shading="auto",
+                vmin=limits[key][0], vmax=limits[key][1],
+            )
+            axis.invert_yaxis()
+            axis.set_xlabel(horizontal_name)
+            axis.set_ylabel(level_name)
+            label = label_map.get(experiment, experiment) if label_map else experiment
+            heading = "Increment" if key == "increment" else "Posterior spread"
+            axis.set_title(f"{label} - {heading}")
+
+    for column, image in enumerate(images):
+        fig.colorbar(image, ax=axes[:, column].tolist(), shrink=0.8)
+    if title:
+        fig.suptitle(title, fontsize=14)
+        fig.subplots_adjust(top=0.94)
+    return fig

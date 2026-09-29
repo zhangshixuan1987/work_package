@@ -228,6 +228,7 @@ class DartObsDiagReader:
             "lev_type": "pressure",
             "CopySpread": "totalspread",
             "CopyRMSE": "rmse",
+            "CopyBias": "bias",
             "CopyNposs": "Nposs",
             "CopyNused": "Nused",
             "type1": "guess",
@@ -321,10 +322,11 @@ class DartObsDiagReader:
             ])
             ind_vars = _first_idx(np.where(CopyMetaData == var_dict["CopySpread"]))
             ind_rmse = _first_idx(np.where(CopyMetaData == var_dict["CopyRMSE"]))
+            ind_bias = _first_idx(np.where(CopyMetaData == var_dict.get("CopyBias", "bias")))
             ind_npos = _first_idx(np.where(CopyMetaData == var_dict["CopyNposs"]))
             ind_nuse = _first_idx(np.where(CopyMetaData == var_dict["CopyNused"]))
 
-            sprd = rmse = npos = nuse = hrank = np.array([])
+            sprd = rmse = bias = npos = nuse = hrank = np.array([])
 
             if dtype == "guess":
                 varname = f"{var_dict['name']}_guess"
@@ -332,6 +334,8 @@ class DartObsDiagReader:
                     base = ds[varname]  # [time, copy, level, region]
                     sprd = self._maybe_return_array(base[:, ind_vars, :, ind_reg])
                     rmse = self._maybe_return_array(base[:, ind_rmse, :, ind_reg])
+                    if ind_bias is not None:
+                        bias = self._maybe_return_array(base[:, ind_bias, :, ind_reg])
                     npos = self._maybe_return_array(base[:, ind_npos, :, ind_reg])
                     nuse = self._maybe_return_array(base[:, ind_nuse, :, ind_reg])
 
@@ -341,6 +345,8 @@ class DartObsDiagReader:
                     base = ds[varname]  # [copy, level, region]
                     sprd = self._maybe_return_array(base[ind_vars, :, ind_reg])
                     rmse = self._maybe_return_array(base[ind_rmse, :, ind_reg])
+                    if ind_bias is not None:
+                        bias = self._maybe_return_array(base[ind_bias, :, ind_reg])
                     npos = self._maybe_return_array(base[ind_npos, :, ind_reg])
                     nuse = self._maybe_return_array(base[ind_nuse, :, ind_reg])
 
@@ -353,7 +359,7 @@ class DartObsDiagReader:
                 ds.close()
 
         return (time, plevel, plevel_edges, mlevel, mlevel_edges,
-                hlevel, hlevel_edges, sprd, rmse, npos, nuse, hrank)
+                hlevel, hlevel_edges, sprd, rmse, bias, npos, nuse, hrank)
 
     # ------------------------------------------------------------------ #
     # obs_diag -> metrics dict
@@ -385,7 +391,7 @@ class DartObsDiagReader:
                 time_unit = f"days since {date[:4]}-{date[4:6]}-{date[6:8]}"
 
             (time, plev, plev_edges, mlev, mlev_edges,
-             hlev, hlev_edges, sprd, rmse, npos, nuse, hrank) = self.read_dart_obs_diag(
+             hlev, hlev_edges, sprd, rmse, bias, npos, nuse, hrank) = self.read_dart_obs_diag(
                 region_long, var, dtype, var_dict, date, path, file
             )
             time_unit = getattr(self, "_last_time_unit", None) or time_unit
@@ -415,12 +421,14 @@ class DartObsDiagReader:
                 "time": rel_time,
                 "time_unit": time_unit,
                 "rmse": rmse,
+                "bias": bias,
                 "spread": sprd,
                 "nused": nuse,
                 "npos": npos,
                 "rejection": rejection,
                 "histrank": hrank,
                 "rmse_str": "RMSE",
+                "bias_str": "Bias",
                 "spread_str": "Total Spread",
                 "nused_str": "Number Assimilated",
                 "npos_str": "Number Processed",

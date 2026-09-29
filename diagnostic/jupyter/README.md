@@ -28,8 +28,8 @@ observation archive.
 
 1. `01_obs_distribution.ipynb` - map DART observation distributions.
 2. `02_obs_diag_check.ipynb` - compare two observation-diagnostic products.
-3. `03_obs_diag_compare.ipynb` - compare diagnostic time series across experiments.
-4. `04_obs_profile_diagnostics.ipynb` - compare vertical diagnostic profiles.
+3. `03_obs_diag_compare.ipynb` - compare bias, RMSE, total spread, spread/RMSE, and rejection-rate time series across experiments.
+4. `04_obs_profile_diagnostics.ipynb` - compare bias, RMSE, total spread, spread/RMSE, and rejection-rate vertical profiles.
 5. `05_obs_multilevel_diagnostics.ipynb` - analyze multiple pressure layers and regions.
 6. `06_compute_and_plot_ensemble_ranges.ipynb` - cache and plot ensemble-member spatial minimum, mean, and maximum time series from NetCDF, Zarr, or Intake-ESM inputs.
 
@@ -37,7 +37,7 @@ observation archive.
 
 1. `01_compute_and_plot_horizontal_maps.ipynb` - compute and plot bias, RMSE, and spread maps for surface variables or selected 3-D levels.
 2. `02_compute_and_plot_vertical_cross_sections.ipynb` - compute and plot latitude–level or longitude–level bias, RMSE, and spread sections for 3-D variables.
-3. `03_compute_and_plot_analysis_increments.ipynb` - compute and plot posterior-minus-prior maps for selected DA experiments without a reference dataset.
+3. `03_compute_and_plot_analysis_increments.ipynb` - compute cached posterior-minus-prior maps and time-mean vertical increment/posterior-spread sections without a reference dataset.
 4. `04_check_restart_stability.ipynb` - validate native EAM restarts across members and timestamps using cached range, non-finite, spatial-flag, and inter-snapshot change diagnostics.
 
 Each notebook is independently runnable and lists its available variables and metrics. Request-keyed NetCDF files are stored under `DIAGNOSTIC_OUTPUT_ROOT/data/analysis_atm_init/atmosphere_metrics/`; existing files are overwritten only when `force_compute = True`.
