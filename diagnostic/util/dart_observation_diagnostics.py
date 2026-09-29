@@ -14,7 +14,7 @@ class DartObsDiagReader:
     ---------------
     {
         "data_path": "/compyfs/.../v3_dart_cda_scratch",
-        "path_template": "{data_path}/{run_id}/archive/{group_key}/dart_diagnostics/{diag_set}",
+        "path_template": "{data_path}/{run_id}/{group_key}/eam/dart_diagnostics/{diag_set}",
         "file_templates": {
             "obs_diag": "{run_id}.dart.e.eam_{diag_set}_output.{period}.nc",
             "obs_seq":  "{name}.dart.e.eam_{diag_set}_final.{period}-*.nc",
@@ -164,10 +164,11 @@ class DartObsDiagReader:
                     print(f"[RESOLVE] {diag_set} (swap+wildcard): {w2_full}")
                     return path, wc2
 
-        print("[WARN] No matching files for", diag_set, "Tried:")
-        for t in tried:
-            print("  ", t)
-        return path, primary
+        attempted = "\n".join(f"  - {candidate}" for candidate in tried)
+        raise FileNotFoundError(
+            f"No matching {diag_set} files. Check path_template, the experiment "
+            f"run/group, and the requested period. Tried:\n{attempted}"
+        )
 
     def resolve_dart_file_path(
         self, exp_info: dict, exp: str,
