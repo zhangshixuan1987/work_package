@@ -1,0 +1,127 @@
+<?xml version="1.0"?>
+
+<machine_postprocess>
+
+  <machine name="dav" hostname="dav,geyser,caldera,pronghorn,casper">
+    <timeseries_pes  nodes="4" pes_per_node="16" wallclock="04:00:00" memory="100G">64</timeseries_pes>
+    <xconform_pes  nodes="4" pes_per_node="16" wallclock="06:00:00" memory="100G">64</xconform_pes>
+    <ocn_remap_pes  nodes="4" pes_per_node="9" wallclock="08:00:00" memory="100G">32</ocn_remap_pes>
+    <mpi_command>srun</mpi_command>
+    <pythonpath></pythonpath>
+    <f2py fcompiler="intelem" f77exec="/glade/apps/opt/modulefiles/ys/cmpwrappers/ifort">f2py</f2py>
+    <za>
+      <compiler>gfortran</compiler>
+      <flags>-c -g -O2</flags>
+      <include>-I$(NCAR_INC_NETCDF)</include>
+      <libs>-L$(NCAR_LDFLAGS_NETCDF) $(NCAR_LIBS_NETCDF)</libs>
+    </za>
+    <reset_modules>
+      <module>module purge</module>
+    </reset_modules>
+    <modules>
+      <module>module load gnu/9.1.0</module>
+      <module>module load ncarenv</module>
+      <module>module load ncarcompilers</module>
+      <module>module load openmpi/4.0.3</module>
+      <module>module load netcdf/4.7.3</module>
+      <module>module load nco/4.7.9</module>
+      <module>module load ncl/6.6.2</module>
+    </modules>
+    <components>
+      <component name="atm">
+	<averages_pes  nodes="4" pes_per_node="8" wallclock="02:00:00" memory="100G">32</averages_pes>
+	<diagnostics_pes  nodes="1" pes_per_node="16" wallclock="02:00:00" memory="100G">16</diagnostics_pes>
+	<regrid_pes  nodes="1" pes_per_node="6" wallclock="02:00:00" memory="100G">6</regrid_pes>
+	<obs_root>/glade/p/cesm/amwg/amwg_data</obs_root>
+      </component>
+      <component name="ice">
+	<averages_pes  nodes="4" pes_per_node="8" wallclock="02:00:00" memory="100G">32</averages_pes>
+	<diagnostics_pes  nodes="1" pes_per_node="4" wallclock="01:00:00" memory="100G">4</diagnostics_pes>
+	<obs_root>/glade/p/cesm/pcwg/ice/data</obs_root>
+      </component>
+      <component name="lnd">
+	<averages_pes  nodes="4" pes_per_node="8" wallclock="02:00:00" memory="100G">32</averages_pes>
+	<diagnostics_pes  nodes="1" pes_per_node="12" wallclock="02:00:00" memory="100G">12</diagnostics_pes>
+	<regrid_pes  nodes="1" pes_per_node="6" wallclock="02:00:00" memory="100G">6</regrid_pes>
+	<obs_root>/glade/p/cesm/lmwg/diag/lnd_diag_data</obs_root>
+      </component>
+      <component name="ocn">
+	<averages_pes  nodes="4" pes_per_node="8" wallclock="02:00:00" memory="100G">32</averages_pes>
+	<diagnostics_pes  nodes="1" pes_per_node="16" wallclock="02:00:00" memory="100G">16</diagnostics_pes>
+	<obs_root>/glade/p/cesm/</obs_root>
+      </component>
+      <component name="ilamb">
+	<diagnostics_pes  nodes="1" pes_per_node="2" wallclock="01:00:00" memory="100G">2</diagnostics_pes>
+	<initialize_pes  nodes="1" pes_per_node="1" wallclock="00:00:10" memory="1G">1</initialize_pes>
+	<obs_root>/glade/p/cesm/lmwg_dev/oleson/ILAMB/ILAMB_all</obs_root>
+      </component>
+      <component name="iomb">
+	<diagnostics_pes  nodes="1" pes_per_node="2" wallclock="01:00:00" memory="100G">2</diagnostics_pes>
+	<initialize_pes  nodes="1" pes_per_node="1" wallclock="00:00:10" memory="1G">1</initialize_pes>
+	<obs_root>/glade/p/cesm/omwg/obs_data/IOMB</obs_root>
+      </component>
+    </components>
+  </machine>
+
+  <machine name="cheyenne" hostname="cheyenne">
+    <timeseries_pes queue="regular" nodes="16" pes_per_node="9" wallclock="12:00:00">144</timeseries_pes>
+    <xconform_pes queue="regular" nodes="16" pes_per_node="4" wallclock="12:00:00">64</xconform_pes>
+    <ocn_remap_pes queue="regular" nodes="4" pes_per_node="9" wallclock="08:00:00">32</ocn_remap_pes>
+    <mpi_command>mpiexec_mpt dplace -s 1</mpi_command>
+    <pythonpath></pythonpath>
+    <f2py fcompiler="intelem" f77exec="gfortran">f2py</f2py>
+    <za>
+      <compiler>gfortran</compiler>
+      <flags>-c -g -O2</flags>
+      <include>-I$(NCAR_INC_NETCDF)</include>
+      <libs>-L$(NCAR_LDFLAGS_NETCDF) $(NCAR_LIBS_NETCDF)</libs>
+    </za>
+    <reset_modules>
+      <module>module purge</module>
+    </reset_modules>
+    <modules>
+      <module>module load gnu/9.1.0</module>
+      <module>module load ncarenv</module>
+      <module>module load ncarcompilers</module>
+      <module>module load mpt/2.22</module>
+      <module>module load netcdf/4.7.3</module>
+      <module>module load nco/4.7.9</module>
+      <module>module load ncl/6.6.2</module>
+    </modules>
+    <components>
+      <component name="atm">
+	<averages_pes queue="regular" nodes="4" pes_per_node="18" wallclock="01:00:00">72</averages_pes>
+	<diagnostics_pes queue="regular" nodes="1" pes_per_node="18" wallclock="01:00:00">18</diagnostics_pes>
+	<regrid_pes queue="regular" nodes="1" pes_per_node="16" wallclock="01:00:00">36</regrid_pes>
+	<obs_root>/glade/p/cesm/amwg/amwg_data</obs_root>
+      </component>
+      <component name="ice">
+	<averages_pes queue="regular" nodes="4" pes_per_node="4" wallclock="01:00:00">16</averages_pes>
+	<diagnostics_pes queue="regular" nodes="1" pes_per_node="8" wallclock="01:00:00">8</diagnostics_pes>
+	<obs_root>/glade/p/cesm/pcwg/ice/data</obs_root>
+      </component>
+      <component name="lnd">
+	<averages_pes queue="regular" nodes="4" pes_per_node="18" wallclock="01:00:00">72</averages_pes>
+	<diagnostics_pes queue="regular" nodes="1" pes_per_node="16" wallclock="01:00:00">16</diagnostics_pes>
+	<regrid_pes queue="regular" nodes="1" pes_per_node="12" wallclock="01:00:00">12</regrid_pes>
+	<obs_root>/glade/p/cesm/lmwg/diag/lnd_diag_data</obs_root>
+      </component>
+      <component name="ocn">
+	<averages_pes queue="regular" nodes="4" pes_per_node="4" wallclock="01:00:00">16</averages_pes>
+	<diagnostics_pes queue="regular" nodes="1" pes_per_node="16" wallclock="01:00:00">16</diagnostics_pes>
+	<obs_root>/glade/p/cesm/</obs_root>
+      </component>
+      <component name="ilamb">
+	<diagnostics_pes queue="regular" nodes="1" pes_per_node="8" wallclock="00:30:00">8</diagnostics_pes>
+	<initialize_pes queue="share" nodes="1" pes_per_node="1" wallclock="00:01:00">1</initialize_pes>
+	<obs_root>/glade/p/cesm/lmwg_dev/oleson/ILAMB/ILAMB_all</obs_root>
+      </component>
+      <component name="iomb">
+	<diagnostics_pes queue="regular" nodes="1" pes_per_node="8" wallclock="00:30:00">8</diagnostics_pes>
+	<initialize_pes queue="share" nodes="1" pes_per_node="1" wallclock="00:01:00">1</initialize_pes>
+	<obs_root>/glade/p/cesm/omwg/obs_data/IOMB</obs_root>
+      </component>
+    </components>
+  </machine>
+
+</machine_postprocess>

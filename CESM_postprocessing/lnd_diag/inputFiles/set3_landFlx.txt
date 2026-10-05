@@ -1,0 +1,8 @@
+globalMeanNat   TSA
+globalMeanDay   PREC
+globalMeanDay   TOTRUNOFF
+globalMeanNat   SNOWDP
+globalMeanNat   LHEAT
+globalMeanDay   FPSN
+globalMeanNat   TLAI
+globalMeanNat   TOTSOILLIQICE

@@ -1,0 +1,5 @@
+Snapshot backup of third-party repository (not developed here).
+upstream: https://github.com/NCAR/CESM_postprocessing.git
+branch:   master
+commit:   16211db9e173dae4364f96f00a2aa1dfea698a41
+snapshot: 2026-10-05
