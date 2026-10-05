@@ -95,6 +95,14 @@ instead of modifying output products.
    notebook provides a dry-run stage.
 4. Enable plotting and execute the workflow cells in order.
 
+Figures for the v3 large-ensemble paper (the `*_v3le` synthetic notebooks, the
+ENSO feature/pattern/summary-box notebooks, and the v3.LR historical-versus-future
+NAO cell in `plot_mov_pattern_map_rrm.ipynb`) are written to
+`/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper/figures/pcmdi`.
+Their PCMDI inputs remain under `.../ac.szhang/e3sm-pcmdi-le` (`hist/`, `future/`,
+`climo/`, metrics folders), and v3 LE diagnostic data products are in
+`.../v3LE_paper/diag_data`.
+
 The configured output directory is printed by the workflow. Many production
 examples reference LCRC or NERSC diagnostic locations and therefore require
 access to the corresponding filesystem.
