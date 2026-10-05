@@ -39,3 +39,9 @@ ocn_diag/tool_lib/zon_avg/makefile
 
 # ignore any .svn files
 .svn*
+
+# Keep package configuration images (HTML templates, logos, region maps,
+# colormap previews); these are inputs to the diagnostics, not outputs.
+!*.png
+!*.gif
+!*.jpg

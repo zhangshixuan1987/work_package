@@ -1,4 +1,5 @@
 Snapshot backup of third-party repository (not developed here).
+original name: Python-Practical-Application-on-Climate-Variability-Studies
 upstream: https://github.com/royalosyin/Python-Practical-Application-on-Climate-Variability-Studies.git
 branch:   master
 commit:   a744d3c1101cbfc52a11c84b113073bdadff5f77
