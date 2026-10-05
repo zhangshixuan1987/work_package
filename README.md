@@ -12,7 +12,7 @@ run scripts from their own directory unless their documentation says otherwise.
 | `Gen_Nudge_Data/` | Generate reanalysis-based nudging and initial-condition data. |
 | `Tempest_Extreme/` | Detect and analyze tropical cyclones, extratropical cyclones, and atmospheric rivers. |
 | `coupled_spinup_eval/` | E3SM v3 coupled spin-up evaluation notebooks (Full-CPL vs alternating FC / FOSI spin-ups); outputs on LCRC public_html, see its README. |
-| `arctic_analysis/` | E3SM v3 large-ensemble Arctic paper workflows: time series, mean bias, TS budget, and Arctic amplification. |
+| `polar_analysis/` | E3SM v3 large-ensemble polar (Arctic-focused) paper workflows: time series, mean bias, TS budget, and Arctic amplification. |
 | `analysis_script_ncl/` | Shared NCL analysis, plotting, animation, and regridding scripts. |
 | `betacast/` | BetaCast configuration and regridding resources. |
 | `circulation_pause/` | Circulation, ozone, and related diagnostics. |
@@ -34,5 +34,7 @@ run scripts from their own directory unless their documentation says otherwise.
 - Put workflow-specific usage notes beside the relevant scripts when adding or
   changing a workflow.
 
-There is no repository-wide test suite. Validate changes with the interpreter
+`tools/check_package.py <package>` checks the notebook packages (`polar_analysis`,
+`pcmdi_analysis`) for syntax errors, hard-coded output roots, and missing input
+paths. There is no repository-wide test suite. Validate changes with the interpreter
 or model workflow used by the directory you modify.

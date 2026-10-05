@@ -1,0 +1,9 @@
+{
+  "_comment": "Single source for the v3 LE paper output root. Override at run time with the V3LE_ROOT environment variable.",
+  "v3le_root": "/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper",
+  "subdirs": {
+    "data": "data",
+    "diag_data": "diag_data",
+    "figures": "figures"
+  }
+}
