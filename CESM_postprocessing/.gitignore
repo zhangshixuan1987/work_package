@@ -39,8 +39,3 @@ ocn_diag/tool_lib/zon_avg/makefile
 
 # ignore any .svn files
 .svn*
-# Keep upstream figures/docs in this snapshot (overrides parent ignores)
-!*.png
-!*.gif
-!*.pdf
-!*.eps

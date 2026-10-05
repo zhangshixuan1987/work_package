@@ -1,5 +1,0 @@
-# Keep upstream figures/docs in this snapshot (overrides parent ignores)
-!*.png
-!*.gif
-!*.pdf
-!*.eps
