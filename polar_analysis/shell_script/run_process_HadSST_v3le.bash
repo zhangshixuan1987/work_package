@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Parameters: override from the environment for another machine/experiment,
+# e.g.  DATA_DIR=/other/data bash run_process_HadSST_v3le.bash   (or: sbatch --export=ALL,DATA_DIR=... run_process_HadSST_v3le.bash)
+DATA_DIR="${DATA_DIR:-/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3_polar_analysis/data}"
+
+data_dir="/lcrc/group/e3sm2/ac.wlin/E3SMv3/AMIP/sstice-ext"
+syear=1869
+eyear=2022
+exp="HadISST"
+period="${syear}-${eyear}"
+file="${data_dir}/sst_ice_CMIP6_DECK_E3SM_1x1_c20221024.nc"
+
+cd ${data_dir}
+
+outdir="${DATA_DIR}/climo"
+if [ ! -d ${outdir} ];then
+  mkdir -p ${outdir}
+fi
+
+for year in `seq $syear $eyear`;do 
+  time1=`printf "%04d" $year`"-01-01 00:00:0.0"
+  time2=`printf "%04d" $year`"-12-31 23:59:59.0"
+  rm -rvf ${outdir}/${exp}_${year}.nc
+  ncrcat -d time,"${time1}","${time2}" ${file} ${outdir}/${exp}_${year}.nc 
+done 
+
+outfile="${outdir}/${exp}.observation.climo.${period}.nc"
+rm -rvf ${outfile}
+echo ${outdir}/${exp}_*.nc
+if [ ! -f "${outfile}" ];then 
+  rm -rvf ${outfile}
+  ncea ${outdir}/${exp}_*.nc ${outfile} 
+  rm -rvf ${outdir}/${exp}_*.nc
+fi 
+#ncap2 -s "lon=lon+180.0" ${outfile} ${outfile}.tmp 
+#mv ${outfile}.tmp ${outfile}

@@ -99,10 +99,9 @@ Figures for the v3 large-ensemble paper (the `*_v3le` synthetic notebooks, the
 ENSO feature/pattern/summary-box notebooks, and the v3.LR historical-versus-future
 NAO cell in `plot_mov_pattern_map_rrm.ipynb`) are written to
 `/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper/figures/pcmdi`.
-These notebooks get the root from `config/paths.json` through
-`from paths import V3LE_DIAG_DIR, V3LE_FIG_ROOT` (override with the `V3LE_ROOT`
-environment variable); run `python tools/check_package.py pcmdi_analysis` from
-`work_package/` after editing. Their PCMDI inputs remain under `.../ac.szhang/e3sm-pcmdi-le` (`hist/`, `future/`,
+The output directories are set in each notebook's configuration cell; run
+`python tools/check_package.py pcmdi_analysis` from `work_package/` after
+editing. Their PCMDI inputs remain under `.../ac.szhang/e3sm-pcmdi-le` (`hist/`, `future/`,
 `climo/`, metrics folders), and v3 LE diagnostic data products are in
 `.../v3LE_paper/diag_data`.
 
@@ -120,7 +119,6 @@ Important shared modules include:
 - `scripts/clim_metrics_reader.py`: mean-climate metric input.
 - `scripts/movs_metrics_reader.py`: variability-mode metric input.
 - `scripts/enso_metrics_reader.py`: ENSO metric input.
-- `scripts/paths.py`: v3 LE output locations read from `config/paths.json`.
 - `scripts/enso_feature_sources.py`: ensemble and standalone ENSO sources.
 - `scripts/pcmdi_enso_box_reader.py`: `ENSOMetricReader` for aggregated ENSO
   metric JSON files used by the summary box plots; it depends on the vendored

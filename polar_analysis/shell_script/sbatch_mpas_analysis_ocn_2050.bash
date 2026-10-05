@@ -7,14 +7,9 @@
 #SBATCH -A condo
 #SBATCH -p acme-small
 
-# Load shared output locations (V3LE_DATA_DIR, ...) from paths.sh next to this
-# script. Under sbatch the job runs a spooled copy, so ask Slurm for the original.
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then
-  _self="$(scontrol show job "${SLURM_JOB_ID}" | awk -F= '/ Command=/{print $2; exit}')"
-else
-  _self="${BASH_SOURCE[0]}"
-fi
-source "$(cd "$(dirname "${_self}")" && pwd)/paths.sh"
+# Parameters: override from the environment for another machine/experiment,
+# e.g.  DATA_DIR=/other/data bash sbatch_mpas_analysis_ocn_2050.bash   (or: sbatch --export=ALL,DATA_DIR=... sbatch_mpas_analysis_ocn_2050.bash)
+DATA_DIR="${DATA_DIR:-/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper/data}"
 
 source /lcrc/soft/climate/e3sm-unified/load_e3sm_unified_1.9.3_chrysalis.sh
 
@@ -23,7 +18,7 @@ cd $jobdir
 
 region="Arctic"
 #location of work directory 
-WORK_DIR=${V3LE_DATA_DIR}/mpas_ts
+WORK_DIR=${DATA_DIR}/mpas_ts
 
 #Mapping file
 MAP_FILE=/lcrc/group/acme/ac.szhang/acme_scratch/data/regrid_maps/map_IcoswISC30E3r4_to_1.0x1.0degree_conserve.nc
@@ -136,7 +131,7 @@ while read -r key name; do
    # Set calendar attribute
    ncatted -a calendar,time,m,c,"365_day" "${OUT_FILE_DIR}.tmp"
  else 
-    echo $RUN_FILE_DIR >> "${V3LE_DATA_DIR}/logs/missing.txt"
+    echo $RUN_FILE_DIR >> "${DATA_DIR}/logs/missing.txt"
     echo "missing, try two segements...."
     alternate1=`echo ${RUN_FILE_DIR} | sed "s/ts_1850-2049_climo_2021-2050/ts_1850-2024_climo_1985-2024/g"`
     if [ ! -f "${alternate1}" ];then

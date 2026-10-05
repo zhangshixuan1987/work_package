@@ -7,14 +7,19 @@ Usage::
 
 Errors (exit status 1):
   * a notebook is not valid JSON or a code cell does not compile;
-  * the v3 LE root from config/paths.json is written literally anywhere
-    outside config/ (it must come from scripts/paths.py or shell_script/paths.sh);
-  * a notebook uses V3LE_* / fig_dir / require before importing them from paths;
-  * notebooks that use the standard setup cell do not all share the same one;
-  * a shell script fails ``bash -n`` or does not source paths.sh.
+  * a notebook still uses the removed ``paths`` module;
+  * in packages whose notebooks use a ``parameters`` cell (papermill tag):
+    - every notebook has exactly one, directly after the shared setup cell,
+    - all notebooks share the same setup cell,
+    - absolute /lcrc paths appear only in the parameters cell;
+  * config/regions.json (if present) does not resolve against exp_info;
+  * a shell script fails ``bash -n`` or lacks a ``DATA_DIR="${DATA_DIR:-...}"``
+    parameter.
 
 Warnings (reported, exit status unaffected):
-  * an absolute /lcrc path or a V3LE_* sub-path used in code does not exist.
+  * a parameter is never used outside the parameters cell;
+  * an absolute /lcrc input path (parameter default or literal) does not exist
+    (output parameters named FIG_*, DIAG_*, OUT* are skipped).
 """
 
 from __future__ import annotations
@@ -28,11 +33,11 @@ from collections import defaultdict
 from pathlib import Path
 
 WORK_PACKAGE = Path(__file__).resolve().parents[1]
-PATH_NAMES = ("V3LE_ROOT", "V3LE_DATA_DIR", "V3LE_DIAG_DIR", "V3LE_FIG_ROOT", "fig_dir", "require")
-SETUP_MARKER = "# Locate this package and load the shared v3 LE locations"
+SETUP_MARKER = "PROJECT_ROOT = next("
 LCRC_RE = re.compile(r'["\'](/lcrc/[^"\'{}*?\[\]\s]+)')
-V3LE_SUB_RE = re.compile(
-    r'(?:\{(V3LE_\w+)\}/([^"\'{}*?\s]+)|(V3LE_\w+)\s*/\s*"([^"{}*?]+)")')
+PARAM_RE = re.compile(r"^([A-Za-z_]\w*)\s*=", re.M)
+REMOVED = re.compile(r"from paths import|\bproject_paths\b|\bV3LE_(ROOT|DATA_DIR|DIAG_DIR|FIG_ROOT)\b")
+SHELL_PARAM = re.compile(r'^DATA_DIR="\$\{DATA_DIR:-[^}]+\}"', re.M)
 
 try:  # Strip IPython magics/shell escapes the way Jupyter does.
     from IPython.core.inputtransformer2 import TransformerManager
@@ -46,93 +51,105 @@ except ImportError:  # pragma: no cover - fallback without IPython
                          for l in src.splitlines())
 
 
-def code_cells(nb: dict) -> list[str]:
-    return ["".join(c["source"]) for c in nb.get("cells", []) if c.get("cell_type") == "code"]
+def is_parameters(cell: dict) -> bool:
+    return "parameters" in cell.get("metadata", {}).get("tags", [])
 
 
-def load_paths(pkg: Path) -> dict:
-    """Import the package's scripts/paths.py in isolation."""
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(f"_paths_{pkg.name}", pkg / "scripts" / "paths.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return {n: getattr(mod, n) for n in ("V3LE_ROOT", "V3LE_DATA_DIR", "V3LE_DIAG_DIR", "V3LE_FIG_ROOT")}
+def check_regions(pkg: Path) -> list[str]:
+    if not (pkg / "config" / "regions.json").is_file():
+        return []
+    sys.path.insert(0, str(pkg / "scripts"))
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            import regions  # package-local module
+            for region in regions.REGIONS:
+                regions.region_catalogs(region)
+        return []
+    except Exception as exc:
+        return [f"config/regions.json: {exc}"]
+    finally:
+        sys.path.pop(0)
+        for mod in ("regions", "exp_info"):
+            sys.modules.pop(mod, None)
 
 
 def check(pkg: Path) -> tuple[list[str], list[str]]:
-    errors: list[str] = []
+    errors: list[str] = check_regions(pkg)
     warns: list[str] = []
     rel = lambda p: p.relative_to(WORK_PACKAGE)  # noqa: E731
+    notebooks = sorted((pkg / "jupyter").rglob("*.ipynb"))
+    notebooks = [p for p in notebooks if ".ipynb_checkpoints" not in p.parts]
 
-    config = pkg / "config" / "paths.json"
-    if not config.is_file() or not (pkg / "scripts" / "paths.py").is_file():
-        return [f"{pkg.name}: missing config/paths.json or scripts/paths.py"], []
-    literal_root = json.loads(config.read_text())["v3le_root"]
-    resolved = load_paths(pkg)
-    if not resolved["V3LE_ROOT"].is_dir():
-        errors.append(f"V3LE_ROOT does not exist: {resolved['V3LE_ROOT']}")
+    loaded = {}
+    for nb_path in notebooks:
+        try:
+            loaded[nb_path] = json.loads(nb_path.read_text())
+        except json.JSONDecodeError as exc:
+            errors.append(f"{rel(nb_path)}: invalid JSON ({exc})")
+    use_params = any(is_parameters(c) for nb in loaded.values() for c in nb.get("cells", []))
 
     missing_paths: dict[str, set[str]] = defaultdict(set)
     setup_variants: dict[str, list[str]] = defaultdict(list)
 
-    for nb_path in sorted((pkg / "jupyter").glob("*.ipynb")):
-        try:
-            cells = code_cells(json.loads(nb_path.read_text()))
-        except json.JSONDecodeError as exc:
-            errors.append(f"{rel(nb_path)}: invalid JSON ({exc})")
-            continue
-        imported = False
-        for idx, src in enumerate(cells):
+    for nb_path, nb in loaded.items():
+        name = str(nb_path.relative_to(pkg / "jupyter"))
+        code = [c for c in nb.get("cells", []) if c.get("cell_type") == "code"]
+        for idx, cell in enumerate(code):
+            src = "".join(cell["source"])
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", SyntaxWarning)
-                    compile(to_python(src), f"{nb_path.name}[{idx}]", "exec")
+                    compile(to_python(src), f"{name}[{idx}]", "exec")
             except SyntaxError as exc:
                 errors.append(f"{rel(nb_path)} cell {idx}: {exc.msg} (line {exc.lineno})")
-            if literal_root in src:
-                errors.append(f"{rel(nb_path)} cell {idx}: hard-coded v3LE root; use paths.py")
-            if re.search(r"^\s*from paths import", src, re.M):
-                imported = True
-            body = re.sub(r"^\s*from paths import.*$", "", src, flags=re.M)
-            # Constants count when referenced; helpers only when called, since
-            # names like fig_dir are also common parameter/attribute names.
-            used = [n for n in PATH_NAMES
-                    if re.search(rf"(?<![\w.]){n}" + (r"\s*\(" if n.islower() else r"\b"), body)
-                    and not re.search(rf"^\s*{n}\s*=", body, re.M)
-                    and not re.search(rf"^\s*def {n}\b", body, re.M)]
-            if used and not imported:
-                errors.append(f"{rel(nb_path)} cell {idx}: uses {used} before 'from paths import'")
-            if SETUP_MARKER in src:
-                key = re.sub(r'\n*FIG_DIR_ROOT = fig_dir\("[^"]*"\)\s*$', "", src)
-                setup_variants[key].append(nb_path.name)
-            for m in LCRC_RE.finditer(src):
-                if not Path(m.group(1)).exists():
-                    missing_paths[m.group(1)].add(nb_path.name)
-            for m in V3LE_SUB_RE.finditer(src):
-                var, sub = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
-                if var in resolved and not (resolved[var] / sub).exists():
-                    missing_paths[f"{var}/{sub}"].add(nb_path.name)
+            if REMOVED.search(src):
+                errors.append(f"{rel(nb_path)} cell {idx}: uses the removed paths module")
+            for line in src.splitlines():
+                # outputs (FIG_*/DIAG_*/OUT*) are created by the notebook itself
+                if is_parameters(cell) and re.match(r"\s*(FIG|DIAG|OUT)\w*\s*=", line):
+                    continue
+                for m in LCRC_RE.finditer(line):
+                    if not Path(m.group(1)).exists():
+                        missing_paths[m.group(1)].add(name)
+
+        if not use_params:
+            continue
+        params = [i for i, c in enumerate(code) if is_parameters(c)]
+        setups = [i for i, c in enumerate(code) if SETUP_MARKER in "".join(c["source"])]
+        if len(params) != 1:
+            errors.append(f"{rel(nb_path)}: needs exactly one 'parameters' cell (found {len(params)})")
+            continue
+        if len(setups) != 1 or params[0] != setups[0] + 1:
+            errors.append(f"{rel(nb_path)}: the 'parameters' cell must directly follow the setup cell")
+        if setups:
+            setup_variants["".join(code[setups[0]]["source"])].append(name)
+        psrc = "".join(code[params[0]]["source"])
+        rest = "\n".join("".join(c["source"]) for i, c in enumerate(code) if i != params[0])
+        for i, c in enumerate(code):
+            if i != params[0] and LCRC_RE.search("".join(c["source"])):
+                errors.append(f"{rel(nb_path)} cell {i}: absolute /lcrc path outside the parameters cell")
+        for pname in PARAM_RE.findall(psrc):
+            if not re.search(rf"\b{pname}\b", rest):
+                warns.append(f"unused parameter {pname} in {name}")
 
     if len(setup_variants) > 1:
-        sizes = sorted(((len(v), v[:3]) for v in setup_variants.values()), reverse=True)
+        sizes = sorted(((len(v), v[:2]) for v in setup_variants.values()), reverse=True)
         errors.append(f"{len(setup_variants)} different setup cells: {sizes}")
 
-    for py in sorted((pkg / "scripts").glob("*.py")):
-        if literal_root in py.read_text():
-            errors.append(f"{rel(py)}: hard-coded v3LE root; use paths.py")
-
     shell_dir = pkg / "shell_script"
-    for sh in sorted(shell_dir.glob("*.bash")) if shell_dir.is_dir() else []:
+    for sh in sorted(shell_dir.glob("*.*sh")) if shell_dir.is_dir() else []:
         text = sh.read_text()
         if subprocess.run(["bash", "-n", str(sh)], capture_output=True).returncode:
             errors.append(f"{rel(sh)}: bash -n failed")
-        if "paths.sh" not in text:
-            errors.append(f"{rel(sh)}: does not source paths.sh")
-        if literal_root in text:
-            errors.append(f"{rel(sh)}: hard-coded v3LE root; use paths.sh")
+        if not SHELL_PARAM.search(text):
+            errors.append(f"{rel(sh)}: missing DATA_DIR=\"${{DATA_DIR:-<default>}}\" parameter")
         for m in LCRC_RE.finditer(text):
             if not Path(m.group(1)).exists():
                 missing_paths[m.group(1)].add(sh.name)
+        default = re.search(r'DATA_DIR:-([^}]+)\}', text)
+        if default and not Path(default.group(1)).exists():
+            missing_paths[default.group(1)].add(sh.name)
 
     for path, users in sorted(missing_paths.items()):
         names = sorted(users)
@@ -145,8 +162,7 @@ def main(argv: list[str]) -> int:
     names = argv or ["polar_analysis", "pcmdi_analysis"]
     status = 0
     for name in names:
-        pkg = (WORK_PACKAGE / name).resolve()
-        errors, warns = check(pkg)
+        errors, warns = check((WORK_PACKAGE / name).resolve())
         print(f"== {name}: {len(errors)} error(s), {len(warns)} warning(s)")
         for e in errors:
             print(f"  ERROR {e}")

@@ -1,0 +1,132 @@
+{
+  "_comment": "Per-region settings for the climo-based bias and budget notebooks. Region bounds live in scripts/exp_info.py REGION_CATALOG. variable_overrides replace VariableInfo fields (min, max, nlev, ref); exclude_runs drops runs from RUN_CATALOG; budget_lat_band limits the regional-mean budget CSVs.",
+  "defaults": {
+    "sfc_mask_kind": "land",
+    "sfc_mask_ref": "MODIS.observation",
+    "sfc_mask_var": "TS",
+    "refexp": "MODIS.observation",
+    "exclude_runs": [],
+    "variable_overrides": {},
+    "budget_lat_band": null
+  },
+  "regions": {
+    "Arctic": {},
+    "Greenland": {},
+    "Antarctic": {
+      "exclude_runs": [
+        "HadISST.analysis"
+      ],
+      "variable_overrides": {
+        "TS": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "TURFLX": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "LHFLX": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "SHFLX": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "RADNET": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FSNS": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FSDS": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FSUS": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FSNSC": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FSDSC": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FSUSC": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FLNS": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FLDS": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FLUS": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FLNSC": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FLDSC": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "FLUSC": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "SWCF_SRF": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        },
+        "LWCF_SRF": {
+          "min": -10,
+          "max": 10,
+          "nlev": 11
+        }
+      },
+      "budget_lat_band": [
+        -90.0,
+        -65.0
+      ]
+    },
+    "Atlantic": {
+      "sfc_mask_kind": "ocean",
+      "sfc_mask_ref": "HadISST.analysis",
+      "refexp": "HadISST.analysis",
+      "variable_overrides": {
+        "TS": {
+          "ref": "HadISST.analysis"
+        }
+      }
+    }
+  }
+}

@@ -1,24 +1,21 @@
 #!/bin/bash
 
-# Load shared output locations (V3LE_DATA_DIR, ...) from paths.sh next to this
-# script. Under sbatch the job runs a spooled copy, so ask Slurm for the original.
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then
-  _self="$(scontrol show job "${SLURM_JOB_ID}" | awk -F= '/ Command=/{print $2; exit}')"
-else
-  _self="${BASH_SOURCE[0]}"
-fi
-source "$(cd "$(dirname "${_self}")" && pwd)/paths.sh"
+# Parameters: override from the environment for another machine/experiment,
+# e.g.  DATA_DIR=/other/data bash run_process_HadSST.bash   (or: sbatch --export=ALL,DATA_DIR=... run_process_HadSST.bash)
+DATA_DIR="${DATA_DIR:-/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3_polar_analysis/data}"
 
-data_dir="/lcrc/group/e3sm2/ac.wlin/E3SMv3/AMIP/sstice-ext"
-syear=1869
-eyear=2022
+data_dir="/lcrc/group/e3sm/ac.szhang/acme_scratch/data/HadISST"
+#syear=2001
+#eyear=2020
+syear=2001
+eyear=2018
 exp="HadISST"
 period="${syear}-${eyear}"
-file="${data_dir}/sst_ice_CMIP6_DECK_E3SM_1x1_c20221024.nc"
+file="${data_dir}/rgd_data/ts_186901_202212.nc"
 
 cd ${data_dir}
 
-outdir="${V3LE_DATA_DIR}/climo"
+outdir="${DATA_DIR}/climo"
 if [ ! -d ${outdir} ];then
   mkdir -p ${outdir}
 fi

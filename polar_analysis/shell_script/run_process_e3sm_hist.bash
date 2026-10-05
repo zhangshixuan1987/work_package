@@ -1,39 +1,31 @@
 #!/bin/bash
 
-# Load shared output locations (V3LE_DATA_DIR, ...) from paths.sh next to this
-# script. Under sbatch the job runs a spooled copy, so ask Slurm for the original.
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then
-  _self="$(scontrol show job "${SLURM_JOB_ID}" | awk -F= '/ Command=/{print $2; exit}')"
-else
-  _self="${BASH_SOURCE[0]}"
-fi
-source "$(cd "$(dirname "${_self}")" && pwd)/paths.sh"
+# Parameters: override from the environment for another machine/experiment,
+# e.g.  DATA_DIR=/other/data bash run_process_e3sm_hist.bash   (or: sbatch --export=ALL,DATA_DIR=... run_process_e3sm_hist.bash)
+DATA_DIR="${DATA_DIR:-/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3_polar_analysis/data}"
 
-map="map/map_721x1440_to_180x360_conserve.nc"
-outdir="${V3LE_DATA_DIR}/climo"
+map="${DATA_DIR}/map/map_721x1440_to_180x360_conserve.nc"
+outdir="${DATA_DIR}/climo"
 if [ ! -d ${outdir} ];then 
   mkdir -p ${outdir}
 fi 
 
-syear=1985   #2001
-eyear=2014   #2018
-inty="30yr"
-
-
-exps=( "v3.LR.historical_0051" "v3.LR.historical_0101" 
-       "v3.LR.historical_0101_bcdt15m" "v3.LR.historical_0151" 
-       "v3.LR.historical_0201" "v3.LR.historical_0251" )
-
-data_dir="/lcrc/group/e3sm/ac.wlin/E3SMv3"
-
+data_dir="/lcrc/group/e3sm/ac.szhang/acme_scratch/e3sm_project/test_zppy_pmp"
 sub_dir="post/atm/180x360_aave/clim"
+for igp in `seq 1 2`;do 
 
-for igp in `seq 1 2`;do
-  for exp in ${exps[@]};do
+  if [[ ${igp} == 1 ]];then 
+    syear=1985
+    eyear=2014
+    inty="30yr"
+  else 
+    syear=2001
+    eyear=2018
+    inty="18yr"
+  fi 
+
+  for exp in "v3.LR.amip_0101" "v3.LR.amip_0151" "v3.LR.amip_0201" "v3.LR.historical_0051" "v3.LR.historical_0101" "v3.LR.historical_0101_bcdt15m" "v3.LR.historical_0151" "v3.LR.historical_0201" "v3.LR.historical_0251";do 
     indir="${data_dir}/${exp}/${sub_dir}/${inty}"
-    echo $indir
-    exit
-
     period="${syear}-${eyear}"
     files=
     unset files

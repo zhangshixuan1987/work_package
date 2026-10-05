@@ -1,15 +1,10 @@
 #!/bin/bash
 
-# Load shared output locations (V3LE_DATA_DIR, ...) from paths.sh next to this
-# script. Under sbatch the job runs a spooled copy, so ask Slurm for the original.
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then
-  _self="$(scontrol show job "${SLURM_JOB_ID}" | awk -F= '/ Command=/{print $2; exit}')"
-else
-  _self="${BASH_SOURCE[0]}"
-fi
-source "$(cd "$(dirname "${_self}")" && pwd)/paths.sh"
+# Parameters: override from the environment for another machine/experiment,
+# e.g.  DATA_DIR=/other/data bash run_process_era5.bash   (or: sbatch --export=ALL,DATA_DIR=... run_process_era5.bash)
+DATA_DIR="${DATA_DIR:-/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3_polar_analysis/data}"
 
-outdir="${V3LE_DATA_DIR}/climo"
+outdir="${DATA_DIR}/climo"
 if [ ! -d ${outdir} ];then 
   mkdir -p ${outdir}
 fi 

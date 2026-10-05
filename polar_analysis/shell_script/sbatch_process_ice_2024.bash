@@ -7,14 +7,9 @@
 #SBATCH -A condo
 #SBATCH -p acme-small
 
-# Load shared output locations (V3LE_DATA_DIR, ...) from paths.sh next to this
-# script. Under sbatch the job runs a spooled copy, so ask Slurm for the original.
-if [[ -n "${SLURM_JOB_ID:-}" ]]; then
-  _self="$(scontrol show job "${SLURM_JOB_ID}" | awk -F= '/ Command=/{print $2; exit}')"
-else
-  _self="${BASH_SOURCE[0]}"
-fi
-source "$(cd "$(dirname "${_self}")" && pwd)/paths.sh"
+# Parameters: override from the environment for another machine/experiment,
+# e.g.  DATA_DIR=/other/data bash sbatch_process_ice_2024.bash   (or: sbatch --export=ALL,DATA_DIR=... sbatch_process_ice_2024.bash)
+DATA_DIR="${DATA_DIR:-/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper/data}"
 
 source /lcrc/soft/climate/e3sm-unified/load_e3sm_unified_1.9.3_chrysalis.sh
 
@@ -37,7 +32,7 @@ exp_name="v3.LR.historical"
 rundir="/lcrc/group/e3sm2/ac.wlin/E3SMv3"
 
 # Work directory
-WORK_DIR="${V3LE_DATA_DIR}/${exp_name}"
+WORK_DIR="${DATA_DIR}/${exp_name}"
 mkdir -p "${WORK_DIR}/SE_SICE"
 
 # Mapping file
