@@ -36,3 +36,9 @@ __pycache__/
 *.gif
 *.pdf
 *.eps
+*.jpg
+*.jpeg
+*.svg
+*.tif
+*.tiff
+*.bmp
