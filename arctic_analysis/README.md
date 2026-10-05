@@ -15,25 +15,35 @@ originals, together with `6_pcmdi_diag/` and `script/`, are archived unchanged i
 
 ```text
 arctic_analysis/
-├── jupyter/   notebooks (process_* writes data, plot_* makes figures)
-└── scripts/   shared modules imported by the notebooks
+├── shell_script/  shell/Slurm preprocessing scripts (climatologies, MPAS sea-ice regridding)
+├── jupyter/       notebooks (process_* writes data, plot_* makes figures)
+└── scripts/       shared modules imported by the notebooks
 ```
 
-All diagnostic output goes under the fixed paper location
+All data and diagnostic output goes under the fixed paper location
 `/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper`:
 
 ```text
 v3LE_paper/
-├── figures/     V3LE_FIG_ROOT: time_series_imsk/, time_series_nmsk/, mean_bias/,
-│                budget/, arctic_amplification/<suffix>/
-└── diag_data/   V3LE_DIAG_DIR: diagnostic NetCDF/JSON products (AA_*, AA2_*,
-                 *.ensemble_stats.*.nc, mean_bias/budget <region>/ outputs, ...)
+├── data/          V3LE_DATA_DIR: processed inputs (former v3_le_paper/data)
+│   ├── global/            monthly_base 3D fields per member/dataset (~410 GB)
+│   ├── global_driftcorr/  drift-corrected monthly_base fields (~860 GB)
+│   ├── regmn/             region_means time series (global, Arctic, ...)
+│   ├── regmn_driftcorr/   region_means of drift-corrected fields (+ backup/)
+│   ├── sea_ice/           per-member mpas_ts sea-ice/atm time series (imsk)
+│   ├── mpas_ts/           MPAS-Analysis mpassi/mpaso time series (shell_script/sbatch_mpas_*)
+│   ├── pcmdi_diags/       symlinks to e3sm-pcmdi-le/climo member directories
+│   ├── climo/             created by shell_script/run_process_*.bash (bias/budget inputs)
+│   └── logs/              missing-file lists from the MPAS batch scripts
+├── diag_data/     V3LE_DIAG_DIR: diagnostic NetCDF/JSON products (AA_*, AA2_*,
+│                  *.ensemble_stats.*.nc, mean_bias/budget <region>/ outputs, ...)
+├── figures/       V3LE_FIG_ROOT: time_series_imsk/, time_series_nmsk/, mean_bias/,
+│                  budget/, arctic_amplification/<suffix>/, pcmdi/
+└── analysis_v0/   archive of the original v3_le_paper workflow folders
 ```
 
-`diag_data/` replaces the former `v3_le_paper/figure_data` (same flat file names);
-the `process_*` notebooks write there and the `plot_*` notebooks read from it.
-Raw and regional-mean intermediates (`data/global*`, `data/regmn*`) stay in
-`v3_le_paper/data`.
+The pipeline is `data/` → `process_*` → `diag_data/` → `plot_*` → `figures/`.
+`diag_data/` replaces the former `v3_le_paper/figure_data` (same flat file names).
 
 ## Notebook organization
 
@@ -55,7 +65,7 @@ make figures. Run each group in the order listed below.
 | 2 | `process_ts_{e3sm,era5,noaa20c}.ipynb` | Build regional-mean time series. |
 | 3 | `process_3d_e3sm_driftcorr.ipynb`, `process_ts_e3sm_driftcorr.ipynb` | Apply the piControl drift correction to E3SM fields and time series. |
 
-Outputs go to `v3_le_paper/data` (set by `top_dir`/`out_dir` in each notebook).
+Outputs go to `V3LE_DATA_DIR` (`global/`, `regmn/`, and the `*_driftcorr` variants).
 
 ### 2. Regional time series
 
@@ -110,10 +120,11 @@ Figures go to `figures/arctic_amplification/<suffix>/`.
    Unified).
 2. Run the first code cell. It locates `PROJECT_ROOT` (the directory that
    contains `scripts/`), adds `scripts/` to `sys.path`, and, where needed,
-   defines `V3LE_FIG_ROOT`, `V3LE_DIAG_DIR`, and the workflow's `FIG_DIR_ROOT`.
+   defines `V3LE_DATA_DIR`, `V3LE_DIAG_DIR`, `V3LE_FIG_ROOT`, and the workflow's
+   `FIG_DIR_ROOT`.
 3. Review the configuration cell (`TOP_DIR`, `DATA_DIR`, `OUT_DIR`, run lists,
-   periods) before running the rest. Input and intermediate data paths are
-   absolute LCRC paths, mostly under `v3_le_paper/` or `large_ensemble/`.
+   periods) before running the rest. Raw model and observation inputs are
+   absolute LCRC paths outside this package (for example `CVDP_RGD`).
 
 ## Shared modules
 
@@ -140,19 +151,34 @@ These items are only in the `analysis_v0/` archive:
   `energy_budget.py`) and the unused `thermo.py`/`constants.py` thermodynamics
   helpers.
 
+## Shell scripts
+
+`shell_script/` holds the shell preprocessing that feeds `V3LE_DATA_DIR`:
+
+- `run_process_{e3sm_hist,e3sm_amip,era5,noaa2c,HadSST,era5.e3smdiag}.bash`:
+  build 30-year/2001–2018 climatologies with derived surface-energy-budget
+  fields into `data/climo/` (the `plot_bias_*`/`plot_budget_ts_{sea,zonal}`
+  inputs). Scripts that regrid expect a `map/map_721x1440_to_180x360_conserve.nc`
+  file relative to the working directory. `run_process_e3sm_hist.bash` still has
+  a debugging `exit` inside its loop.
+- `sbatch_mpas_analysis_{ice_2024,ice_2050,ocn_2050}.bash`: extract MPAS-Analysis
+  sea-ice/ocean time series into `data/mpas_ts/`; missing inputs are appended to
+  `data/logs/missing.txt`.
+- `sbatch_process_ice_{2024,2050}.bash`: regrid MPAS-SeaIce history to 1° under
+  `data/v3.LR.historical/`.
+
 ## Known input-path issues
 
-Some notebooks still read inputs from project directories that no longer exist
-under `/lcrc/group/e3sm/ac.szhang/acme_scratch/e3sm_project/`. Update their
+These notebooks still read inputs from project directories that no longer exist,
+and their data was not found in `V3LE_DATA_DIR`. Update their
 `TOP_DIR`/`top_dir`/`top_path` before running them:
 
-- `large_ensemble/`: the `*_50n` AA notebooks, `process_ts_*_imsk`,
-  `plot_ts_sea_ice_imsk` (sea-ice inputs now appear to be in
-  `v3_le_paper/data/sea_ice`), `process_ts_nmsk`, `process_seaice_ts`, and the
-  `plot_budget_seb`/`plot_budget_ts_mean` notebooks.
-- `energy_budge_analysis/`: `plot_bias_*`, `plot_budget_ts_sea`, and
-  `plot_budget_ts_zonal` (similar `data/climo` and `diag_data` folders exist in
-  `v3_polar_analysis/`).
+- `large_ensemble/`: the `*_50n` AA notebooks (left unmapped because `data/regmn`
+  stores one "Arctic" region, used by the 65°N notebooks), `process_ts_nmsk`
+  (`data/Arctic/*.area_mean_ts.*`), `process_seaice_ts` (`data/seaice`), and
+  `plot_budget_seb`/`plot_budget_ts_mean` (`data/<region>`).
 
-`diag_data/` has no `v3.LR.historical.Arctic.DJF.ensemble_stats.*.nc`, so
-`plot_ts_sea_ice_imsk` stops at DJF until `process_ts_sea_ice_imsk` regenerates it.
+`data/climo/` does not exist yet; run the `shell_script/run_process_*.bash` scripts
+before the bias and budget notebooks. `diag_data/` has no
+`v3.LR.historical.Arctic.DJF.ensemble_stats.*.nc`, so `plot_ts_sea_ice_imsk`
+stops at DJF until `process_ts_sea_ice_imsk` regenerates it.
