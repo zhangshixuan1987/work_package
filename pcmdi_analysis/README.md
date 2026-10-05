@@ -52,6 +52,11 @@ independent notebooks:
 - MOV pattern maps: `plot_mov_pattern_map_rrm.ipynb`
 - MOV pathway metrics: `plot_mov_pathway_metric_rrm.ipynb`
 - Mean-climate bias maps: `plot_clim_bias_map.ipynb`
+- ENSO summary box plots: `plot_enso_summary_box_vs_obs.ipynb` (CMIP6 boxes,
+  E3SMv3 overlay), `plot_enso_summary_box_vs_cmip.ipynb` (relative to the CMIP6
+  mean), `plot_enso_summary_box_vs_model.ipynb` (future relative to historical),
+  and `plot_enso_summary_box_vs_members.ipynb` (historical-member boxes with
+  future members overlaid, no CMIP6)
 
 ### Data preparation utilities
 
@@ -105,6 +110,9 @@ Important shared modules include:
 - `scripts/movs_metrics_reader.py`: variability-mode metric input.
 - `scripts/enso_metrics_reader.py`: ENSO metric input.
 - `scripts/enso_feature_sources.py`: ensemble and standalone ENSO sources.
+- `scripts/pcmdi_enso_box_reader.py`: `ENSOMetricReader` for aggregated ENSO
+  metric JSON files used by the summary box plots; it depends on the vendored
+  PCMDI `scripts/EnsoPlotLib.py` and `scripts/EnsoCollectionsLib.py`.
 - `scripts/pcmdi_mov_workflow.py`: MOV pattern processing and plotting.
 - `scripts/mov_pathway_workflow.py`: MOV pathway metric workflow.
 - `scripts/tc_track.py`: TempestExtremes tracking command-line driver.
