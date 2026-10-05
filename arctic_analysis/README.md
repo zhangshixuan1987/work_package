@@ -7,7 +7,9 @@ surface-temperature budgets, and Arctic amplification (AA). The notebooks under
 variable, and region catalogs live under `scripts/`.
 
 The workflows were collected from the `1_*`–`5_*` directories of
-`/lcrc/group/e3sm/ac.szhang/acme_scratch/e3sm_project/v3_le_paper`.
+`/lcrc/group/e3sm/ac.szhang/acme_scratch/e3sm_project/v3_le_paper`. Those
+originals, together with `6_pcmdi_diag/` and `script/`, are archived unchanged in
+`/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper/analysis_v0`.
 
 ## Layout
 
@@ -125,7 +127,7 @@ Figures go to `figures/arctic_amplification/<suffix>/`.
 
 ## Not carried over
 
-These items remain in the original `v3_le_paper/` directories:
+These items are only in the `analysis_v0/` archive:
 
 - `trash/` folders, `*_bak` and `*-Copy1` notebooks, and the superseded
   `arctic_65N_v0/` AA configuration.
@@ -133,6 +135,10 @@ These items remain in the original `v3_le_paper/` directories:
   imports it, and it depends on the `thermo`/`constants` modules in
   `4_budget_analysis/trash/`.
 - Generated PDFs, `__pycache__/`, and `.ipynb_checkpoints/`.
+- `script/`: older versions of the time-series and budget workflows
+  (`plot_time_series.ipynb`, `energy_balance.ipynb`, `function.py`,
+  `energy_budget.py`) and the unused `thermo.py`/`constants.py` thermodynamics
+  helpers.
 
 ## Known input-path issues
 
