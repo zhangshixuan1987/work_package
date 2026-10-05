@@ -11,6 +11,7 @@ run scripts from their own directory unless their documentation says otherwise.
 | `CMIP_PGW_forcing/` | Generate and diagnose CMIP6 pseudo-global-warming SST and sea-ice forcing. |
 | `Gen_Nudge_Data/` | Generate reanalysis-based nudging and initial-condition data. |
 | `Tempest_Extreme/` | Detect and analyze tropical cyclones, extratropical cyclones, and atmospheric rivers. |
+| `coupled_spinup_eval/` | E3SM v3 coupled spin-up evaluation notebooks (Full-CPL vs alternating FC / FOSI spin-ups); outputs on LCRC public_html, see its README. |
 | `analysis_script_ncl/` | Shared NCL analysis, plotting, animation, and regridding scripts. |
 | `betacast/` | BetaCast configuration and regridding resources. |
 | `circulation_pause/` | Circulation, ozone, and related diagnostics. |

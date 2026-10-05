@@ -1,0 +1,623 @@
+{
+  "ALBEDO": {
+    "regions": {
+      "75S75N": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "ALBEDOC": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "ALBEDO_SRF": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "AODDUST": {
+    "regions": {
+      "global": [
+        "MACv2"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "AODVIS": {
+    "regions": {
+      "global": [
+        "MACv2"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDHGH_CAL": {
+    "regions": {
+      "global": [
+        "CALIPSOCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDMED_CAL": {
+    "regions": {
+      "global": [
+        "CALIPSOCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDLOW_CAL": {
+    "regions": {
+      "global": [
+        "CALIPSOCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_CAL": {
+    "regions": {
+      "global": [
+        "CALIPSOCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDHGH_TAU1.3_9.4_MODIS": {
+    "regions": {
+      "global": [
+        "MODISCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDHGH_TAU1.3_MODIS": {
+    "regions": {
+      "global": [
+        "MODISCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDHGH_TAU9.4_MODIS": {
+    "regions": {
+      "global": [
+        "MODISCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_TAU1.3_9.4_MODIS": {
+    "regions": {
+      "global": [
+        "MODISCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_TAU1.3_MODIS": {
+    "regions": {
+      "global": [
+        "MODISCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_TAU9.4_MODIS": {
+    "regions": {
+      "global": [
+        "MODISCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDLOW_TAU1.3_9.4_MISR": {
+    "regions": {
+      "global": [
+        "MISRCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDLOW_TAU1.3_MISR": {
+    "regions": {
+      "global": [
+        "MISRCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDLOW_TAU9.4_MISR": {
+    "regions": {
+      "global": [
+        "MISRCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_TAU1.3_9.4_MISR": {
+    "regions": {
+      "global": [
+        "MISRCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_TAU1.3_MISR": {
+    "regions": {
+      "global": [
+        "MISRCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_TAU9.4_MISR": {
+    "regions": {
+      "global": [
+        "MISRCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_TAU1.3_9.4_ISCCP": {
+    "regions": {
+      "global": [
+        "ISCCPCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_TAU1.3_ISCCP": {
+    "regions": {
+      "global": [
+        "ISCCPCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "CLDTOT_TAU9.4_ISCCP": {
+    "regions": {
+      "global": [
+        "ISCCPCOSP"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "SOLIN": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FLDS": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FLDSC": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FLNS": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FLNSC": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FLUT": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FLUTC": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FSDS": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FSDSC": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FSNS": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FSNSC": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FSNTOA": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "FSNTOAC": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "SWCF": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "SWCFSRF": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "LWCF": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "LWCFSRF": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "LHFLX": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "SHFLX": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "OMEGA-200mb": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "OMEGA-500mb": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "OMEGA-850mb": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "T-200mb": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "T-850mb": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "U-200mb": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "U-850mb": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "Z3-500mb": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "PSL": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "TREFHT": {
+    "regions": {
+      "global": [
+        "MERRA2"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "TREFMNAV": {
+    "regions": {
+      "global": [
+        "MERRA2"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "TREFMXAV": {
+    "regions": {
+      "global": [
+        "MERRA2"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "TREF_range": {
+    "regions": {
+      "global": [
+        "MERRA2"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "QREFHT": {
+    "regions": {
+      "global": [
+        "ERA5_ext"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "TMQ": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "PRECT": {
+    "regions": {
+      "global": [
+        "GPCP_v3.2"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "TAUXY": {
+    "regions": {
+      "ocean": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "U10": {
+    "regions": {
+      "global": [
+        "ERA5_ext"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "TCO": {
+    "regions": {
+      "global": [
+        "OMI-MLS"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "TGCLDLWP_OCN": {
+    "regions": {
+      "global": [
+        "SSMI"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "SST": {
+    "regions": {
+      "global": [
+        "HadISST_PI"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "RESTOM": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "NETCF": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_toa_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "NETCF_SRF": {
+    "regions": {
+      "global": [
+        "ceres_ebaf_surface_v4.1"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "NET_FLUX_SRF": {
+    "regions": {
+      "global": [
+        "ERA5"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  },
+  "PminusE": {
+    "regions": {
+      "global": [
+        "GPCP_OAFLux"
+      ]
+    },
+    "n_regions": 1,
+    "n_sources_total": 1
+  }
+}
