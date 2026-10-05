@@ -1,4 +1,73 @@
-# Python & Practical Application on Climate Variability Studies
+# Climate variability with Python (snapshot)
+
+Snapshot of [royalosyin/Python-Practical-Application-on-Climate-Variability-Studies](https://github.com/royalosyin/Python-Practical-Application-on-Climate-Variability-Studies),
+reorganized for easier maintenance; see `UPSTREAM.txt` for the source commit.
+The original upstream introduction follows the index below.
+
+## Layout
+
+| Path | Contents |
+|------|----------|
+| `notebooks/` | Tutorial notebooks `exNN_<topic>.ipynb`; run them from this folder |
+| `cvtools/` | Helper modules (wavelet, SSA, SPI, harmonic analysis) imported by the notebooks |
+| `data/` | Input data and intermediate `.npz` files (paths in notebooks: `../data/...`) |
+| `figures/` | Plot output (`../figures/...`); image files are git-ignored |
+
+Changes from upstream: files renamed to snake_case and grouped into the folders
+above; Windows paths (`data\x`, `image\x`) replaced with portable `../data/x`
+and `../figures/x`; helper scripts moved into the `cvtools` package
+(`HA_helpers` -> `cvtools.harmonic`, `mySSA` -> `cvtools.ssa`,
+`dim_spi_n` -> `cvtools.spi`); Python 2 `print` statements and removed NumPy
+aliases (`np.complex`) fixed in `cvtools`. Notebook code is otherwise unchanged
+and some notebooks still use Python 2 or Basemap.
+
+## Notebook index
+
+| Topic | Notebooks |
+|-------|-----------|
+| Basics and data I/O | ex00_intro_python, ex01_sst_netcdf_subsample, ex02_nino3_index, ex03_sst_land_mask_global_mean, ex04_nino3_ssta_plot |
+| Fields, interpolation and maps | ex05_uwind_mean_std, ex06_uwind_zonal_mean_interp, ex07_interp_regular_irregular_grids, ex08_sst_monthly_climatology, ex09_sst_map_projections, ex22_flood_hazard_map |
+| Precipitation and drought | ex11_gpcc_precip, ex12_gpcp_precip, ex13_africa_rainfall_hovmoller, ex14_spi_drought_index |
+| Trends and time series | ex10_acw_hovmoller, ex15_sst_trend_anomaly, ex23_co2_vs_temperature_anomaly, ex24_co2_time_series, ex25_temperature_anomaly_heatmap, ex26_marine_heatwaves, ex27_wind_rose, ex35_sea_ice_extent |
+| Correlation and coupled modes | ex16_nino3_slp_correlation, ex28_mca_slp_sst, ex29_cca_slp_sst, ex34_soi_correlations |
+| EOF and decomposition | ex17_eof_hgt500, ex18_eof_global_sst, ex19_eof_central_pacific_sst, ex33_eemd_ne_pacific_sst, ex36_ssa_nh_land_temperature |
+| Spectral and wavelet analysis | ex20_power_spectral_density, ex21_wavelet_nino3, ex31_harmonic_analysis_temperature |
+| Weather regimes / clustering | ex30_weather_regimes_kmeans, ex32_weather_regimes_som |
+
+ex35 (was `SeaIce.ipynb`) and ex36 (was `Singular Spectrum Analysis for NH Monthly
+Land Temperature.ipynb`) were unnumbered upstream.
+
+## Data not included
+
+Upstream ships only small inputs. Download these into `data/` before running
+the listed notebooks (mostly NOAA PSL gridded products):
+
+| File | Used by |
+|------|---------|
+| `skt.mon.mean.nc` | ex01, ex02, ex03, ex07, ex09 |
+| `sst.mnmean.nc`, `lsmask.nc` | ex08, ex15, ex18 |
+| `sst.mnmean.v5.nc` | ex33 |
+| `uwnd3.mon.mean.nc` | ex05, ex06 |
+| `precip.mon.total.v7.nc` | ex11 |
+| `V22_GPCP.1979-2010.nc` | ex12, ex14 |
+| `chirps-v2.0.2016.days_p25.nc` | ex13 |
+| `slp.mon.mean.1970.1999.nc` | ex16 |
+| `hgt500.mon.mean.nc` | ex17 |
+| `eof_data/sst.sw.AVHRR.l4.1982.2000.nc` | ex19 |
+| `Hazard_AUS__1000.grd` | ex22 |
+| `slp.mnmean.hadslp2.nc`, `sst.mon.anom.kaplan.nc` | ex28, ex29 |
+| `z500.DJF.anom.1979.2010.nc` | ex30, ex32 |
+| `precip.mon.mean.nc`, `prmsl.mon.mean.nc`, `air.sig995.mon.mean.nc` | ex34 |
+| `NH.Ts.csv` | ex36 |
+
+`skt.so.mon.mean.npz` and `annualmeanpr.npz` / `monthlylmeanpr.npz` are written
+by ex01 and ex11. `ssta.nino3.30y.npz` (ex02 output) is included.
+
+---
+
+## Upstream introduction
+
+### Python & Practical Application on Climate Variability Studies
 Main objective of this tutorial is the transference of know-how in practical applications and management of statistical tools commonly used to explore meteorological time series, focusing on applications to study issues related with the climate variability and climate change. This tutorial starts with some basic statistic for time series analysis as estimation of means, anomalies, standard deviation, correlations, arriving the estimation of particular climate indexes (Niño 3), detrending single time series and decomposition of time series, filtering, interpolation of climate variables on regular or irregular grids, leading modes of climate variability (EOF or HHT), signal processing in the climate system (spectral and wavelet analysis). In addition, this tutorial also deals with different data formats such as CSV, NetCDF, Binary, and matlab'mat, etc. It is assumed that you have basic knowledge and understanding of statistics and Python.
 
 ## Generic libraries for scientific analysis
