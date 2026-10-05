@@ -30,6 +30,7 @@ class MoVsMetricsReader:
         self.caseids = parameter["test_id"]
 
         self.group = parameter["movs_group"]
+        self.expand_realizations = bool(parameter.get("movs_expand_realizations", False))
         self.movs_mode = parameter["movs_mode"]
         self.movc_obs = parameter["movc_obs"]
         self.mova_obs = parameter["mova_obs"]
@@ -222,7 +223,20 @@ class MoVsMetricsReader:
                 return pd.DataFrame(columns=["model", "num_runs"]), []
 
         models = sorted((movs_dict.get(mode_list[0]) or {}).keys())
-        df = pd.DataFrame({"model": models, "num_runs": np.nan})
+        if self.expand_realizations:
+            model_rows = [
+                (f"{model}_{run}", model, run)
+                for model in models
+                for run in sort_human(
+                    list((movs_dict.get(mode_list[0], {}).get(model) or {}).keys())
+                )
+            ]
+        else:
+            model_rows = [(model, model, None) for model in models]
+
+        df = pd.DataFrame(
+            {"model": [label for label, _, _ in model_rows], "num_runs": np.nan}
+        )
         mode_season_list = []
 
         for mode in self.movs_mode:
@@ -235,12 +249,19 @@ class MoVsMetricsReader:
                 df[col_name] = np.nan
                 mode_season_list.append(col_name)
 
-                for idx, model in enumerate(models):
+                for idx, (_, model, selected_run) in enumerate(model_rows):
                     value = np.nan
                     num_runs = 0
 
                     if mode in movs_dict and model in movs_dict[mode]:
-                        runs = sort_human(list(movs_dict[mode][model].keys()))
+                        available_runs = movs_dict[mode][model]
+                        runs = (
+                            [selected_run]
+                            if selected_run is not None and selected_run in available_runs
+                            else sort_human(list(available_runs.keys()))
+                            if selected_run is None
+                            else []
+                        )
                         stat_values = []
                         for run in runs:
                             try:

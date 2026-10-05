@@ -189,6 +189,7 @@ class SyntheticMetricsPlotter:
         show_mean_columns: bool = True,
         plot_mean_groups: Optional[bool] = None,
         movs_group: Optional[str] = None,
+        movs_expand_realizations: bool = False,
         exclude_vars: Optional[Dict[str, Any]] = None, 
         mean_group1_name: Optional[str] = None,
         mean_group2_name: Optional[str] = None,
@@ -247,6 +248,7 @@ class SyntheticMetricsPlotter:
         self.exclude_models = self._to_list(exclude_models)
         self.error_norm = error_norm if error_norm is not None else "default"
         self.movs_group = movs_group if movs_group is not None else "cbf"
+        self.movs_expand_realizations = bool(movs_expand_realizations)
         self.show_unit = bool(show_unit) 
 
         # MOVA
@@ -315,6 +317,7 @@ class SyntheticMetricsPlotter:
             "mean_group2_name": self.mean_group2_name,
             "extra_groups_name": self.extra_groups_name, 
             "movs_group": self.movs_group,
+            "movs_expand_realizations": self.movs_expand_realizations,
             "test_model_only": self.test_model_only,
             "save_data": self.save_data,
             "out_dir": out_dir,

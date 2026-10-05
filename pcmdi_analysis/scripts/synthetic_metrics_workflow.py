@@ -126,6 +126,7 @@ class SyntheticPlotsParameters:
     mov_portrait_figure_size: Optional[tuple[float, float]] = None
     mov_parcoord_figure_size: Optional[tuple[float, float]] = None
     mov_parcoord_legend_y_offset: float = -0.08
+    movs_expand_realizations: bool = False
     enso_figure_size: tuple[float, float] = (30.0, 18.0)
     enso_reduced_set: bool = False
     enso_metric_order: Optional[List[str]] = None
@@ -415,6 +416,7 @@ def make_parameters(
     mov_portrait_figure_size: Optional[tuple[float, float]] = None,
     mov_parcoord_figure_size: Optional[tuple[float, float]] = None,
     mov_parcoord_legend_y_offset: float = -0.08,
+    movs_expand_realizations: bool = False,
     enso_figure_size: tuple[float, float] = (30.0, 18.0),
     enso_reduced_set: bool = False,
     enso_metric_order: Optional[List[str]] = None,
@@ -474,6 +476,7 @@ def make_parameters(
         mov_portrait_figure_size=mov_portrait_figure_size,
         mov_parcoord_figure_size=mov_parcoord_figure_size,
         mov_parcoord_legend_y_offset=mov_parcoord_legend_y_offset,
+        movs_expand_realizations=movs_expand_realizations,
         enso_figure_size=enso_figure_size,
         enso_reduced_set=enso_reduced_set,
         enso_metric_order=enso_metric_order,
@@ -590,6 +593,7 @@ def make_plotter(
         test_enso_set=parameters.test_dataset.enso_set if parameters.test_dataset else None,
         test_model_only=parameters.test_model_only,
         movs_group=parameters.movs_group,
+        movs_expand_realizations=parameters.movs_expand_realizations,
         exclude_vars=parameters.exclude_vars,
         exclude_models=parameters.exclude_models,
         error_norm=parameters.error_norm,
