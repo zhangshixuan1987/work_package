@@ -17,11 +17,21 @@ arctic_analysis/
 └── scripts/   shared modules imported by the notebooks
 ```
 
-All figures are written under the fixed paper location
-`/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper`
-(`V3LE_FIG_ROOT` in each notebook's first code cell), one subdirectory per
-workflow: `time_series_imsk/`, `time_series_nmsk/`, `mean_bias/`, `budget/`, and
-`arctic_amplification/<suffix>/`.
+All diagnostic output goes under the fixed paper location
+`/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper`:
+
+```text
+v3LE_paper/
+├── figures/     V3LE_FIG_ROOT: time_series_imsk/, time_series_nmsk/, mean_bias/,
+│                budget/, arctic_amplification/<suffix>/
+└── diag_data/   V3LE_DIAG_DIR: diagnostic NetCDF/JSON products (AA_*, AA2_*,
+                 *.ensemble_stats.*.nc, mean_bias/budget <region>/ outputs, ...)
+```
+
+`diag_data/` replaces the former `v3_le_paper/figure_data` (same flat file names);
+the `process_*` notebooks write there and the `plot_*` notebooks read from it.
+Raw and regional-mean intermediates (`data/global*`, `data/regmn*`) stay in
+`v3_le_paper/data`.
 
 ## Notebook organization
 
@@ -51,15 +61,15 @@ Outputs go to `v3_le_paper/data` (set by `top_dir`/`out_dir` in each notebook).
 | --- | --- |
 | `process_ts_atm_imsk.ipynb` | Atmospheric anomaly statistics with the ice mask (`imsk`). |
 | `process_ts_sea_ice_imsk.ipynb` | Sea-ice anomaly statistics with the ice mask. |
-| `plot_ts_sea_ice_imsk.ipynb` | Seasonal sea-ice time-series panels. Figures go to `time_series_imsk/`. |
-| `process_ts_nmsk.ipynb` | Annual anomaly mean/spread panels without the mask (`nmsk`). Figures go to `time_series_nmsk/<region>/`. |
+| `plot_ts_sea_ice_imsk.ipynb` | Seasonal sea-ice time-series panels. Figures go to `figures/time_series_imsk/`. |
+| `process_ts_nmsk.ipynb` | Annual anomaly mean/spread panels without the mask (`nmsk`). Figures go to `figures/time_series_nmsk/<region>/`. |
 
 ### 3. Mean-state bias
 
 - `plot_bias_map.ipynb`: regional bias maps against observations.
 - `plot_bias_zonal.ipynb`: zonal-mean biases.
 
-Figures go to `mean_bias/<region>/`.
+Figures go to `figures/mean_bias/<region>/`.
 
 ### 4. Surface-temperature budget
 
@@ -69,7 +79,7 @@ Figures go to `mean_bias/<region>/`.
 - `plot_budget_ts_zonal.ipynb`: zonal-mean TS budget.
 
 These notebooks use `RUN_CATALOG`, `REGION_CATALOG`, `VARIABLE_CATALOG`, and
-`Budget_CATALOG` from `scripts/exp_info.py`. Figures go to `budget/<region>/`.
+`Budget_CATALOG` from `scripts/exp_info.py`. Figures go to `figures/budget/<region>/`.
 
 ### 5. Arctic amplification
 
@@ -89,7 +99,7 @@ Run order within a configuration:
 4. `plot_aa_stat_ts_<suffix>.ipynb`, `plot_aa_stat_ac_<suffix>.ipynb`,
    `plot_aa_stat_pdf_<suffix>.ipynb`, `plot_aa_2d_<suffix>.ipynb`: figures.
 
-Figures go to `arctic_amplification/<suffix>/`.
+Figures go to `figures/arctic_amplification/<suffix>/`.
 
 ## Running a notebook
 
@@ -98,7 +108,7 @@ Figures go to `arctic_amplification/<suffix>/`.
    Unified).
 2. Run the first code cell. It locates `PROJECT_ROOT` (the directory that
    contains `scripts/`), adds `scripts/` to `sys.path`, and, where needed,
-   defines `V3LE_FIG_ROOT` and the workflow's `FIG_DIR_ROOT`.
+   defines `V3LE_FIG_ROOT`, `V3LE_DIAG_DIR`, and the workflow's `FIG_DIR_ROOT`.
 3. Review the configuration cell (`TOP_DIR`, `DATA_DIR`, `OUT_DIR`, run lists,
    periods) before running the rest. Input and intermediate data paths are
    absolute LCRC paths, mostly under `v3_le_paper/` or `large_ensemble/`.
@@ -123,3 +133,20 @@ These items remain in the original `v3_le_paper/` directories:
   imports it, and it depends on the `thermo`/`constants` modules in
   `4_budget_analysis/trash/`.
 - Generated PDFs, `__pycache__/`, and `.ipynb_checkpoints/`.
+
+## Known input-path issues
+
+Some notebooks still read inputs from project directories that no longer exist
+under `/lcrc/group/e3sm/ac.szhang/acme_scratch/e3sm_project/`. Update their
+`TOP_DIR`/`top_dir`/`top_path` before running them:
+
+- `large_ensemble/`: the `*_50n` AA notebooks, `process_ts_*_imsk`,
+  `plot_ts_sea_ice_imsk` (sea-ice inputs now appear to be in
+  `v3_le_paper/data/sea_ice`), `process_ts_nmsk`, `process_seaice_ts`, and the
+  `plot_budget_seb`/`plot_budget_ts_mean` notebooks.
+- `energy_budge_analysis/`: `plot_bias_*`, `plot_budget_ts_sea`, and
+  `plot_budget_ts_zonal` (similar `data/climo` and `diag_data` folders exist in
+  `v3_polar_analysis/`).
+
+`diag_data/` has no `v3.LR.historical.Arctic.DJF.ensemble_stats.*.nc`, so
+`plot_ts_sea_ice_imsk` stops at DJF until `process_ts_sea_ice_imsk` regenerates it.
