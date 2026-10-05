@@ -14,9 +14,14 @@ The workflows were collected from the `1_*`–`5_*` directories of
 ```text
 arctic_analysis/
 ├── jupyter/   notebooks (process_* writes data, plot_* makes figures)
-├── scripts/   shared modules imported by the notebooks
-└── figures/   created on demand for figures that used to go to the notebook folder
+└── scripts/   shared modules imported by the notebooks
 ```
+
+All figures are written under the fixed paper location
+`/lcrc/group/e3sm/public_html/diagnostic_output/ac.szhang/v3LE_paper`
+(`V3LE_FIG_ROOT` in each notebook's first code cell), one subdirectory per
+workflow: `time_series_imsk/`, `time_series_nmsk/`, `mean_bias/`, `budget/`, and
+`arctic_amplification/<suffix>/`.
 
 ## Notebook organization
 
@@ -46,13 +51,15 @@ Outputs go to `v3_le_paper/data` (set by `top_dir`/`out_dir` in each notebook).
 | --- | --- |
 | `process_ts_atm_imsk.ipynb` | Atmospheric anomaly statistics with the ice mask (`imsk`). |
 | `process_ts_sea_ice_imsk.ipynb` | Sea-ice anomaly statistics with the ice mask. |
-| `plot_ts_sea_ice_imsk.ipynb` | Seasonal sea-ice time-series panels. Figures go to `figures/time_series_imsk/`. |
-| `process_ts_nmsk.ipynb` | Annual anomaly mean/spread panels without the mask (`nmsk`). Figures go to `figures/time_series_nmsk/<region>/`. |
+| `plot_ts_sea_ice_imsk.ipynb` | Seasonal sea-ice time-series panels. Figures go to `time_series_imsk/`. |
+| `process_ts_nmsk.ipynb` | Annual anomaly mean/spread panels without the mask (`nmsk`). Figures go to `time_series_nmsk/<region>/`. |
 
 ### 3. Mean-state bias
 
 - `plot_bias_map.ipynb`: regional bias maps against observations.
 - `plot_bias_zonal.ipynb`: zonal-mean biases.
+
+Figures go to `mean_bias/<region>/`.
 
 ### 4. Surface-temperature budget
 
@@ -62,8 +69,7 @@ Outputs go to `v3_le_paper/data` (set by `top_dir`/`out_dir` in each notebook).
 - `plot_budget_ts_zonal.ipynb`: zonal-mean TS budget.
 
 These notebooks use `RUN_CATALOG`, `REGION_CATALOG`, `VARIABLE_CATALOG`, and
-`Budget_CATALOG` from `scripts/exp_info.py`. Figures are written under the
-absolute `fig_path` configured in each notebook.
+`Budget_CATALOG` from `scripts/exp_info.py`. Figures go to `budget/<region>/`.
 
 ### 5. Arctic amplification
 
@@ -83,7 +89,7 @@ Run order within a configuration:
 4. `plot_aa_stat_ts_<suffix>.ipynb`, `plot_aa_stat_ac_<suffix>.ipynb`,
    `plot_aa_stat_pdf_<suffix>.ipynb`, `plot_aa_2d_<suffix>.ipynb`: figures.
 
-Figures go to `figures/arctic_amplification/<suffix>/`.
+Figures go to `arctic_amplification/<suffix>/`.
 
 ## Running a notebook
 
@@ -92,7 +98,7 @@ Figures go to `figures/arctic_amplification/<suffix>/`.
    Unified).
 2. Run the first code cell. It locates `PROJECT_ROOT` (the directory that
    contains `scripts/`), adds `scripts/` to `sys.path`, and, where needed,
-   defines `FIG_DIR_ROOT`.
+   defines `V3LE_FIG_ROOT` and the workflow's `FIG_DIR_ROOT`.
 3. Review the configuration cell (`TOP_DIR`, `DATA_DIR`, `OUT_DIR`, run lists,
    periods) before running the rest. Input and intermediate data paths are
    absolute LCRC paths, mostly under `v3_le_paper/` or `large_ensemble/`.
