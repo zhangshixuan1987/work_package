@@ -1,0 +1,4 @@
+RADIOSONDE_TEMPERATURE,           9,         T,   K,             -1.0,   1.0,   1.0,   3.5, (a), (e)   
+RADIOSONDE_SPECIFIC_HUMIDITY,     10,        Q,   g kg~S~-1~N~,  0.0,    1.0,   0.0,   2.0, (b), (f)
+RADIOSONDE_U_WIND_COMPONENT,      16,        U,   m s~S~-1~N~,   -2.0,   2.0,   3.0,   8.0, (c), (g)
+RADIOSONDE_V_WIND_COMPONENT,      17,        V,   m s~S~-1~N~,   -1.0,   1.0,   3.0,   8.0, (d), (h)

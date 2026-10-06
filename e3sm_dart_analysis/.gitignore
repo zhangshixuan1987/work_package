@@ -1,0 +1,69 @@
+# Python caches and tooling
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Notebook runtime artifacts
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# Local environments and machine-specific files
+.env
+.env.*
+.venv/
+venv/
+env/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs and scheduler output
+*.log
+*.out
+*.err
+core.*
+nohup.out
+slurm-*.out
+slurm-*.err
+
+# LaTeX/build intermediates
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.nav
+*.snm
+*.synctex.gz
+*.toc
+
+# Generated diagnostic products
+diagnostic/**/figures/**
+diagnostic/figures/**
+diagnostic/**/trash/**
+diagnostic/backup/**
+
+# Large analysis data products
+diagnostic/**/data/**
+diagnostic/**/*.nc
+diagnostic/**/*.nc4
+diagnostic/**/*.h5
+diagnostic/**/*.hdf5
+diagnostic/**/*.zarr/
+
+# Generated plots and documents from diagnostics
+diagnostic/**/*.pdf
+diagnostic/**/*.png
+diagnostic/**/*.eps
+
+# Keep lightweight documentation placeholders if they are added later.
+!diagnostic/**/figures/README*
+!diagnostic/**/data/README*
+!diagnostic/**/.gitkeep
