@@ -211,3 +211,79 @@ def plot_ensemble_summary(dataset, *, title=None):
     fig.suptitle(title or dataset.attrs["variable"])
     fig.tight_layout()
     return fig
+
+
+def plot_ensemble_summary_comparison(
+    datasets,
+    *,
+    labels=None,
+    colors=None,
+    title=None,
+    show_members=True,
+):
+    """Compare spatial-range summaries from two or more experiments."""
+    if len(datasets) < 2:
+        raise ValueError("At least two ensemble summaries are required for comparison")
+
+    labels = labels or {}
+    colors = colors or {}
+    default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    statistics = ("spatial_max", "spatial_mean", "spatial_min")
+    panel_titles = {
+        "spatial_max": "Ensemble-member spatial maxima",
+        "spatial_mean": "Ensemble-member spatial means",
+        "spatial_min": "Ensemble-member spatial minima",
+    }
+
+    variables = {
+        str(dataset.attrs.get("variable", "")) for dataset in datasets.values()
+    }
+    if len(variables) != 1:
+        raise ValueError(
+            f"All summaries must use one variable; found {sorted(variables)}"
+        )
+    units = {str(dataset.attrs.get("units", "")) for dataset in datasets.values()}
+    if len(units) != 1:
+        raise ValueError(f"All summaries must use one unit; found {sorted(units)}")
+
+    fig, axes = plt.subplots(3, 1, figsize=(11, 9), sharex=True)
+    for experiment_index, (experiment, dataset) in enumerate(datasets.items()):
+        member_dim = dataset.attrs["member_dim"]
+        time_dim = dataset.attrs["time_dim"]
+        time = dataset[time_dim]
+        statistic_values = list(dataset.statistic.values.astype(str))
+        label = labels.get(experiment, experiment)
+        color = colors.get(
+            experiment,
+            default_colors[experiment_index % len(default_colors)],
+        )
+
+        for axis, statistic in zip(axes, statistics):
+            field = dataset[statistic]
+            if show_members:
+                for member in field[member_dim].values:
+                    axis.plot(
+                        time,
+                        field.sel({member_dim: member}),
+                        color=color,
+                        alpha=0.08,
+                        linewidth=0.6,
+                    )
+            statistic_index = statistic_values.index(statistic)
+            lower = dataset.ensemble_min.isel(statistic=statistic_index)
+            upper = dataset.ensemble_max.isel(statistic=statistic_index)
+            center = dataset.ensemble_mean.isel(statistic=statistic_index)
+            axis.fill_between(time, lower, upper, color=color, alpha=0.14)
+            axis.plot(time, center, color=color, linewidth=1.8, label=label)
+
+    unit = next(iter(units))
+    for axis, statistic in zip(axes, statistics):
+        axis.set_ylabel(unit)
+        axis.set_title(panel_titles[statistic])
+        axis.grid(alpha=0.25)
+    axes[0].legend()
+    axes[-1].set_xlabel("Time")
+    variable = next(iter(variables))
+    fig.suptitle(title or f"{variable} ensemble spatial-range comparison")
+    fig.tight_layout()
+    return fig

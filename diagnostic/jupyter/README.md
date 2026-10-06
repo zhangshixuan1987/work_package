@@ -31,7 +31,7 @@ observation archive.
 3. `03_obs_diag_compare.ipynb` - compare bias, RMSE, total spread, spread/RMSE, and rejection-rate time series across experiments.
 4. `04_obs_profile_diagnostics.ipynb` - compare bias, RMSE, total spread, spread/RMSE, and rejection-rate vertical profiles.
 5. `05_obs_multilevel_diagnostics.ipynb` - analyze multiple pressure layers and regions.
-6. `06_compute_and_plot_ensemble_ranges.ipynb` - cache and plot ensemble-member spatial minimum, mean, and maximum time series from NetCDF, Zarr, or Intake-ESM inputs.
+6. `06_compute_and_plot_ensemble_ranges.ipynb` - cache and compare CTRL/DART ensemble-member spatial minima, means, maxima, envelopes, and ensemble means.
 
 ## `analysis_atm_init/`
 

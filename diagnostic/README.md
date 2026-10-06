@@ -93,7 +93,7 @@ S2S forecast verification is consolidated into two parameterized workflows:
 
 The TCC workflow also includes the Dec2011 `da` analysis selection inherited from `6_s2s_skills/`; weekly, biweekly, 15-day, and monthly caches remain separate. The former seasonal and ensemble-slice notebook copies in `analysis_s2s_pcc/` and `analysis_s2s_tcc/` are superseded by notebook parameters. Cached NetCDF products are reused unless `force_compute = True`.
 
-The legacy `cross_correlation/` workflow is consolidated into `jupyter/analysis_lac/06_compute_and_plot_ensemble_cross_correlation.ipynb`, and the generic `ensemble_plot/` notebook is now `jupyter/analysis_atm_da/06_compute_and_plot_ensemble_ranges.ipynb`. The duplicate `fcst_initial_shock/` notebook is superseded by the cached `jupyter/fcst_atm_initial_shock/` workflow.
+The legacy `cross_correlation/` workflow is consolidated into `jupyter/analysis_lac/06_compute_and_plot_ensemble_cross_correlation.ipynb`, and the generic `ensemble_plot/` notebook is now `jupyter/analysis_atm_da/06_compute_and_plot_ensemble_ranges.ipynb`, which compares cached CTRL and DART hindcast spatial-range ensembles. The duplicate `fcst_initial_shock/` notebook is superseded by the cached `jupyter/fcst_atm_initial_shock/` workflow.
 
 Atmospheric restart stability checking is maintained in `jupyter/analysis_atm_init/04_check_restart_stability.ipynb` with reusable processing in `util/atm_restart_stability.py`. It supersedes the broken one-off `sanity_check/` notebook and caches request-specific range, non-finite, spatial, and transition diagnostics.
 
