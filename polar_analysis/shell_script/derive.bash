@@ -9,7 +9,7 @@ if [ ! -d ${outdir} ];then
   mkdir -p ${outdir}
 fi 
 
-data_dir="/lcrc/group/acme/ac.szhang/acme_scratch/data/merra2/rgd_data"
+data_dir="/lcrc/group/e3sm/ac.szhang/acme_scratch/data/merra2/rgd_data"
 for outfile in ${outdir}/MERRA.analysis.climo*;do 
   ncap2 -s "FSUS=FSDS-FSNS"            ${outfile} ${outfile}.tmp
   mv ${outfile}.tmp ${outfile}

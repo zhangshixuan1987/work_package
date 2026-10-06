@@ -141,16 +141,16 @@ on the current machine.
 
 ## Known input issues on this machine
 
-The checker reports these as warnings:
-
-- `.../e3sm_project/large_ensemble` no longer exists. It is still the default
-  `TOP_DIR`/`TOP_PATH`/`top_dir` parameter of the `*_50n` AA process notebooks,
-  `process_ts_nmsk`, `process_seaice_ts`, and `plot_budget_seb`/`plot_budget_ts_mean`.
-  The 50N notebooks are not pointed at `data/regmn` because that stores a single
-  "Arctic" region used by the 65°N notebooks.
-- `derive.bash`/`run_process_merra2.new.bash` read MERRA2 from
-  `/lcrc/group/acme/.../data/merra2/rgd_data`, and `sbatch_process_ice_*.bash`
-  use a regrid map under `/lcrc/group/acme/...`; neither exists.
+- `process_ts_nmsk`, `plot_budget_seb`, and `plot_budget_ts_mean` read annual
+  `v3.LR.historical.enNN.area_mean_ts.185001-202412.nc` files from
+  `DATA_DIR/Arctic/`. The originals (in the removed `large_ensemble/` tree) are
+  gone and no notebook here produces them. Checks against the values printed in
+  the notebooks' saved outputs show they were annual, cos-latitude-weighted
+  65–90°N means: atmosphere fields from `data/global/*.monthly_base.*` reproduce
+  the original SST exactly, but the sea-ice fields (`SICONC`, `SIMASS`,
+  `SITHICK`, and the `_imsk` masks built from them) came from regridded
+  MPAS-SeaIce output (`shell_script/sbatch_process_ice_*.bash`), which must be
+  regenerated before the files can be rebuilt.
 - `diag_data/` has no `v3.LR.historical.Arctic.DJF.ensemble_stats.*.nc`, so
   `plot_ts_sea_ice_imsk` stops at DJF until `process_ts_sea_ice_imsk` regenerates it.
 

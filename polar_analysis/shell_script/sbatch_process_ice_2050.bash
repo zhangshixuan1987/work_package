@@ -36,7 +36,7 @@ WORK_DIR="${DATA_DIR}/${exp_name}"
 mkdir -p "${WORK_DIR}/SE_SICE"
 
 # Mapping file
-MAP_FILE="/lcrc/group/acme/ac.szhang/acme_scratch/data/regrid_maps/map_IcoswISC30E3r4_to_1.0x1.0degree_conserve.nc"
+MAP_FILE="/lcrc/group/e3sm/ac.szhang/acme_scratch/data/regrid_maps/map_IcoswISC30E3r4_to_1.0x1.0degree_conserve.nc"
 
 start_year=1850
 end_year=2050
