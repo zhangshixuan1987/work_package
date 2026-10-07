@@ -12,6 +12,8 @@ import xskillscore as xs
 from typing import Dict, Tuple
 from datetime import datetime
 
+from util.array_stats import nanquantile_numpy
+
 class ModelDataReader:
     def __init__(self, base_path, exp_base, regnam, frequency, period=None, component="atm"):
         self.base_path = base_path
@@ -338,8 +340,8 @@ class EnsembleMetricEvaluator:
             bootstrap_metrics.append(metric)
 
         boot_maps = np.stack([m.values for m in bootstrap_metrics], axis=0)
-        lower = np.nanpercentile(boot_maps, 100 * alpha / 2, axis=0)
-        upper = np.nanpercentile(boot_maps, 100 * (1 - alpha / 2), axis=0)
+        lower = nanquantile_numpy(boot_maps, alpha / 2, axis=0)
+        upper = nanquantile_numpy(boot_maps, 1 - alpha / 2, axis=0)
         mean_metric = metric_fn(model, obs, ens_dim = ens_dim)
         mask = ((mean_metric < lower) | (mean_metric > upper)).astype(int)
 

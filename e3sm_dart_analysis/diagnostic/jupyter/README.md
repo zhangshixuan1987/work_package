@@ -7,14 +7,22 @@ in `../script/`.
 
 ## Top-level path parameters
 
-Every notebook starts with a code cell tagged `parameters`. Edit only these three
-paths when relocating a workflow:
+Every notebook starts with a code cell tagged `parameters`. Input data depend on
+the machine and analysis case, so these paths are notebook parameters rather
+than values in `../configs/`. Edit them per run, or pass them with papermill
+(`papermill nb.ipynb out.ipynb -p INPUT_DATA_ROOT /other/scratch`):
 
 ```python
 INPUT_DATA_ROOT = Path("/compyfs/zhan391/v3_dart_cda_scratch")
-WORK_DIR = Path("/compyfs/zhan391/e3sm_dart_analysis")
-DIAGNOSTIC_OUTPUT_ROOT = Path("/compyfs/www/zhan391/e3sm_dart/diag_out")
+WORK_DIR = Path("/compyfs/zhan391/work_package/e3sm_dart_analysis")
+DIAGNOSTIC_OUTPUT_ROOT = Path("/compyfs/www/zhan391/e3sm_dart/diag_dart_2026")
 ```
+
+The parameter cell holds plain values only. `sys.path` setup and
+`workflow_output_dirs(...)` live in the following cell, so overridden
+parameters are honored. Shared modules accept paths as arguments
+(e.g. `get_experiment_dict(..., data_root=INPUT_DATA_ROOT)`) instead of
+reading fixed defaults.
 
 Outputs are derived consistently as
 `DIAGNOSTIC_OUTPUT_ROOT/data/<workflow>/...` for NetCDF and intermediate data,

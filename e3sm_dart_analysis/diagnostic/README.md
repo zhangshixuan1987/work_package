@@ -25,7 +25,7 @@ workflow needs to run unattended or from a scheduler, put that entry point in
 
 ## Diagnostic Notebooks
 
-Every maintained notebook begins with a tagged parameter cell defining `INPUT_DATA_ROOT`, `WORK_DIR`, and `DIAGNOSTIC_OUTPUT_ROOT`. Data products are written under `DIAGNOSTIC_OUTPUT_ROOT/data/<workflow>/`; figures are written under `DIAGNOSTIC_OUTPUT_ROOT/figure/<workflow>/`. The repository defaults are `/compyfs/zhan391/v3_dart_cda_scratch`, `/compyfs/zhan391/e3sm_dart_analysis`, and `/compyfs/www/zhan391/e3sm_dart/diag_out`, respectively.
+Every maintained notebook begins with a tagged parameter cell defining `INPUT_DATA_ROOT`, `WORK_DIR`, and `DIAGNOSTIC_OUTPUT_ROOT`. Data products are written under `DIAGNOSTIC_OUTPUT_ROOT/data/<workflow>/`; figures are written under `DIAGNOSTIC_OUTPUT_ROOT/figure/<workflow>/`. The repository defaults are `/compyfs/zhan391/v3_dart_cda_scratch`, `/compyfs/zhan391/work_package/e3sm_dart_analysis`, and `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026`, respectively.
 
 Active land-atmosphere workflow drivers live in `jupyter/analysis_lac/`:
 
@@ -74,7 +74,7 @@ Initial-land diagnostics follow the same notebook-driver layout:
 9. `script/run_process_land_rest.bash` drives the complete batch workflow; `script/initial_land/aggregate_restart.py` and `script/initial_land/regrid_restart.py` expose its individual stages.
 10. Regrid reference grids and map files are expected under `/compyfs/zhan391/v3_dart_cda_scratch/reference/regrid_maps/` by default.
 11. Initial-land support files such as `dzsoi_elm.nc` and `landmask_1x1.nc` are generated under `/compyfs/zhan391/v3_dart_cda_scratch/reference/lnd_sea_mask/` when missing.
-12. Generated initial-land NetCDF/log outputs live under `/compyfs/www/zhan391/e3sm_dart/diag_out/data/analysis_lnd_init/`; generated figures live under `/compyfs/www/zhan391/e3sm_dart/diag_out/figure/analysis_lnd_init/`.
+12. Generated initial-land NetCDF/log outputs live under `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/data/analysis_lnd_init/`; generated figures live under `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/figure/analysis_lnd_init/`.
 
 The former `7_mjo_analysis/` workflow is consolidated under `jupyter/analysis_mjo/`:
 `01_hovmoller_phase_composites.ipynb` handles configurable PRECT/FLUT
@@ -109,7 +109,7 @@ standalone commands in `script/`.
 
 Actively maintained NCL workflow bundles live in `script/ncl/`. Historical
 paper-figure sources are stored outside the repository at
-`/compyfs/www/zhan391/e3sm_dart/diag_out/figure/ncl_paper_figures/`. The bundles retain
+`/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/paper/ncl_paper_figures/`. The bundles retain
 their internal directory structure because several NCL programs use relative
 `load "./..."` statements.
 
@@ -123,7 +123,7 @@ working directory and moves newly generated figures from both maintained and
 historical scripts to the fixed
 `DIAGNOSTIC_OUTPUT_ROOT/figure/ncl/` tree. Generated NetCDF files and logs go to
 `DIAGNOSTIC_OUTPUT_ROOT/data/ncl/`. The default output root is
-`/compyfs/www/zhan391/e3sm_dart/diag_out`.
+`/compyfs/www/zhan391/e3sm_dart/diag_dart_2026`.
 
 For example:
 

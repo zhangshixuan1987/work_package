@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-DIAG_OUTPUT_ROOT = Path("/compyfs/www/zhan391/e3sm_dart/diag_out")
+DIAG_OUTPUT_ROOT = Path("/compyfs/www/zhan391/e3sm_dart/diag_dart_2026")
 OUTPUT_DATA_ROOT = DIAG_OUTPUT_ROOT / "data"
 OUTPUT_FIGURE_ROOT = DIAG_OUTPUT_ROOT / "figure"
 

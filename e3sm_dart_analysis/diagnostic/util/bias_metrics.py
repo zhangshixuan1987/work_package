@@ -12,6 +12,8 @@ import numpy as np
 import xarray as xr
 import xskillscore as xs
 
+from util.array_stats import nanquantile
+
 
 ATM_VARIABLES = {
     "FLUT": {"reference": "CERES-OAFlux", "candidates": ["FLUT", "OLR"], "units": "W m-2"},
@@ -165,8 +167,8 @@ def _open_files(files):
     if not files:
         raise FileNotFoundError("No input files")
     if len(files) == 1:
-        return xr.open_dataset(files[0])
-    return xr.open_mfdataset(files, combine="by_coords", parallel=False)
+        return xr.open_dataset(files[0], chunks={})
+    return xr.open_mfdataset(files, combine="by_coords", parallel=True, chunks={})
 
 
 def read_model_ensemble(data_root, experiment, season, run_segment, component, variable, period=None, lat_range=(-90, 90), lon_range=(-180, 180), max_members=None):
@@ -179,46 +181,55 @@ def read_model_ensemble(data_root, experiment, season, run_segment, component, v
     variable_config = (ATM_VARIABLES if component == "atm" else LND_VARIABLES)[variable]
     count = config["nens"] if max_members is None else min(max_members, config["nens"])
     members = []
-    for member_number in range(1, count + 1):
-        member = f"EN{member_number:02d}"
-        clim = config["path"] / member / "archive/post" / component / "180x360_aave/clim"
-        y0, m0, y1, m1, _ = _period_years(period)
-        lower, upper = y0 * 100 + m0, y1 * 100 + m1
-        candidates = sorted(clim.glob("*.nc"))
-        files = []
-        for candidate in candidates:
-            match = re.search(r"(\d{4})-(\d{2})\.nc$", candidate.name)
-            if match and lower <= int(match.group(1) + match.group(2)) <= upper:
-                files.append((candidate, int(match.group(1) + match.group(2))))
-        if not files:
-            raise FileNotFoundError(f"No monthly files for {period} in {clim}")
+    opened = []
+    try:
+        for member_number in range(1, count + 1):
+            members.append(_lazy_member_field(
+                config, member_number, component, variable, variable_config,
+                period, lat_range, lon_range, opened,
+            ))
+        # One dask graph over all members/months so files are read in parallel.
+        ensemble = xr.concat(members, dim="ens").compute()
+    finally:
+        for dataset in opened:
+            dataset.close()
+    return ensemble, config
 
-        monthly_fields = []
-        for monthly_file, month_key in files:
-            dataset = xr.open_dataset(monthly_file)
-            try:
-                if variable not in dataset:
-                    if variable == "PRECT" and {"PRECC", "PRECL"} <= set(dataset):
-                        field = dataset["PRECC"] + dataset["PRECL"]
-                    else:
-                        raise KeyError(f"{variable} not found in {monthly_file}")
-                else:
-                    field = _reduce_land_variable(
-                        dataset, variable, variable_config.get("reducer")
-                    )
-                if "time" in field.dims:
-                    field = field.mean("time", skipna=True)
-                field = _subset_region(field, lat_range, lon_range)
-                field = _convert_units(
-                    field, variable, variable_config["units"]
-                ).load()
-                field = field.reset_coords(drop=True).expand_dims(time=[month_key])
-            finally:
-                dataset.close()
-            monthly_fields.append(field)
-        field = xr.concat(monthly_fields, dim="time")
-        members.append(field.expand_dims(ens=[member]))
-    return xr.concat(members, dim="ens"), config
+
+def _lazy_member_field(config, member_number, component, variable, variable_config, period, lat_range, lon_range, opened):
+    """Build one member's monthly field lazily; open datasets are appended to ``opened``."""
+    member = f"EN{member_number:02d}"
+    clim = config["path"] / member / "archive/post" / component / "180x360_aave/clim"
+    y0, m0, y1, m1, _ = _period_years(period)
+    lower, upper = y0 * 100 + m0, y1 * 100 + m1
+    candidates = sorted(clim.glob("*.nc"))
+    files = []
+    for candidate in candidates:
+        match = re.search(r"(\d{4})-(\d{2})\.nc$", candidate.name)
+        if match and lower <= int(match.group(1) + match.group(2)) <= upper:
+            files.append((candidate, int(match.group(1) + match.group(2))))
+    if not files:
+        raise FileNotFoundError(f"No monthly files for {period} in {clim}")
+
+    monthly_fields = []
+    for monthly_file, month_key in files:
+        dataset = xr.open_dataset(monthly_file, chunks={})
+        opened.append(dataset)
+        if variable not in dataset:
+            if variable == "PRECT" and {"PRECC", "PRECL"} <= set(dataset):
+                field = dataset["PRECC"] + dataset["PRECL"]
+            else:
+                raise KeyError(f"{variable} not found in {monthly_file}")
+        else:
+            field = _reduce_land_variable(
+                dataset, variable, variable_config.get("reducer")
+            )
+        if "time" in field.dims:
+            field = field.mean("time", skipna=True)
+        field = _subset_region(field, lat_range, lon_range)
+        field = _convert_units(field, variable, variable_config["units"])
+        monthly_fields.append(field.reset_coords(drop=True).expand_dims(time=[month_key]))
+    return xr.concat(monthly_fields, dim="time").expand_dims(ens=[member])
 
 
 def read_reference(reference_root, component, variable, period, lat_range=(-90, 90), lon_range=(-180, 180)):
@@ -272,8 +283,8 @@ def derive_metric_dataset(model, reference, *, experiment, variable, component, 
                 samples[name].append(field)
         for name, fields in samples.items():
             stack = xr.concat(fields, dim="bootstrap")
-            dataset[f"{name}_ci_lower"] = stack.quantile(0.025, "bootstrap").reset_coords(drop=True)
-            dataset[f"{name}_ci_upper"] = stack.quantile(0.975, "bootstrap").reset_coords(drop=True)
+            dataset[f"{name}_ci_lower"] = nanquantile(stack, 0.025, "bootstrap").reset_coords(drop=True)
+            dataset[f"{name}_ci_upper"] = nanquantile(stack, 0.975, "bootstrap").reset_coords(drop=True)
 
     dataset.attrs.update({
         "experiment": experiment,
@@ -345,3 +356,97 @@ def plot_metric_maps(datasets, metric, variable, label_map=None, title=""):
     if title:
         figure.suptitle(title)
     return figure
+
+
+def _validated_registry(data_root, season, run_segment, component, experiments, variables):
+    variable_registry = ATM_VARIABLES if component == "atm" else LND_VARIABLES
+    unknown_variables = sorted(set(variables) - set(variable_registry))
+    if unknown_variables:
+        raise ValueError(f"Unsupported {component} variables: {unknown_variables}")
+    registry = experiment_registry(data_root, season, run_segment)
+    unknown_experiments = sorted(set(experiments) - set(registry))
+    if unknown_experiments:
+        raise ValueError(
+            f"Experiments unavailable for {season}/{run_segment}: "
+            f"{unknown_experiments}; choose from {list(registry)}"
+        )
+    return registry
+
+
+def run_bias_metrics(
+    *, data_root, reference_root, cache_dir, season, run_segment, component,
+    experiments, variables, lat_range=(-90, 90), lon_range=(-180, 180),
+    n_bootstrap=0, random_seed=42, max_members=None, force_compute=False,
+):
+    """Compute and cache metrics for every experiment/variable not yet cached."""
+    registry = _validated_registry(data_root, season, run_segment, component, experiments, variables)
+    Path(cache_dir).mkdir(parents=True, exist_ok=True)
+    for variable in variables:
+        references = {}
+        try:
+            for experiment in experiments:
+                period = registry[experiment]["period"]
+                output = cache_path(cache_dir, experiment, variable, period)
+                if output.is_file() and not force_compute:
+                    print(f"Reusing {output.name}")
+                    continue
+                if period not in references:
+                    references[period] = read_reference(
+                        reference_root, component, variable, period, lat_range, lon_range,
+                    )
+                model, _ = read_model_ensemble(
+                    data_root, experiment, season, run_segment, component, variable,
+                    period=period, lat_range=lat_range, lon_range=lon_range,
+                    max_members=max_members,
+                )
+                try:
+                    cache_bias_metrics(
+                        output, model=model, reference=references[period],
+                        force_compute=force_compute, experiment=experiment,
+                        variable=variable, component=component, run_segment=run_segment,
+                        season=season, period=period, n_bootstrap=n_bootstrap,
+                        random_seed=random_seed,
+                    ).close()
+                finally:
+                    model.close()
+        finally:
+            for reference in references.values():
+                reference.close()
+
+
+def plot_cached_bias_metrics(
+    *, data_root, cache_dir, figure_dir, season, run_segment, component,
+    experiments, variables, metrics, dpi=200,
+):
+    """Plot cached metric maps; return the list of written figure paths."""
+    unknown_metrics = sorted(set(metrics) - set(METRICS))
+    if unknown_metrics:
+        raise ValueError(f"Unknown metrics: {unknown_metrics}")
+    registry = _validated_registry(data_root, season, run_segment, component, experiments, variables)
+    figure_dir = Path(figure_dir)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    label_map = {name: registry[name]["label"] for name in experiments}
+    written = []
+    for variable in variables:
+        paths = {
+            experiment: cache_path(cache_dir, experiment, variable, registry[experiment]["period"])
+            for experiment in experiments
+        }
+        missing = [str(path) for path in paths.values() if not path.is_file()]
+        if missing:
+            raise FileNotFoundError("Missing cached bias metrics:\n" + "\n".join(missing))
+        cached = {experiment: xr.load_dataset(path) for experiment, path in paths.items()}
+        try:
+            for metric in metrics:
+                figure = plot_metric_maps(
+                    cached, metric, variable, label_map=label_map,
+                    title=f"{variable} {metric.upper()} | {season} {run_segment.upper()}",
+                )
+                output = figure_dir / f"{variable}_{metric}_{season}_{run_segment}.png"
+                figure.savefig(output, dpi=dpi, bbox_inches="tight")
+                plt.close(figure)
+                written.append(output)
+        finally:
+            for dataset in cached.values():
+                dataset.close()
+    return written

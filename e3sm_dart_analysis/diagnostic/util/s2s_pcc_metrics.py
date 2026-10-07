@@ -18,6 +18,7 @@ from xskillscore import rmse, pearson_r
 
 from dataclasses import dataclass
 
+from util.array_stats import nanquantile
 from util.s2s_experiments import (
     build_experiments,
     DEFAULT_EXPERIMENTS
@@ -1055,8 +1056,8 @@ class S2SSkillAssessor:
 
             qs = self.cfg.member_quantiles
             if qs:
-                member_vars["ACC_member_quantile"] = ACCm.quantile(list(qs), dim="ens").rename({"quantile": "q"})
-                member_vars["RMSE_member_quantile"] = RMSEm.quantile(list(qs), dim="ens").rename({"quantile": "q"})
+                member_vars["ACC_member_quantile"] = nanquantile(ACCm, list(qs), "ens").rename({"quantile": "q"})
+                member_vars["RMSE_member_quantile"] = nanquantile(RMSEm, list(qs), "ens").rename({"quantile": "q"})
 
         # lead_days based on ACC time coordinate
         t = ACC["time"]

@@ -41,6 +41,7 @@ from util.s2s_observations import (
 from util.s2s_time_windows import (
     build_windows_from_start
 )
+from util.array_stats import nanquantile
 
 @dataclass(frozen=True)
 class FileCollectionConfig:
@@ -1089,9 +1090,9 @@ class S2SWindowedTCCAggregator:
 
         qs = list(self.cfg.member_quantiles or ())
         if qs:
-            out["TCC_quantile"] = out["TCC_member"].quantile(qs, dim="ens").rename({"quantile": "q"})
-            out["RMSE_quantile"] = out["RMSE_member"].quantile(qs, dim="ens").rename({"quantile": "q"})
-            out["BIAS_quantile"] = out["BIAS_member"].quantile(qs, dim="ens").rename({"quantile": "q"})  # NEW
+            out["TCC_quantile"] = nanquantile(out["TCC_member"], qs, "ens").rename({"quantile": "q"})
+            out["RMSE_quantile"] = nanquantile(out["RMSE_member"], qs, "ens").rename({"quantile": "q"})
+            out["BIAS_quantile"] = nanquantile(out["BIAS_member"], qs, "ens").rename({"quantile": "q"})  # NEW
 
         # add ensmean diagnostics if provided
         if ensmean_path is not None and os.path.exists(ensmean_path):
@@ -1600,7 +1601,7 @@ class S2SRegionalSkillReducer:
                     # ---- Quantiles (PRE): regional mean of gridpoint quantile maps ----
                     if self.cfg.save_member_quantiles_pre:
                         # qmap dims: (q, ... , lat, lon)  (q coordinate name: "q")
-                        qmap = ds_mem[vn].quantile(qs, dim="ens", skipna=True).rename({"quantile": "q"})
+                        qmap = nanquantile(ds_mem[vn], qs, "ens").rename({"quantile": "q"})
                         qreg = self._weighted_mean_latlon(qmap, w, lat_name, lon_name)
                         qreg = self._squeeze_region_da(qreg)
 

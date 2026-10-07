@@ -16,4 +16,4 @@ The launcher runs from the program's own directory and then moves new figures
 to `${DIAGNOSTIC_OUTPUT_ROOT}/figure/ncl/active/<bundle>/`. It moves generated
 NetCDF products and logs to `${DIAGNOSTIC_OUTPUT_ROOT}/data/ncl/active/<bundle>/`.
 `DIAGNOSTIC_OUTPUT_ROOT` defaults to
-`/compyfs/www/zhan391/e3sm_dart/diag_out`.
+`/compyfs/www/zhan391/e3sm_dart/diag_dart_2026`.

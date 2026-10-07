@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 DEFAULT_SOURCE = Path("/compyfs/zhan391/v3_dart_cda_scratch/diag_dart")
-DEFAULT_DESTINATION = Path("/compyfs/www/zhan391/e3sm_dart/diag_out/data")
+DEFAULT_DESTINATION = Path("/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/data")
 
 FORECAST_EXPERIMENT_DIRS = {"CAPTEN10", "CTRLEN10", "DARTEN20", "DARTEN40"}
 PROVENANCE_FILES = {
@@ -31,7 +31,7 @@ PROVENANCE_FILES = {
 
 
 def destination_relative(source_relative: Path) -> Path:
-    """Return the new path below ``diag_out/data`` for one legacy file."""
+    """Return the new path below ``diag_dart_2026/data`` for one legacy file."""
     parts = source_relative.parts
     top = parts[0]
     name = source_relative.name
@@ -172,7 +172,7 @@ def main() -> None:
         return
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    manifest = args.manifest or destination.parent / "migration_manifests" / f"diag_dart_{timestamp}.json"
+    manifest = args.manifest or destination.parent / "manifests" / f"diag_dart_{timestamp}.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "created_utc": timestamp,

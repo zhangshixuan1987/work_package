@@ -54,7 +54,7 @@ run_command() {
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 diagnostic_dir=$(cd -- "$script_dir/.." && pwd -P)
 input_root=${INPUT_DATA_ROOT:-/compyfs/zhan391/v3_dart_cda_scratch}
-diagnostic_output_root=${DIAGNOSTIC_OUTPUT_ROOT:-/compyfs/www/zhan391/e3sm_dart/diag_out}
+diagnostic_output_root=${DIAGNOSTIC_OUTPUT_ROOT:-/compyfs/www/zhan391/e3sm_dart/diag_dart_2026}
 python_bin=${PYTHON_BIN:-/qfs/people/zhan391/.conda/envs/e3sm_analysis/bin/python}
 
 restart_file=

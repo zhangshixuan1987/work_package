@@ -60,35 +60,35 @@ def read_model_regional_series(data_root,experiment,season,run_segment,variable,
  registry=experiment_registry(data_root,season,run_segment)
  if experiment not in registry: raise ValueError(f"{experiment} unavailable; choose {list(registry)}")
  meta=registry[experiment]; period=period or meta["period"]; *_,years=_period(period)
- count=meta["nens"] if max_members is None else min(max_members,meta["nens"]); members=[]
- for number in range(1,count+1):
-  member=f"EN{number:02d}"; folder=meta["path"]/member/"archive/post/atm/180x360_aave/ts"/frequency
-  files=[folder/f"{variable}.{member}.{year}.nc" for year in years]; missing=[p for p in files if not p.is_file()]
-  if missing: raise FileNotFoundError("Missing model files: "+", ".join(map(str,missing)))
-  arrays=[]
-  for p in files:
-   ds=xr.open_dataset(p)
-   try: arrays.append(ds[variable].load())
-   finally: ds.close()
-  field=_convert(_select_period(xr.concat(arrays,dim="time"),period),variable).assign_coords(time=lambda x:x.time.dt.floor("D"))
-  series=_regional_mean(field,region); series.attrs["units"]=VARIABLES[variable]["units"]
-  members.append(series.expand_dims(ens=[member]))
- return xr.concat(members,dim="ens"),meta
+ count=meta["nens"] if max_members is None else min(max_members,meta["nens"]); members=[]; opened=[]
+ try:
+  for number in range(1,count+1):
+   member=f"EN{number:02d}"; folder=meta["path"]/member/"archive/post/atm/180x360_aave/ts"/frequency
+   files=[folder/f"{variable}.{member}.{year}.nc" for year in years]; missing=[p for p in files if not p.is_file()]
+   if missing: raise FileNotFoundError("Missing model files: "+", ".join(map(str,missing)))
+   ds=xr.open_mfdataset(files,combine="by_coords",parallel=True,chunks={}); opened.append(ds)
+   field=_convert(_select_period(ds[variable],period),variable).assign_coords(time=lambda x:x.time.dt.floor("D"))
+   series=_regional_mean(field,region); series.attrs["units"]=VARIABLES[variable]["units"]
+   members.append(series.expand_dims(ens=[member]))
+  # One dask graph over all members so files are read in parallel.
+  ensemble=xr.concat(members,dim="ens").compute()
+ finally:
+  for ds in opened: ds.close()
+ return ensemble,meta
 
 def read_observation_regional_series(reference_root,variable,region,period):
  cfg=VARIABLES[variable]; *_,years=_period(period); folder=Path(reference_root)/cfg["obs_dir"]/"daily"
- arrays=[]
- for year in years:
-  path=folder/cfg["obs_file"].format(year=year)
+ files=[folder/cfg["obs_file"].format(year=year) for year in years]
+ for path in files:
   if not path.is_file(): raise FileNotFoundError(path)
-  ds=xr.open_dataset(path)
-  try:
-   name=next((x for x in (variable,"OLR","olr","precip") if x in ds),None)
-   if name is None: raise KeyError(f"{variable} not found in {path}: {list(ds.data_vars)}")
-   arrays.append(ds[name].load())
-  finally: ds.close()
- field=_convert(_select_period(xr.concat(arrays,dim="time"),period),variable,is_obs=True).assign_coords(time=lambda x:x.time.dt.floor("D"))
- series=_regional_mean(field,region); series.attrs["units"]=VARIABLES[variable]["units"]
+ ds=xr.open_mfdataset(files,combine="by_coords",parallel=True,chunks={})
+ try:
+  name=next((x for x in (variable,"OLR","olr","precip") if x in ds),None)
+  if name is None: raise KeyError(f"{variable} not found in {files[0]}: {list(ds.data_vars)}")
+  field=_convert(_select_period(ds[name],period),variable,is_obs=True).assign_coords(time=lambda x:x.time.dt.floor("D"))
+  series=_regional_mean(field,region).compute()
+ finally: ds.close()
+ series.attrs["units"]=VARIABLES[variable]["units"]
  return series
 
 def timeseries_cache_path(cache_dir,variable,region,season,run_segment,period):

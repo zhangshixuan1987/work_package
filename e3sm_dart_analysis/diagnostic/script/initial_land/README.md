@@ -16,7 +16,7 @@ diagnostic/script/run_process_land_rest.bash \
 ```
 
 Products default to
-`/compyfs/www/zhan391/e3sm_dart/diag_out/data/analysis_lnd_init/restart/`.
+`/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/data/analysis_lnd_init/restart/`.
 Existing aggregation, SCRIP, weight-map, and regridded files are reused. Pass
 `--force` to regenerate them, `--aggregate-only` to skip regridding, or
 `--dry-run` to inspect the commands without writing files.

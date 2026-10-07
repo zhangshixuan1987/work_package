@@ -20,9 +20,9 @@ fi
 
 runner_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 diagnostic_dir=$(cd -- "$runner_dir/.." && pwd -P)
-output_root=${DIAGNOSTIC_OUTPUT_ROOT:-/compyfs/www/zhan391/e3sm_dart/diag_out}
+output_root=${DIAGNOSTIC_OUTPUT_ROOT:-/compyfs/www/zhan391/e3sm_dart/diag_dart_2026}
 active_root="$diagnostic_dir/script/ncl"
-legacy_root=${NCL_PAPER_FIGURE_ROOT:-"$output_root/figure/ncl_paper_figures"}
+legacy_root=${NCL_PAPER_FIGURE_ROOT:-"$output_root/paper/ncl_paper_figures"}
 
 script_input=$1
 shift

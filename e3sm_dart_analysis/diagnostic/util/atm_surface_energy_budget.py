@@ -17,7 +17,7 @@ def _select_period(data,period):
     y0,m0,y1,m1=map(int,m.groups()); key=data.time.dt.year*100+data.time.dt.month
     return data.where((key>=y0*100+m0)&(key<=y1*100+m1),drop=True)
 
-def _open_member_field(root,member,variable,period,run_segment):
+def _open_member_field(root,member,variable,period,run_segment,opened):
     years=range(int(period[:4]),int(period[7:11])+1)
     choices=("6hourly_da","daily","6hourly") if run_segment=="da" else ("daily","6hourly")
     candidates=("LHFLX","QFLX") if variable=="LHFLX" else (variable,)
@@ -26,12 +26,8 @@ def _open_member_field(root,member,variable,period,run_segment):
             folder=root/member/"archive/post/atm/180x360_aave/ts"/freq
             files=[folder/f"{candidate}.{member}.{year}.nc" for year in years]
             if all(p.is_file() for p in files):
-                arrays=[]
-                for p in files:
-                    ds=xr.open_dataset(p)
-                    try: arrays.append(ds[candidate].load())
-                    finally: ds.close()
-                field=xr.concat(arrays,dim="time")
+                ds=xr.open_mfdataset(files,combine="by_coords",parallel=True,chunks={}); opened.append(ds)
+                field=ds[candidate]
                 if candidate=="QFLX": field=field*2.5e6
                 if freq.startswith("6hourly"): field=field.resample(time="1D").mean()
                 return _select_period(field,period)
@@ -45,10 +41,13 @@ def cache_surface_energy_budget(path,*,data_root,experiment,season,run_segment,m
     if path.is_file() and not force_compute: return xr.load_dataset(path)
     registry=experiment_registry(data_root,season,run_segment)
     if experiment not in registry: raise ValueError(f"{experiment} unavailable; choose {list(registry)}")
-    meta=registry[experiment]; period=period or meta["period"]
-    fields={v:_open_member_field(meta["path"],member,v,period,run_segment) for v in INPUT_VARIABLES}
-    ds=xr.Dataset(fields); rn=ds.FSNS-ds.FLNS; residual=rn-(ds.LHFLX+ds.SHFLX)
-    out=xr.Dataset({"Rn":rn,"LE":ds.LHFLX,"SH":ds.SHFLX,"Residual":residual,"BowenRatio":xr.where(np.abs(ds.LHFLX)>1e-6,ds.SHFLX/ds.LHFLX,np.nan)})
+    meta=registry[experiment]; period=period or meta["period"]; opened=[]
+    try:
+        fields={v:_open_member_field(meta["path"],member,v,period,run_segment,opened) for v in INPUT_VARIABLES}
+        ds=xr.Dataset(fields); rn=ds.FSNS-ds.FLNS; residual=rn-(ds.LHFLX+ds.SHFLX)
+        out=xr.Dataset({"Rn":rn,"LE":ds.LHFLX,"SH":ds.SHFLX,"Residual":residual,"BowenRatio":xr.where(np.abs(ds.LHFLX)>1e-6,ds.SHFLX/ds.LHFLX,np.nan)}).compute()
+    finally:
+        for opened_ds in opened: opened_ds.close()
     out.attrs.update(experiment=experiment,member=member,season=season,run_segment=run_segment,period=period,input_variables=",".join(INPUT_VARIABLES))
     path.parent.mkdir(parents=True,exist_ok=True); tmp=path.with_suffix(path.suffix+".tmp"); out.to_netcdf(tmp); os.replace(tmp,path)
     return out
