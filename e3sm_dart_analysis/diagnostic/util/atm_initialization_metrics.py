@@ -769,7 +769,14 @@ def derive_map_metric(
     level_name = dao._guess_lev_name(posterior)
     level_index = None
     if level is not None and level_name is not None and level_name in posterior.dims:
-        level_index = int(np.abs(posterior[level_name].values - level).argmin())
+        level_values = np.asarray(posterior[level_name].values, dtype=float)
+        level_units = str(posterior[level_name].attrs.get("units", "")).lower()
+        pressure_in_pa = (
+            level_units in {"pa", "pascal", "pascals"}
+            or (level_name.lower() == "plev" and np.nanmax(np.abs(level_values)) > 2000)
+        )
+        selection_values = level_values / 100.0 if pressure_in_pa else level_values
+        level_index = int(np.abs(selection_values - level).argmin())
         prior = prior.isel({level_name: level_index})
         posterior = posterior.isel({level_name: level_index})
         posterior_spread = posterior_spread.isel({level_name: level_index})
@@ -1001,6 +1008,145 @@ def plot_cached_maps(
     return fig
 
 
+def plot_combined_cached_maps(
+    datasets,
+    requests,
+    experiments,
+    lat_range,
+    lon_range,
+    label_map=None,
+    title="",
+    figsize=(16, 15),
+    font_size=18,
+):
+    """Plot variable rows by experiment columns with one color scale per row.
+
+    ``datasets`` is keyed by ``(variable, level)`` and then experiment. Each
+    dataset must contain a two-dimensional ``metric`` field. Plot-only scale
+    factors and units are supplied by the corresponding request dictionaries.
+    """
+    if not requests:
+        raise ValueError("At least one combined-map request is required.")
+    if not experiments:
+        raise ValueError("At least one experiment is required.")
+
+    projection = ccrs.PlateCarree()
+    figure, axes = plt.subplots(
+        len(requests),
+        len(experiments),
+        figsize=figsize,
+        subplot_kw={"projection": projection},
+        squeeze=False,
+        layout="constrained",
+    )
+
+    panel_index = 0
+    for row, request in enumerate(requests):
+        variable = request["variable"]
+        level = request.get("level")
+        request_key = (variable, level)
+        if request_key not in datasets:
+            raise KeyError(f"Missing combined-map request {request_key}.")
+        scale = float(request.get("scale", 1.0))
+        fields = {
+            experiment: datasets[request_key][experiment]["metric"] * scale
+            for experiment in experiments
+        }
+        finite_maxima = []
+        for field in fields.values():
+            values = np.asarray(field.values, dtype=float)
+            finite = values[np.isfinite(values)]
+            if finite.size:
+                finite_maxima.append(float(finite.max()))
+        maximum = max(finite_maxima) if finite_maxima else 1.0
+        if maximum <= 0.0:
+            maximum = 1.0
+
+        row_image = None
+        for column, experiment in enumerate(experiments):
+            axis = axes[row, column]
+            field = fields[experiment].squeeze(drop=True)
+            latitude_name = next(
+                dim for dim in field.dims if dim.lower().startswith("lat")
+            )
+            longitude_name = next(
+                dim for dim in field.dims if dim.lower().startswith("lon")
+            )
+            longitude, latitude = np.meshgrid(
+                field[longitude_name].values,
+                field[latitude_name].values,
+            )
+            row_image = axis.pcolormesh(
+                longitude,
+                latitude,
+                field.values,
+                shading="auto",
+                transform=projection,
+                cmap="viridis",
+                vmin=0.0,
+                vmax=maximum,
+                rasterized=True,
+            )
+            axis.coastlines(linewidth=0.7)
+            axis.set_extent(
+                [lon_range[0], lon_range[1], lat_range[0], lat_range[1]],
+                crs=projection,
+            )
+            gridlines = axis.gridlines(
+                draw_labels=True,
+                linewidth=0.4,
+                color="0.5",
+                alpha=0.4,
+                linestyle="--",
+                x_inline=False,
+                y_inline=False,
+            )
+            gridlines.top_labels = False
+            gridlines.right_labels = False
+            gridlines.bottom_labels = row == len(requests) - 1
+            gridlines.left_labels = column == 0
+            gridlines.xlabel_style = {"size": 0.65 * font_size}
+            gridlines.ylabel_style = {"size": 0.65 * font_size}
+
+            panel_letter = chr(ord("a") + panel_index)
+            panel_index += 1
+            axis.set_title(
+                f"({panel_letter})",
+                loc="left",
+                fontweight="normal",
+                fontsize=0.78 * font_size,
+            )
+            experiment_label = (
+                label_map.get(experiment, experiment) if label_map else experiment
+            )
+            axis.set_title(
+                experiment_label,
+                loc="right",
+                fontweight="normal",
+                fontsize=0.78 * font_size,
+            )
+
+        if row_image is not None:
+            unit = request.get("unit", "")
+            request_label = request.get("label", variable)
+            colorbar_label = f"{request_label} increment RMS"
+            if unit:
+                colorbar_label += f" ({unit})"
+            colorbar = figure.colorbar(
+                row_image,
+                ax=axes[row, :].tolist(),
+                orientation="vertical",
+                shrink=0.80,
+                pad=0.015,
+            )
+            colorbar.set_label(colorbar_label, fontsize=0.72 * font_size)
+            colorbar.ax.tick_params(labelsize=0.65 * font_size)
+
+    if title:
+        figure.suptitle(title, fontsize=font_size)
+    return figure
+
+
 
 def cross_section_cache_path(
     cache_dir, experiment, timestamp, variable, metric, horizontal_axis
@@ -1186,14 +1332,14 @@ def plot_cached_cross_sections(
 def increment_cross_section_cache_path(
     cache_dir, experiment, timestamp, variable, horizontal_axis, increment_mode
 ):
-    """Return the request-keyed DA-increment cross-section cache path."""
+    """Return the request-keyed increment/spread-ratio cross-section cache path."""
     if horizontal_axis not in {"latitude", "longitude"}:
         raise ValueError("horizontal_axis must be latitude or longitude.")
     if increment_mode not in {"signed", "absolute"}:
         raise ValueError("increment_mode must be signed or absolute.")
     return Path(cache_dir) / (
         f"{experiment}_{timestamp}_cross-section_{horizontal_axis}_"
-        f"{variable}_{increment_mode}-increment.nc"
+        f"{variable}_{increment_mode}-increment-spread-ratio-hpa.nc"
     )
 
 
@@ -1201,7 +1347,7 @@ def derive_increment_cross_section(
     dao, variable, lat_range, lon_range, horizontal_axis="latitude",
     increment_mode="absolute",
 ):
-    """Derive an increment and posterior-spread vertical cross-section."""
+    """Derive spatial sections of increment and posterior/prior spread ratio."""
     if horizontal_axis not in {"latitude", "longitude"}:
         raise ValueError("horizontal_axis must be latitude or longitude.")
     if increment_mode not in {"signed", "absolute"}:
@@ -1209,11 +1355,14 @@ def derive_increment_cross_section(
 
     prior = dao.subset_region(dao.prior_mean[[variable]], lat_range, lon_range)
     posterior = dao.subset_region(dao.post_mean[[variable]], lat_range, lon_range)
+    prior_spread = dao.subset_region(
+        dao.prior_sd[[variable]], lat_range, lon_range
+    )
     posterior_spread = dao.subset_region(
         dao.post_sd[[variable]], lat_range, lon_range
     )
-    prior, posterior, posterior_spread = xr.align(
-        prior, posterior, posterior_spread, join="inner"
+    prior, posterior, prior_spread, posterior_spread = xr.align(
+        prior, posterior, prior_spread, posterior_spread, join="inner"
     )
 
     level_name = dao._guess_lev_name(posterior)
@@ -1225,6 +1374,7 @@ def derive_increment_cross_section(
     if float(posterior[longitude_name].max()) > 180.0:
         prior = dao.normalize_longitude(prior, longitude_name)
         posterior = dao.normalize_longitude(posterior, longitude_name)
+        prior_spread = dao.normalize_longitude(prior_spread, longitude_name)
         posterior_spread = dao.normalize_longitude(
             posterior_spread, longitude_name
         )
@@ -1232,6 +1382,11 @@ def derive_increment_cross_section(
     increment = posterior[variable] - prior[variable]
     if increment_mode == "absolute":
         increment = np.abs(increment)
+    spread_ratio = xr.where(
+        np.isfinite(prior_spread[variable]) & (prior_spread[variable] > 0),
+        posterior_spread[variable] / prior_spread[variable],
+        np.nan,
+    )
 
     retained_name = (
         latitude_name if horizontal_axis == "latitude" else longitude_name
@@ -1240,8 +1395,14 @@ def derive_increment_cross_section(
         longitude_name if horizontal_axis == "latitude" else latitude_name
     )
 
+    def _horizontal_mean(field, dimension):
+        if dimension == latitude_name:
+            latitude_weights = np.cos(np.deg2rad(field[latitude_name])).clip(min=0.0)
+            return field.weighted(latitude_weights).mean(dimension, skipna=True)
+        return field.mean(dimension, skipna=True)
+
     def _to_section(field):
-        field = field.mean(reduced_name, skipna=True)
+        field = _horizontal_mean(field, reduced_name)
         extra_dimensions = [
             dimension for dimension in field.dims
             if dimension not in (level_name, retained_name)
@@ -1253,9 +1414,24 @@ def derive_increment_cross_section(
     dataset = xr.Dataset(
         {
             "increment": _to_section(increment),
+            "prior_spread": _to_section(prior_spread[variable]),
             "posterior_spread": _to_section(posterior_spread[variable]),
+            "spread_ratio": _to_section(spread_ratio),
         }
     )
+    level_values = np.asarray(dataset[level_name].values, dtype=float)
+    level_units = str(dataset[level_name].attrs.get("units", "")).lower()
+    pressure_in_pa = (
+        level_units in {"pa", "pascal", "pascals"}
+        or (level_name.lower() == "plev" and np.nanmax(np.abs(level_values)) > 2000)
+    )
+    if pressure_in_pa:
+        dataset = dataset.assign_coords({level_name: dataset[level_name] / 100.0})
+    if level_name.lower() == "plev" or pressure_in_pa:
+        dataset[level_name].attrs.update({
+            "long_name": "Pressure",
+            "units": "hPa",
+        })
     dataset.attrs.update(
         {
             "experiment": dao.name,
@@ -1265,6 +1441,10 @@ def derive_increment_cross_section(
             "increment_mode": increment_mode,
             "product_type": "vertical_increment_cross_section",
             "horizontal_axis": horizontal_axis,
+            "horizontal_mean": (
+                "cosine-latitude weighted" if reduced_name == latitude_name
+                else "arithmetic longitude mean"
+            ),
         }
     )
     return dataset
@@ -1289,7 +1469,7 @@ def cache_increment_cross_section(
 def plot_cached_increment_cross_sections(
     datasets, variable, increment_mode="absolute", label_map=None, title="",
 ):
-    """Plot cached increment and posterior-spread sections by experiment."""
+    """Plot spatial sections of increment and posterior/prior spread ratio."""
     if increment_mode not in {"signed", "absolute"}:
         raise ValueError("increment_mode must be signed or absolute.")
     experiment_names = list(datasets)
@@ -1298,7 +1478,7 @@ def plot_cached_increment_cross_sections(
 
     fields_by_column = {
         key: [datasets[name][key] for name in experiment_names]
-        for key in ("increment", "posterior_spread")
+        for key in ("increment", "spread_ratio")
     }
     limits = {}
     for key, fields in fields_by_column.items():
@@ -1307,6 +1487,11 @@ def plot_cached_increment_cross_sections(
         if key == "increment" and increment_mode == "signed":
             magnitude = max(abs(minimum), abs(maximum))
             minimum, maximum = -magnitude, magnitude
+        elif key == "spread_ratio":
+            magnitude = max(abs(minimum - 1.0), abs(maximum - 1.0))
+            if np.isclose(magnitude, 0.0):
+                magnitude = 0.05
+            minimum, maximum = max(0.0, 1.0 - magnitude), 1.0 + magnitude
         elif minimum >= 0:
             minimum = 0.0
         if np.isclose(minimum, maximum):
@@ -1320,7 +1505,7 @@ def plot_cached_increment_cross_sections(
     images = [None, None]
     for row, experiment in enumerate(experiment_names):
         dataset = datasets[experiment]
-        for column, key in enumerate(("increment", "posterior_spread")):
+        for column, key in enumerate(("increment", "spread_ratio")):
             axis = axes[row, column]
             field = dataset[key]
             level_name = next(
@@ -1333,12 +1518,24 @@ def plot_cached_increment_cross_sections(
             images[column] = axis.pcolormesh(
                 field[horizontal_name], field[level_name], field, shading="auto",
                 vmin=limits[key][0], vmax=limits[key][1],
+                cmap=(
+                    "RdBu_r"
+                    if key == "spread_ratio"
+                    or (key == "increment" and increment_mode == "signed")
+                    else None
+                ),
             )
             axis.invert_yaxis()
             axis.set_xlabel(horizontal_name)
-            axis.set_ylabel(level_name)
+            level_units = field[level_name].attrs.get("units", "")
+            axis.set_ylabel(
+                "Pressure (hPa)" if level_units == "hPa" else level_name
+            )
             label = label_map.get(experiment, experiment) if label_map else experiment
-            heading = "Increment" if key == "increment" else "Posterior spread"
+            heading = (
+                "Increment" if key == "increment"
+                else "Posterior/prior spread ratio"
+            )
             axis.set_title(f"{label} - {heading}")
 
     for column, image in enumerate(images):

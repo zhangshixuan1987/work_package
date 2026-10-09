@@ -58,8 +58,12 @@ Active data-assimilation diagnostic workflow drivers live in `jupyter/analysis_a
 1. `01_obs_distribution.ipynb` - inspect and plot DART obs_seq observation distributions.
 2. `02_obs_diag_check.ipynb` - compare overlapping obs_diag products numerically and visually.
 3. `03_obs_diag_compare.ipynb` - compare obs_diag bias, RMSE, total spread, spread/RMSE, and rejection-rate time series; switch modes with `PLOT_MODE`.
-4. `04_obs_profile_diagnostics.ipynb` - plot bias, RMSE, total spread, spread/RMSE, and rejection-rate profiles; switch modes with `PROFILE_MODE`.
-5. `05_obs_multilevel_diagnostics.ipynb` - compare diagnostics across multiple pressure layers and regions.
+4. `04_obs_multilevel_diagnostics.ipynb` - compare diagnostics across multiple pressure layers and regions.
+5. `05_prior_innovation_profiles.ipynb` - separate systematic and random components of prior observation-space mismatch.
+6. `06_state_update_profiles.ipynb` - compute long-window pressure-profile state increments, normalized increments, and spread responses.
+7. `07_state_update_spatial_patterns.ipynb` - map representative posterior-minus-prior increments and spatial spread responses as a case-study companion to notebook 06.
+8. `08_obs_profile_diagnostics.ipynb` - plot bias, RMSE, total spread, spread/RMSE, and rejection-rate profiles; switch modes with `PROFILE_MODE`.
+9. `09_compute_and_plot_ens_ranges.ipynb` - cache and compare CTRL/DART ensemble-member spatial ranges.
 
 Initial-land diagnostics follow the same notebook-driver layout:
 
@@ -93,7 +97,7 @@ S2S forecast verification is consolidated into two parameterized workflows:
 
 The TCC workflow also includes the Dec2011 `da` analysis selection inherited from `6_s2s_skills/`; weekly, biweekly, 15-day, and monthly caches remain separate. The former seasonal and ensemble-slice notebook copies in `analysis_s2s_pcc/` and `analysis_s2s_tcc/` are superseded by notebook parameters. Cached NetCDF products are reused unless `force_compute = True`.
 
-The legacy `cross_correlation/` workflow is consolidated into `jupyter/analysis_lac/06_compute_and_plot_ensemble_cross_correlation.ipynb`, and the generic `ensemble_plot/` notebook is now `jupyter/analysis_atm_da/06_compute_and_plot_ensemble_ranges.ipynb`, which compares cached CTRL and DART hindcast spatial-range ensembles. The duplicate `fcst_initial_shock/` notebook is superseded by the cached `jupyter/fcst_atm_initial_shock/` workflow.
+The legacy `cross_correlation/` workflow is consolidated into `jupyter/analysis_lac/06_compute_and_plot_ensemble_cross_correlation.ipynb`, and the generic `ensemble_plot/` notebook is now `jupyter/analysis_atm_da/09_compute_and_plot_ens_ranges.ipynb`, which compares cached CTRL and DART hindcast spatial-range ensembles. The duplicate `fcst_initial_shock/` notebook is superseded by the cached `jupyter/fcst_atm_initial_shock/` workflow.
 
 Atmospheric restart stability checking is maintained in `jupyter/analysis_atm_init/04_check_restart_stability.ipynb` with reusable processing in `util/atm_restart_stability.py`. It supersedes the broken one-off `sanity_check/` notebook and caches request-specific range, non-finite, spatial, and transition diagnostics.
 
