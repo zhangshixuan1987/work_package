@@ -1,0 +1,105 @@
+;==============================================================
+; Create a "Southern Annular Mode (SAM)" index using Gong and Wang, 1999
+; Definition of Antarctic Oscillation index, Geophysical  Research Letters, 
+; Vol.  26, No.4, 459-462, February  15, 1999, DOI: 10.1029/1999GL900003
+; Originally written by PSD Dec 2015. Revised by Shixuan Zhang @ PNNL  
+; Zonal mean SLP 40S (standardized by month) minus 65S- (standardized by month)
+; Using 1981-2010 for standardization period
+
+
+; ==============================================================
+; User defined parameters that specify region of globe and data range 
+; and climo time period
+; opendap=1 uses PSD's opendap URL instead of a local file
+; ==============================================================
+
+  opendap=2
+  
+  lat40   = -40.
+  lat65   = -65.
+  
+  ;;year range for the data;;;;;;
+  yrStrt  = 2
+  yrLast  = 31
+  nyear  = yrLast-(yrStrt-1)
+  nmonth  = 12
+
+  ;;;year range for climatology;;;;
+  cl1=2
+  cl2=31
+
+; ==============================================================
+; Open the file
+; ==============================================================
+
+  var    = "PSL"
+  title  = str_upper(var)+" "
+  if(opendap.eq.1)then
+    f      = addfile ("http://www.esrl.noaa.gov/psd/thredds/dodsC/Datasets/20thC_ReanV2c/Monthlies/monolevel/prmsl.mon.mean.nc", "r")
+  else
+    f      = addfile ("/compyfs/zhan391/E3SM_PROJECT/E3SM/20200918.alpha5_11_fallback.piControl.ne30pg2_r05_EC30to60E2r2-1900_ICG.compy/FV_2-31.nc", "r")
+  end if
+  
+  out_file_name = "SAM_Norm_AOI_Monthly_"+yrStrt+"-"+yrLast+"_E3SM.txt"
+
+; ==============================================================
+; Create a zonal mean for each latitude
+; ==============================================================
+  
+  var40  = f->$var$(:,{lat40:lat40},:)
+  var65  = f->$var$(:,{lat65:lat65},:)  
+  
+  zAvg40 = dim_avg_n_Wrap( dim_avg_n_Wrap( var40, 2), 1)
+  zAvg65 = dim_avg_n_Wrap( dim_avg_n_Wrap( var65, 2), 1)
+
+  ;;reshap to 30 year x 12 month x 1 latitude 
+  rzAvg40 = reshape(zAvg40,(/nyear,nmonth/))
+  rzAvg65 = reshape(zAvg65,(/nyear,nmonth/))
+  
+  rzAvg40!0     = "year"
+  rzAvg40!1     = "month"
+  rzAvg40&year  = ispan(yrStrt,yrLast,1)
+  rzAvg40&month = ispan(1,12,1)
+
+  rzAvg65!0     = "year"
+  rzAvg65!1     = "month"
+  rzAvg65&year  = ispan(yrStrt,yrLast,1)
+  rzAvg65&month = ispan(1,12,1)
+
+  std40   = dim_stddev_n_Wrap(rzAvg40,0)
+  avg40   = dim_avg_n_Wrap(rzAvg40,0)
+
+  std65   = dim_stddev_n_Wrap(rzAvg65,0)
+  avg65   = dim_avg_n_Wrap(rzAvg65,0)
+
+  rzAvg40 = (rzAvg40  - conform(rzAvg40,avg40,(/1/)) ) /conform(rzAvg40,std40,(/1/))
+  rzAvg65 = (rzAvg65  - conform(rzAvg65,avg65,(/1/)) ) /conform(rzAvg65,std65,(/1/))
+
+  sam_ind = rzAvg40 - rzAvg65
+  
+
+  ;;;;construct the output array and output the data to a file;;;;
+  system("/bin/rm -f "+out_file_name)   ; remove any pre-existing file
+  system("/bin/touch "+out_file_name)   ; remove any pre-existing file
+
+  do iy = 0,nyear-1
+
+   outline  = sprinti("%04d",toint(rzAvg40&year(iy)))
+   do im  = 0,nmonth-1
+     outline = outline + sprintf("%8.3f",sam_ind(iy,im))
+   end do 
+   write_table(out_file_name, "a", [/outline/], "%s")
+
+ end do 
+
+  
+  sam     = ndtooned(sam_ind)
+; ==============================================================
+; write out results
+; ==============================================================
+
+  print(" "+yrStrt+" "+  yrLast)
+  do n=yrStrt, yrLast
+    nn=(n-yrStrt)*12
+    print(n+" "+sprintf("%7.3f",sam(nn))+" "+sprintf("%7.3f",sam(nn+1))+" "+sprintf("%7.3f",sam(nn+2))+" "+sprintf("%7.3f",sam(nn+3))+" "+sprintf("%7.3f",sam(nn+4))+" "+sprintf("%7.3f",sam(nn+5))+" "+sprintf("%7.3f",sam(nn+6))+" "+sprintf("%7.3f",sam(nn+7))+" "+sprintf("%7.3f",sam(nn+8))+" "+sprintf("%7.3f",sam(nn+9))+" "+sprintf("%7.3f",sam(nn+10))+" "+sprintf("%7.3f",sam(nn+11)))
+  end do
