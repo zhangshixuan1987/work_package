@@ -1,0 +1,133 @@
+C NCLFORTSTART
+      subroutine psadj(plev    ,plevp1  ,plat    ,plon    ,t       ,
+     $                 press_m ,press_i ,phis_old,phis_new,ps_old  ,
+     $                 ps_new  )
+C
+C-----------------------------------------------------------------------
+C
+C Adjust Ps based on difference between "analysis" phis and model phis.
+C Also uses T and P arrays
+C
+C-----------------------------------------------------------------------
+C
+      implicit none
+C
+C-----------------------------------------------------------------------
+C
+C     INPUTS
+C
+      integer plev      ! vertical dimension
+      integer plevp1    ! "plev+1"
+      integer plat      ! latitude dimension
+      integer plon      ! longitude dimension
+C
+      real*8 t       (plon,plat,plev)    ! analysis Temperatures
+      real*8 press_m (plon,plat,plev)    ! analysis pressures
+      real*8 press_i (plon,plat,plevp1)  ! analysis pressures (interfaces)
+      real*8 phis_old(plon,     plat)    ! analysis phis
+      real*8 phis_new(plon,     plat)    ! model phis
+      real*8 ps_old  (plon,     plat)    ! analysis Ps (horizontally
+C                                        ! interpolated to model grid)
+C
+C     OUTPUTS
+C
+      real*8 ps_new  (plon,     plat)    ! adjusted model Ps
+C
+C-----------------------------------------------------------------------
+
+C NCLEND
+
+C NCLFORTSTART
+      subroutine psadj_se(plev    ,plevp1  ,pcol    ,t       ,
+     $                 press_m ,press_i ,phis_old,phis_new,ps_old  ,
+     $                 ps_new  )
+C
+C-----------------------------------------------------------------------
+C
+C Adjust Ps based on difference between "analysis" phis and model phis.
+C Also uses T and P arrays
+C
+C-----------------------------------------------------------------------
+C
+      implicit none
+C
+C-----------------------------------------------------------------------
+C
+C     INPUTS
+C
+      integer plev      ! vertical dimension
+      integer plevp1    ! "plev+1"
+      integer pcol
+C
+      real*8 t       (pcol,plev)    ! analysis Temperatures
+      real*8 press_m (pcol,plev)    ! analysis pressures
+      real*8 press_i (pcol,plevp1)  ! analysis pressures (interfaces)
+      real*8 phis_old(pcol)         ! analysis phis
+      real*8 phis_new(pcol)         ! model phis
+      real*8 ps_old  (pcol)         ! analysis Ps (horizontally
+C                                   ! interpolated to model grid)
+C
+C     OUTPUTS
+C
+      real*8 ps_new  (pcol)         ! adjusted model Ps
+C
+C-----------------------------------------------------------------------
+
+C NCLEND
+
+C NCLFORTSTART
+      subroutine tsadj(plat    ,plon    ,phis_old,phis_new,ts      )
+C
+C-----------------------------------------------------------------------
+C
+C Adjust Ts based on difference between old and new phis.
+C
+C-----------------------------------------------------------------------
+C
+      implicit none
+C
+C-----------------------------------------------------------------------
+C
+C     INPUTS
+C
+      integer plat !  latitude dimension
+      integer plon !  longitude dimension
+C
+      real*8 phis_old(plon,plat) ! analysis phis (e.g., ECMWF)
+      real*8 phis_new(plon,plat) ! model phis
+C
+C     INPUT/OUTPUT
+C
+      real*8 ts      (plon,plat) ! Surface Temp
+C
+C-----------------------------------------------------------------------
+
+C NCLEND
+
+C NCLFORTSTART
+      subroutine tsadj_se(pcol, phis_old, phis_new, ts)
+C
+C-----------------------------------------------------------------------
+C
+C Adjust Ts based on difference between old and new phis.
+C
+C-----------------------------------------------------------------------
+C
+      implicit none
+C
+C-----------------------------------------------------------------------
+C
+C     INPUTS
+C
+      integer pcol
+C
+      real*8 phis_old(pcol) ! analysis phis (e.g., ECMWF)
+      real*8 phis_new(pcol) ! model phis
+C
+C     INPUT/OUTPUT
+C
+      real*8 ts      (pcol) ! Surface Temp
+C
+C-----------------------------------------------------------------------
+
+C NCLEND

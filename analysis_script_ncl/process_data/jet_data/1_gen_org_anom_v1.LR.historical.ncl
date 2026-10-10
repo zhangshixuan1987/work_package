@@ -1,0 +1,159 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;This script used to calculate and plot the zonal mean variables from CAM;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;The terms zonal and meridional are used to describe directions on a globe;;;;;;;
+;;;;;;;Zonal means "along a latitudinal circle" or "in the west–east direction";;;;;;;;
+;;;;;;;while meridional means "along a longitudinal circle" (a.k.a. meridian) ;;;;;;;;;
+;;;;;;;or "in the north–south direction" [2];;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
+load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_csm.ncl"
+load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/contributed.ncl"
+load "$NCARG_ROOT/lib/ncarg/nclscripts/esmf/ESMF_regridding.ncl"
+
+begin
+
+  data_dir  = " /global/cfs/cdirs/e3sm/zhan391/local_diag/fig_data/cmip6/historical"
+  exp_name  = (/"E3SMv1.0_CMIP6"/)
+  exp_str   = (/"v1.LR.historical"/)
+  nexps     = dimsizes(exp_name)
+
+  ystr      = 1979
+  yend      = 2014
+  time_tag  = "1979-2014"
+  grid_tag  = "1x1"
+
+  seasons   = (/"MON"/) ;,"ANN","DJF","JJA","MAM","SON"/)
+  nseas     = dimsizes(seasons)
+  d2r       = get_d2r("float")
+
+ ;define regions for eof analysis
+  latS      = -70.  ;negative for southern hemisphere
+  latN      = -20.  ;negative for southern hemisphere
+  lonW      =  0.0
+  lonE      = 360.0
+
+  varList   = (/"TAUX","TAUY","U850","U500", "U200"/)
+  facList   = (/  1.0,   1.0,   1.0,    1.0,   1.0/)
+  untList   = (/"N s~S~-2~N~","N s~S~-2~N~", "m s~S~-1~N~", "m s~S~-1~N~", "m s~S~-1~N~"/)
+  nvars     = dimsizes(varList)
+
+  do j = 0,nvars-1,1
+
+  vars   = varList(j)
+  varunt = untList(j)
+  facmod = facList(j)
+
+  print("working on variable "+ vars)
+
+  do k  = 0,nexps-1,1
+
+   if(vars.eq."U500".or.vars.eq."U850".or.vars.eq."U200") then 
+     fl1   = systemfunc("ls "+data_dir+"/"+exp_name(k)+"*U_MON_*"+time_tag(k)+".nc")
+   else 
+     fl1   = systemfunc("ls "+data_dir+"/"+exp_name(k)+"*"+vars+"_MON_*"+time_tag(k)+".nc")
+   end if 
+   nens  = dimsizes(fl1)
+
+   do ie = 0,nens-1,1
+
+    print(fl1(ie))
+    f1 = addfile(fl1(ie),"r")
+
+    lat  = f1->lat
+    lon  = f1->lon
+
+    time = f1->time
+    cd_date       = cd_calendar(time, 0)
+    year          = tointeger(cd_date(:,0))
+    indy          = ind(year.ge.ystr.and.year.le.yend)
+    obstime       = time(indy)
+    obstime@units = time@units
+
+    if(vars.eq."U500") then
+      xtmp =  f1->U_o(:,{50000},:,:) ;vinth2p(f1->Z3_o,f1->hyam,f1->hybm,500.0,f1->PS,1,f1->P0/100.0,1,False)
+      var0 = xtmp(indy,{latS:latN},{lonW:lonE})
+    else if (vars.eq."U850") then
+      xtmp = f1->U_o(:,{85000},:,:) ; vinth2p(f1->Z3_o,f1->hyam,f1->hybm,700.0,f1->PS,1,f1->P0/100.0,1,False)
+      var0 = xtmp(indy,{latS:latN},{lonW:lonE})
+    else if (vars.eq."U200") then
+      xtmp = f1->U_o(:,{20000},:,:) ;vinth2p(f1->Z3_o,f1->hyam,f1->hybm,200.0,f1->PS,1,f1->P0/100.0,1,False)
+      var0 = xtmp(indy,{latS:latN},{lonW:lonE})
+    else
+      vin  = vars+"_o"
+      xtmp = f1->$vin$
+      var0 = xtmp(:,{latS:latN},{lonW:lonE})
+    end if
+    end if
+    end if
+    var0@_FillValue = -9999.
+    var0       = var0*facmod
+    var0@units = varunt
+
+    ;==============================================================
+    ; compute climatology and Anomalies
+    ;==============================================================
+
+    do i = 0, nseas-1,1
+
+      print("working on season "+ seasons(i))
+
+      if (seasons(i).eq."MON") then
+        vb1   = var0(time|:,lat|:,lon|:)
+        vc1   = var0(time|:,lat|:,lon|:)
+        vd1   = var0(time|0:11,lat|:,lon|:)
+        var   = vb1(:,:,:)
+        Clm   = clmMonTLL(var) ; (12,lat,lon)
+        Anom  = calcMonAnomTLL(var, Clm)
+        Clm!0         = "month"
+        vd1!0         = "month"
+        vd1&month     = Clm&month
+        vc1(:,:,:)    = (/Anom/)
+        vd1(:,:,:)    = (/Clm/)
+        delete([/var,Clm,Anom/])
+      else if (seasons(i).eq."ANN") then
+        vb1        = month_to_annual(var0(time|:,lat|:,lon|:), 1)
+        vb1!0      = "time"
+        ttmp       = ispan(0,dimsizes(obstime)/12-1,1)
+        ttmp@units = "years since "+ystr+"-01-01 00:00:00"
+        vb1&time   = ttmp
+        vd1        = dim_avg_n_Wrap(vb1,0)
+        vc1        = vb1
+        vc1        = vb1 - conform(vb1,vd1,(/1,2/))
+        delete(ttmp)
+      else
+        vb1        = month_to_season(var0(time|:,lat|:,lon|:), seasons(i))
+        vb1!0      = "time"
+        ttmp       = ispan(0,dimsizes(obstime)/12-1,1)
+        ttmp@units = "years since "+ystr+"-01-01 00:00:00"
+        vb1&time   = ttmp
+        vd1        = dim_avg_n_Wrap(vb1,0)
+        vc1        = vb1
+        vc1        = vb1 - conform(vb1,vd1,(/1,2/))
+        delete(ttmp)
+      end if 
+      end if 
+
+      setfileoption("nc", "Format",  "NetCDF4")
+      enstr     = "en"+sprinti("%02d",ie)
+      out_file  = exp_str(k)+"_anom_"+vars+"_"+seasons(i)+"_"+enstr+"_"+ystr+"-"+yend+".nc"
+
+      system("rm " + out_file)
+      fout = addfile(out_file,"cw")
+      vs1  = vars+"_o"
+      fout->$vs1$  = vb1
+      vs2  = vars+"_a"
+      fout->$vs2$  = vc1
+      vs3  = vars+"_c"
+      fout->$vs3$  = vd1
+      delete([/fout,vb1,vc1,vd1/])
+   end do 
+   delete([/xtmp,time,cd_date,year,indy,obstime/])
+
+  end do 
+
+ end do 
+ delete([/fl1/])
+end do 
+
+end

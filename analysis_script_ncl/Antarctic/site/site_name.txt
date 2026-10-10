@@ -1,0 +1,45 @@
+Site           ,  latitude,  longitude,   Region
+Amundsen Scott ,   -90    ,          0,   East Antarctic Plateau
+Casey          ,   -66.3  ,      110.5,   Coastal East Antarctica  
+Davis          ,   -68.6  ,         78,   Coastal East Antarctica
+Dumont dUrville,   -66.7  ,        140,   Coastal East Antarctica
+Esperanza      ,   -63.4  ,        -57,   Antarctic Peninsula
+Faraday        ,   -65.4  ,      -64.4,   Antarctic Peninsula
+Halley         ,   -75.5  ,      -26.4,   Coastal East Antarctica
+Mawson         ,   -67.6  ,       62.9,   Coastal East Antarctica
+McMurdo        ,   -77.9  ,      166.7,   West Antarctica
+Mirny          ,   -66.5  ,       90.3,   Coastal East Antarctica
+Orcadas        ,   -60.7  ,      -44.7,   Antarctic Peninsula
+Syowa          ,   -69    ,       39.6,   Coastal East Antarctica
+Vostok         ,   -78.5  ,      106.9,   East Antarctic Plateau
+Byrd           ,   -80    ,     -119.4,   West Antarctica
+Talos Dome     ,   -72.5  ,      159.1,   East Antarctic Plateau
+Law Dome DSS   ,   -66.8  ,      112.8,   Coastal East Antarctica
+Plateau Remote ,   -84    ,         43,   East Antarctic Plateau
+IND-22 B4      ,   -70.9  ,       11.5,   Coastal East Antarctica
+EDML           ,   -75    ,          0,   East Antarctic Plateau
+WAIS 2005A     ,   -79.5  ,     -112.1,   West Antarctica
+ITASE 00-1     ,   -79.4  ,     -111.2,   West Antarctica
+ITASE 00-5     ,   -77.7  ,     -124.0,   West Antarctica
+Siple Station  ,   -75.9  ,      -84.3,   Antarctic Peninsula
+JRI            ,   -64.2  ,      -57.7,   Antarctic Peninsula
+Gomez          ,   -73.6  ,      -70.4,   Antarctic Peninsula
+Ferrigno       ,   -74.6  ,      -86.9,   Antarctic Peninsula 
+Lazarav Bay    ,   -69.4  ,      -71.8,   Antarctic Peninsula 
+WAIS Divide    ,   -79.5  ,     -112.1,   West Antarctica
+Larissa        ,   -66    ,        -64,   Antarctic Peninsula
+DML NUS0702    ,   -76.1  ,       22.5,   East Antarctic Plateau
+DML NUS0705    ,   -78.7  ,       35.6,   East Antarctic Plateau
+DML NUS0707    ,   -82.1  ,       54.9,   East Antarctic Plateau 
+DML NUS0805    ,   -82.6  ,       17.9,   East Antarctic Plateau
+Mill Island    ,   -65.6  ,      100.8,   Coastal East Antarctica
+Rutford        ,   -78.1  ,      -83.9,   Antarctic Peninsula 
+MCT18a         ,   -64.7  ,      -62.8,   Antarctic Peninsula
+MCT38c         ,   -64.7  ,      -57.4,   Antarctic Peninsula
+CB2010         ,   -66.9  ,      142.4,   Coastal East Antarctica
+West Peninsula stack,  -71.9,    -74.6,   Antarctic Peninsula
+Law Dome       ,   -66.8  ,      112.8,   Coastal East Antarctica
+South Orkney Fast Ice, -60.7,    -44.7,   Antarctic Peninsula
+MCT18a         ,   -64.7,        -62.8,   Antarctic Peninsula
+MCT38c         ,   -64.7,        -57.4,   Antarctic Peninsula
+CB2010         ,   -66.9,        142.4,   Coastal East Antarctica

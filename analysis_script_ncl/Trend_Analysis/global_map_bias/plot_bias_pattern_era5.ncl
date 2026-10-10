@@ -1,0 +1,331 @@
+  load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
+  load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_csm.ncl"
+  load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/contributed.ncl"
+
+; Purpose: A tempolate to make a eof plot for AAO patterns 
+;          Data is vertically interpolated to pressure levels
+;          1st panel: EOFs for the first three modes
+;          2nd panel: time series plot
+; Author : Shixuan Zhang
+; Date   : Dec 06, 2020
+
+begin
+
+  l_plot_box = True
+  flmsk      = "/global/cfs/cdirs/e3sm/zhan391/local_diag/fig_data/lnd_msk/landmsk.nc"
+  data_dir   = "/global/cfs/cdirs/e3sm/zhan391/local_diag/fig_data/clim"
+  obs_name   = "ERA5"
+  exp_name   = (/"v2.LR.historical", "v2.LR.amip", \
+                 "v2.LR.hist-all-xGHG-xaer", "v2.LR.hist-GHG", "v2.LR.hist-aer"/)
+  exp_strs   = (/"E3SM Coupled", "E3SM AMIP" ,\
+                 "E3SM Coupled (no GHG&AER)", "E3SM Coupled (GHG)", "E3SM Coupled (AER)"/)
+  nexps      = dimsizes(exp_name)
+  left_strs  = exp_name
+  time_tag   = "1979-2014"
+
+  seasons    = (/"ANN", "DJF", "JJA"/)
+  nseas      = dimsizes(seasons)
+  maxlev     = 11
+
+  varList    = (/"TREFHT", "TS", "PSL"/)
+  varUnit    = (/"~S~o~N~C", "~S~o~N~C", "hPa"/)
+  nvar       = dimsizes(varList)
+  
+  ;;;;;;;;;;select the regions for plot;;;;;;;;;;;;;
+  Regions    = (/"Global"/)
+  nregs      = dimsizes(Regions)
+  latS       = -90.
+  latN       =  90.
+  lonW       =   0.
+  lonE       = 360.
+
+ ;sub regions for analysis 
+ ;western equatorial Pacific (Niño4 region, 16E-150W, 5S-5N)
+ ;western and eastern equatorial Pacific (90W-150W,5-5N) 
+ ;Southern Ocean 40-60S, 0-360
+  subreg    = (/"Nino34"/) 
+  slats     = (/      -5/)   
+  slatn     = (/       5/) 
+  slonw     = (/     270/)
+  slone     = (/     160/)
+  regcols   = (/"Black" /)
+  reglthk   = (/3       /)
+  nsreg     = dimsizes(subreg)
+
+  do j = 0,nvar-1,1
+
+  vars   = varList(j)
+  vunt   = varUnit(j)
+  print("working on " + vars)
+
+  ;declear the season or annual mean data to be used;;;;;
+  do i = 0, nseas-1,1
+
+   do k = 0,nexps-1
+
+    fl0  = systemfunc("ls -1 "+data_dir+"/"+obs_name+"_anom_" + vars+ "_MON_en*_"+time_tag+".nc")
+    fl1  = systemfunc("ls -1 "+data_dir+"/"+exp_name(k)+"_anom_" + vars+ "_MON_en*_"+time_tag+".nc")
+    fm0  = addfile(flmsk,"r")
+    f0   = addfiles(fl0,"r")
+    f1   = addfiles(fl1,"r")
+    ListSetType (f0, "join")
+    ListSetType (f1, "join")
+   
+    vnm  = vars+"_o"
+    vd0  = dim_avg_n_Wrap(f0[:]->$vnm$(:,:,{latS:latN},{lonW:lonE}),0)
+    vd1  = dim_avg_n_Wrap(f1[:]->$vnm$(:,:,{latS:latN},{lonW:lonE}),0)
+    lmsk = fm0->LANDFRAC(0,{latS:latN},{lonW:lonE})
+ 
+    vdat = vd0
+    vdat = vd1 - vd0 
+    vdat@_FillValue = -9999.0
+    lms0 = conform(vdat,lmsk,(/1,2/))
+    vdat = where(lms0.le.0,vdat,vdat@_FillValue)
+    delete([/lmsk,lms0/])
+
+    if(vars.eq."PSL") then
+     vdat = vdat/100.0
+     vdat@units = "hPa"
+     vunt    = "hPa"
+    end if 
+
+    if(vars.eq."TMQ") then
+     vdat = vdat/1000.0
+     vdat@units = "kg m~S~-2~N~"
+     vunt    = "kg m~S~-2~N~"
+    end if
+
+    if(vars.eq."TAUX".or.vars.eq."TAUY") then
+     vdat = vdat*100.0
+     vdat@units = "10~S~-2~N~ N m~S~-2~N~"
+     vunt    = "10~S~-2~N~ N m~S~-2~N~"
+    end if
+
+    print("working on season "+ seasons(i))
+    if (seasons(i).eq."ANN") then 
+      var1 = month_to_annual(vdat,1)
+    else 
+      var1 = month_to_season(vdat,seasons(i))
+    end if 
+
+    vdm  = dim_avg_n_Wrap(var1,0)
+    rad  = 4.0*atan(1.0)/180.0
+    wgty = cos(f1[0]->lat({latS:latN})*rad)
+    glm1 = dim_max_n(dim_max_n(vdm,1),0) 
+    glm2 = dim_min_n(dim_min_n(vdm,1),0) 
+    glm3 = wgt_areaave(vdm,wgty,1.0,0)
+    rstr = "Max / Min / Mean: "+ sprintf("%.2f",glm1)+" / "+sprintf("%.2f",glm2)+" / "+sprintf("%.2f",glm3)
+  
+    print(rstr)
+    delete([/fl0,f0,fl1,f1,glm1,glm2,glm3/])
+    delete([/vdat,var1,vd0,vd1/])
+
+   ;;;;;;;;;;;;;;;;;;;;;;;;;;
+   ; Start to process plot 
+   ;;;;;;;;;;;;;;;;;;;;;;;;;;
+   if (k.eq.0) then 
+    ;;;start to process the plot;;;;
+    wtype           = "png"
+    if(wtype.eq."png") then
+      lthick          = 2.0
+      BorderThick     = 2.0
+      wtype@wkWidth   = 1200
+      wtype@wkHeight  = 1200
+    else
+      lthick          = 1.0
+      BorderThick     = 1.0
+    end if
+
+    fe              = vars+"_bias_vs_"+obs_name+"_"+seasons(i)
+    wks             = gsn_open_wks(wtype,fe)
+    lndcolor        = "Grey25"
+    plot            = new(nexps,graphic)
+    dum1             = new((/nexps,nsreg/),graphic)
+    color           = read_colormap_file("cmocean_balance")
+    ncols           = dimsizes(color(:,0))
+    color(ncols/2-5:ncols/2+5,:) = 0
+
+   end if 
+
+   if (vars.eq."TREFHT" .or. vars.eq."TS".or. vars.eq."SST") then
+     cnlevs1  = (/-0.4,-0.3,-0.2,-0.1,-0.01,0.0,0.01,0.1,0.2,0.3,0.4/)
+     cnlevs2  = (/-3.0,-2.0,-1.0,-0.5,-0.2,0.2,0.5,1.0,2.0,3.0/)
+   else if (vars.eq."PSL") then
+     cnlevs1  = (/-200.,-150.,-100.,-50.,-10.,0.,10.,50.,100.,150.,200./)
+     cnlevs2  = (/-8.,-6.,-4.,-2.,-0.5,0.5,2.,4.,6.,8./)
+   end if 
+   end if 
+
+   main_str = "Mean bias"
+   exp_str  = exp_strs(k)
+   left_str = exp_strs(k)
+   lab_str  =  main_str + " of " + vars + " (" + vunt +")"
+
+  ;============================================================
+  ; PLOTS
+  ;============================================================
+   res                = True     ; Plot modes desired.
+   res@gsnDraw        = False
+   res@gsnFrame       = False
+   res@gsnMaximize    = False     ; Maximize plot
+   res@tmXTOn         = False
+   res@tmYROn         = False
+
+   res@tmBorderThicknessF    = BorderThick
+   res@tmXBMajorThicknessF   = BorderThick
+   res@tmXBMinorThicknessF   = BorderThick*0.5
+   res@tmYLMajorThicknessF   = BorderThick
+   res@tmYLMinorThicknessF   = BorderThick*0.5
+   res@tmXTMajorThicknessF   = BorderThick
+   res@tmXTMinorThicknessF   = BorderThick*0.5
+   res@tmYRMajorThicknessF   = BorderThick
+   res@tmYRMinorThicknessF   = BorderThick*0.5
+
+   FontHeight = 0.018
+   res@gsnStringFontHeightF = FontHeight*2.5
+   res@tmXBLabelFontHeightF = FontHeight
+   res@tmYLLabelFontHeightF = FontHeight
+   res@tiMainFontHeightF    = FontHeight
+   res@tiXAxisFontHeightF   = FontHeight
+   res@tiYAxisFontHeightF   = FontHeight
+
+   mpres     = res
+   resx      = res
+   resx1     = res
+   
+;---Control appearance of map.
+   mpres@gsnMajorLatSpacing     = 20
+   mpres@gsnMajorLonSpacing     = 45
+   mpres@gsnMinorLatSpacing     = 15
+   mpres@gsnMinorLonSpacing     = 15
+  ;mpres@mpProjection           = "Robinson"       ; choose projection
+   mpres@mpLabelsOn             = False
+   mpres@mpPerimOn              = False
+   mpres@mpFillOn               = False
+   mpres@mpGeophysicalLineColor      = lndcolor  ; color of cont. outlines
+   mpres@mpGeophysicalLineThicknessF = lthick          ; thickness of outlines
+  ;mpres@mpOutlineOn            = True
+  ;mpres@mpOutlineDrawOrder     = "PostDraw"
+  ;mpres@mpFillDrawOrder        = "Predraw"
+  ;mpres@mpGridAndLimbOn        = True
+  ;mpres@mpGridLatSpacingF      = 90.0
+  ;mpres@mpGridLonSpacingF      = 180.0
+  ;mpres@mpGridLineThicknessF   = 3.0
+  ;mpres@mpGridAndLimbDrawOrder ="PreDraw"
+ ;  mpres@mpLimitMode           = "LatLon"
+   mpres@mpCenterLonF           = 180.0         ; default is 0 [GM]
+   mpres@mpMinLatF              = latS
+   mpres@mpMaxLatF              = latN
+   mpres@mpMinLonF              = lonW
+   mpres@mpMaxLonF              = lonE
+  ;mpres@mpOceanFillColor       = "lightskyblue1"
+  ;mpres@mpLandFillColor        = "gray33"
+
+   mpres@tmYLLabelsOn     = True
+   mpres@tmYLOn           = True
+   mpres@tmYROn           = False
+
+   plot(k) = gsn_csm_map(wks,mpres)
+
+  ;*******************************************
+  ; first plot
+  ;*******************************************
+   res0                       = res
+   res0@gsnAddCyclic          = True
+   res0@gsnLeftString         = ""
+   res0@gsnRightString        = ""
+   res0@gsnCenterString       = ""
+   res0@tiMainString          = ""
+   res0@tiMainOffsetYF        = 0.005
+
+   res0@lbLabelBarOn             = True
+  ;res0@lbOrientation            = "Vertical"
+   res0@lbTitleString            = lab_str 
+  ;res0@lbTitlePosition          = "Right"     ; title location
+  ;res0@lbTitleDirection         = "Across"    ; letter angle
+  ;res0@lbTitleAngleF            = 90.         ; title angle
+   res0@lbBoxLineColor           = "black"
+  ;res0@lbBoxLinesOn             = False
+  ;res0@pmLabelBarParallelPosF   = 0.61
+   res0@pmLabelBarOrthogonalPosF = 0.25
+   res0@pmLabelBarWidthF         = 0.62
+   res0@pmLabelBarHeightF        = 0.15
+   res0@lbLabelFontHeightF       = FontHeight*0.7
+   res0@lbTitleFontHeightF       = FontHeight*0.75
+
+   res0@cnFillOn              = True     ; color plot desired
+  ;res0@cnFillMode            = "RasterFill"   ; turn raster on
+   res0@cnMissingValFillColor = "White"
+   res0@cnFillPalette         = color
+   res0@cnLevelSelectionMode  = "ExplicitLevels"
+   res0@tiMainString          = "" ;exp_str
+   res0@gsnLeftString         = left_str
+   res0@gsnRightString        = rstr
+   res0@cnLevels             := cnlevs2
+   res0@cnLinesOn             = False        ; True is default
+   res0@cnInfoLabelOn         = False
+   res0@cnLineLabelsOn        = False    ; turn off contour labels
+   res0@cnLineColor           = "Black"                   ; color of second contours
+   res0@cnLineThicknessF      = 2.                       ; line thickness
+   res0@gsnContourZeroLineThicknessF = 5  ; eliminates zero contour
+   res0@gsnContourNegLineDashPattern = 1  ; sets negative contours to dash pattern 1
+   res0@gsnRightStringOrthogonalPosF = 0.03
+   res0@gsnLeftStringOrthogonalPosF  = 0.03
+
+   pltrgd  = gsn_csm_contour(wks,vdm,res0)
+   overlay(plot(k) ,pltrgd)
+   delete(vdm)
+
+   if(l_plot_box) then 
+
+    ;---Draw a box using gsn_add_polygon. See how the edges are curved.
+    gnres                  = True
+    gnres@gsFillColor      = "transparent"
+    gnres@gsEdgesOn        = True
+ 
+    txres                  = True
+    txres@txFontHeightF    = 0.015
+    txres@txJust           = "CenterLeft"
+
+    do irg = 0,nsreg-1,1
+      gnres@gsEdgeColor      = regcols(irg)
+      gnres@gsLineColor      = regcols(irg)
+      gnres@gsLineThicknessF = reglthk(irg)
+      gnres@gsEdgeThicknessF = reglthk(irg)
+      latbox = (/slats(irg),slats(irg),slatn(irg),slatn(irg),slats(irg)/)
+      lonbox = (/slonw(irg),slone(irg),slone(irg),slonw(irg),slonw(irg)/)
+      dum1(k,irg)= gsn_add_polygon(wks, plot(k), lonbox, latbox, gnres)
+    end do
+   end if 
+
+  end do ; end of exps
+
+ ; panel plot only resources
+   pres1                            = True      ; mods desired
+   pres1@gsnFrame                   = True      ; save panel until both ready
+   pres1@gsnPanelMainString         = "" ;main_str
+   pres1@gsnPanelMainFontHeightF    = 0.012
+   pres1@gsnPanelLabelBar           = False                ; add common colorbar
+  ;pres1@lbOrientation              = "Vertical"
+   pres1@lbTitleString              = lab_str 
+   pres1@lbTitleFontHeightF         = FontHeight*0.6
+   pres1@lbLabelFontHeightF         = FontHeight*0.55 ;  font height
+   pres1@lbBoxLineColor             = "black"
+   pres1@lbBoxLinesOn               = True
+  ;pres1@pmLabelBarParallelPosF     = 0.61
+   pres1@pmLabelBarOrthogonalPosF   = 0.01
+   pres1@pmLabelBarWidthF           = 0.95
+   pres1@pmLabelBarHeightF          = 0.08
+  ;pres1@gsnPanelBottom             = 0.45       ; space for label bar
+  ;pres1@gsnPanelTop                = 0.85       ; only panel on lower half of page
+  ;pres1@gsnPanelXF                 = (/0.07,0.57/)
+   pres1@gsnPanelYWhiteSpacePercent = 2
+   pres1@gsnPanelXWhiteSpacePercent = 2
+   gsn_panel(wks,plot,(/nexps,1/),pres1)          ; create first panel
+   delete([/dum1,plot,res,res0,mpres,pres1/]) 
+ end do 
+
+end do 
+
+end
+
