@@ -1,0 +1,548 @@
+netcdf v2.LR.historical.en00.SICONC.197901-201412 {
+dimensions:
+	time = UNLIMITED ; // (432 currently)
+	lat = 180 ;
+	lon = 360 ;
+variables:
+	double SICONC(time, lat, lon) ;
+		SICONC:cell_measures = "area: area" ;
+		SICONC:units = "%" ;
+		SICONC:long_name = "timeMonthly_avg_iceAreaCell" ;
+	int time(time) ;
+		time:units = "months since 1978-12-15 00:00:0.0" ;
+	double lat(lat) ;
+		lat:long_name = "Latitude" ;
+		lat:standard_name = "latitude" ;
+		lat:units = "degrees_north" ;
+		lat:axis = "Y" ;
+		lat:valid_min = -90. ;
+		lat:valid_max = 90. ;
+		lat:bounds = "lat_bnds" ;
+	double lon(lon) ;
+		lon:long_name = "Longitude" ;
+		lon:standard_name = "longitude" ;
+		lon:units = "degrees_east" ;
+		lon:axis = "X" ;
+		lon:valid_min = -180. ;
+		lon:valid_max = 180. ;
+		lon:bounds = "lon_bnds" ;
+
+// global attributes:
+		:case = "v2.LR.historical_0101" ;
+		:source_id = "32655baa1f" ;
+		:realm = "seaIce" ;
+		:product = "model-output" ;
+		:title = "MPAS-Seaice History file information" ;
+		:source = "E3SM Sea Ice Model" ;
+		:institution = "LLNL (Lawrence Livermore National Laboratory, Livermore, CA 94550, USA); ANL (Argonne National Laboratory, Argonne, IL 60439, USA); BNL (Brookhaven National Laboratory, Upton, NY 11973, USA); LANL (Los Alamos National Laboratory, Los Alamos, NM 87545, USA); LBNL (Lawrence Berkeley National Laboratory, Berkeley, CA 94720, USA); ORNL (Oak Ridge National Laboratory, Oak Ridge, TN 37831, USA); PNNL (Pacific Northwest National Laboratory, Richland, WA 99352, USA); SNL (Sandia National Laboratories, Albuquerque," ;
+		:institution_id = "E3SM-Project" ;
+		:contact = "e3sm-data-support@listserv.llnl.gov" ;
+		:username = "ac.forsyth2" ;
+		:hostname = "chrysalis" ;
+		:on_a_sphere = "YES" ;
+		:sphere_radius = 6371229.f ;
+		:model_name = "mpas" ;
+		:core_name = "seaice" ;
+		:history = "Thu Mar  2 18:31:57 2023: ncatted -a long_name,SICONC,a,c,timeMonthly_avg_iceAreaCell ftmp_out.nc\n",
+			"Thu Mar  2 18:31:57 2023: ncatted -a units,SICONC,a,c,% ftmp_out.nc\n",
+			"Thu Mar  2 18:31:56 2023: ncap2 -s SICONC=SICONC*100.0 -v tmp_out2.nc ftmp_out.nc\n",
+			"Thu Mar  2 18:31:56 2023: ncatted -a units,time,a,c,months since 1978-12-15 00:00:0.0 tmp_out2.nc\n",
+			"Thu Mar  2 18:31:55 2023: ncap2 -s time=array(1,1,$time) tmp_out1.nc tmp_out2.nc\n",
+			"Thu Mar  2 18:31:55 2023: ncks --mk_rec_dmn time tmp_out.nc tmp_out1.nc\n",
+			"Thu Mar  2 18:31:55 2023: ncrename -v timeMonthly_avg_iceAreaCell,SICONC -d Time,time /lcrc/group/acme/ac.szhang/acme_scratch/data/CVDP_RGD/v2.LR.historical/v2.LR.historical.en00.SICONC.197901-201412.nc tmp_out.nc\n",
+			"Thu Mar  2 18:31:53 2023: ncks -t 2 -O --no_tmp_fl --dfl_lvl=0 --gaa remap_script=ncremap --gaa remap_command=\'/blues/gpfs/home/software/spack-0.10.1/opt/spack/linux-centos7-x86_64/intel-17.0.4/nco-4.7.4-x4y66ep2ydoyegnckicvv5ljwrheniun/bin/ncremap -i /lcrc/group/acme/ac.szhang/acme_scratch/data/CVDP_RGD/v2.LR.historical/SE/v2.LR.historical.en00.SICONC.197901-201412.nc -m /lcrc/group/acme/ac.szhang/acme_scratch/data/regrid_maps/map_EC30to60E2r2_to_1.0x1.0degree_conserve.nc -o /lcrc/group/acme/ac.szhang/acme_scratch/data/CVDP_RGD/v2.LR.historical/v2.LR.historical.en00.SICONC.197901-201412.nc\' --gaa remap_hostname=b646 --gaa remap_version=4.7.4 --hdr_pad=10000 --rgr lat_nm_out=lat#lon_nm_out=lon --map=/lcrc/group/acme/ac.szhang/acme_scratch/data/regrid_maps/map_EC30to60E2r2_to_1.0x1.0degree_conserve.nc /lcrc/group/acme/ac.szhang/acme_scratch/data/CVDP_RGD/v2.LR.historical/SE/v2.LR.historical.en00.SICONC.197901-201412.nc /lcrc/group/acme/ac.szhang/acme_scratch/data/CVDP_RGD/v2.LR.historical/v2.LR.historical.en00.SICONC.197901-201412.nc\n",
+			"Thu Mar  2 18:30:54 2023: ncrcat -d Time,0, -v timeMonthly_avg_iceAreaCell /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1979-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1980-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1981-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1982-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1983-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1984-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1985-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1986-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1987-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1988-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1989-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1990-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1991-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1992-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1993-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1994-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1995-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1996-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1997-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1998-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.1999-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2000-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2001-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2002-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2003-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2004-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2005-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2006-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2007-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2008-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2009-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2010-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2011-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2012-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2013-12-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-01-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-02-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-03-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-04-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-05-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-06-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-07-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-08-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-09-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-10-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-11-01.nc /lcrc/group/e3sm/ac.forsyth2/E3SMv2/v2.LR.historical_0101/archive/ice/hist/v2.LR.historical_0101.mpassi.hist.am.timeSeriesStatsMonthly.2014-12-01.nc /lcrc/group/acme/ac.szhang/acme_scratch/data/CVDP_RGD/v2.LR.historical/SE/v2.LR.historical.en00.SICONC.197901-201412.nc\n",
+			"created on 07/14/21 12:45:50" ;
+		:Conventions = "CF-1.7" ;
+		:parent_id = "mxrd6x17dm\n",
+			"pqm09s80ay\n",
+			"d4on18blyv\n",
+			"7ywus1zyw8\n",
+			"dnmgjj5h4i\n",
+			"6bgqya9y4j\n",
+			"eqlxq4cr41\n",
+			"cweafhx1iw\n",
+			"tw97gt5200\n",
+			"aaun96t7iz\n",
+			"ktuzeg5bkn\n",
+			"ukb3hjgcfm\n",
+			"aky2cyth1j\n",
+			"qgfj7e2hos\n",
+			"satp5682zh\n",
+			"mdcjpu88n3\n",
+			"azy29pwdjf\n",
+			"v25duypfvk\n",
+			"7mxhclf1vw\n",
+			"6osf0fajkt\n",
+			"hi3r7sy331\n",
+			"hy5r22ly9o\n",
+			"jpl09ju81h\n",
+			"nj9p7v1i80\n",
+			"bjj9kk6gxb\n",
+			"9mx9i3re7b\n",
+			"q04x4rrgbp\n",
+			"3me53efy8l\n",
+			"d1ul7xnrtr\n",
+			"a1e0pmfvsb\n",
+			"4n4wdyn2al\n",
+			"gz139u7th5\n",
+			"8lrpcan1ov\n",
+			"h9151zlyfl\n",
+			"koz4q9dbw4\n",
+			"b7gt27hkl3\n",
+			"d9w90udn8l\n",
+			"2sdc0m474q" ;
+		:mesh_spec = "0.0" ;
+		:git_version = "32655baa1f" ;
+		:config_dt = 1800.f ;
+		:config_calendar_type = "gregorian_noleap" ;
+		:config_start_time = "file" ;
+		:config_stop_time = "none" ;
+		:config_run_duration = "0001-00-00_00:00:00" ;
+		:config_num_halos = 2 ;
+		:config_pio_num_iotasks = 0 ;
+		:config_pio_stride = 1 ;
+		:config_write_output_on_startup = "NO" ;
+		:config_test_case_diag = "NO" ;
+		:config_test_case_diag_type = "none" ;
+		:config_full_abort_write = "YES" ;
+		:config_block_decomp_file_prefix = "/lcrc/group/e3sm/data/inputdata/ice/mpas-cice/EC30to60E2r2/mpas-seaice.graph.info.200908.part." ;
+		:config_number_of_blocks = 0 ;
+		:config_explicit_proc_decomp = "NO" ;
+		:config_proc_decomp_file_prefix = "graph.info.part." ;
+		:config_use_halo_exch = "YES" ;
+		:config_aggregate_halo_exch = "YES" ;
+		:config_reuse_halo_exch = "NO" ;
+		:config_load_balance_timers = "NO" ;
+		:config_do_restart = "YES" ;
+		:config_restart_timestamp_name = "rpointer.ice" ;
+		:config_do_restart_hbrine = "YES" ;
+		:config_do_restart_zsalinity = "YES" ;
+		:config_do_restart_bgc = "YES" ;
+		:config_do_restart_snow_density = "YES" ;
+		:config_do_restart_snow_grain_radius = "YES" ;
+		:config_nCategories = 5 ;
+		:config_nIceLayers = 7 ;
+		:config_nSnowLayers = 5 ;
+		:config_earth_radius = 6371229.f ;
+		:config_initial_condition_type = "restart" ;
+		:config_initial_ice_area = 1.f ;
+		:config_initial_ice_volume = 1.f ;
+		:config_initial_snow_volume = 0.f ;
+		:config_initial_latitude_north = 70.f ;
+		:config_initial_latitude_south = -60.f ;
+		:config_initial_velocity_type = "uniform" ;
+		:config_initial_uvelocity = 0.f ;
+		:config_initial_vvelocity = 0.f ;
+		:config_calculate_coriolis = "YES" ;
+		:config_use_dynamics = "YES" ;
+		:config_use_velocity_solver = "YES" ;
+		:config_use_advection = "YES" ;
+		:config_use_forcing = "NO" ;
+		:config_use_column_package = "YES" ;
+		:config_use_prescribed_ice = "NO" ;
+		:config_use_prescribed_ice_forcing = "NO" ;
+		:config_atmospheric_forcing_type = "CORE" ;
+		:config_forcing_start_time = "2000-01-01_00:00:00" ;
+		:config_forcing_cycle_start = "2000-01-01_00:00:00" ;
+		:config_forcing_cycle_duration = "2-00-00_00:00:00" ;
+		:config_forcing_precipitation_units = "mm_per_sec" ;
+		:config_forcing_sst_type = "ncar" ;
+		:config_update_ocean_fluxes = "YES" ;
+		:config_include_pond_freshwater_feedback = "NO" ;
+		:config_use_test_ice_shelf = "NO" ;
+		:config_testing_system_test = "NO" ;
+		:config_dynamics_subcycle_number = 1 ;
+		:config_rotate_cartesian_grid = "YES" ;
+		:config_include_metric_terms = "YES" ;
+		:config_elastic_subcycle_number = 120 ;
+		:config_strain_scheme = "variational" ;
+		:config_constitutive_relation_type = "evp" ;
+		:config_stress_divergence_scheme = "variational" ;
+		:config_variational_basis = "wachspress" ;
+		:config_variational_denominator_type = "original" ;
+		:config_wachspress_integration_type = "dunavant" ;
+		:config_wachspress_integration_order = 8 ;
+		:config_calc_velocity_masks = "YES" ;
+		:config_average_variational_strain = "NO" ;
+		:config_use_air_stress = "YES" ;
+		:config_use_ocean_stress = "YES" ;
+		:config_use_surface_tilt = "YES" ;
+		:config_geostrophic_surface_tilt = "NO" ;
+		:config_ocean_stress_type = "quadratic" ;
+		:config_use_special_boundaries_velocity = "NO" ;
+		:config_use_special_boundaries_velocity_masks = "NO" ;
+		:config_advection_type = "incremental_remap" ;
+		:config_monotonic = "YES" ;
+		:config_conservation_check = "NO" ;
+		:config_monotonicity_check = "NO" ;
+		:config_recover_tracer_means_check = "NO" ;
+		:config_use_column_shortwave = "YES" ;
+		:config_use_column_vertical_thermodynamics = "YES" ;
+		:config_use_column_biogeochemistry = "NO" ;
+		:config_use_column_itd_thermodynamics = "YES" ;
+		:config_use_column_ridging = "YES" ;
+		:config_use_column_snow_tracers = "YES" ;
+		:config_use_ice_age = "YES" ;
+		:config_use_first_year_ice = "YES" ;
+		:config_use_level_ice = "YES" ;
+		:config_use_cesm_meltponds = "NO" ;
+		:config_use_level_meltponds = "YES" ;
+		:config_use_topo_meltponds = "NO" ;
+		:config_use_aerosols = "NO" ;
+		:config_use_effective_snow_density = "YES" ;
+		:config_use_snow_grain_radius = "YES" ;
+		:config_use_special_boundaries_zero_tracers = "NO" ;
+		:config_use_brine = "NO" ;
+		:config_use_vertical_zsalinity = "NO" ;
+		:config_use_vertical_biochemistry = "NO" ;
+		:config_use_shortwave_bioabsorption = "NO" ;
+		:config_use_vertical_tracers = "NO" ;
+		:config_use_skeletal_biochemistry = "NO" ;
+		:config_use_nitrate = "NO" ;
+		:config_use_carbon = "NO" ;
+		:config_use_chlorophyll = "NO" ;
+		:config_use_ammonium = "NO" ;
+		:config_use_silicate = "NO" ;
+		:config_use_DMS = "NO" ;
+		:config_use_nonreactive = "NO" ;
+		:config_use_humics = "NO" ;
+		:config_use_DON = "NO" ;
+		:config_use_iron = "NO" ;
+		:config_use_modal_aerosols = "NO" ;
+		:config_use_zaerosols = "NO" ;
+		:config_skeletal_bgc_flux_type = "Jin2006" ;
+		:config_scale_initial_vertical_bgc = "NO" ;
+		:config_biogrid_bottom_molecular_sublayer = 0.006f ;
+		:config_biogrid_top_molecular_sublayer = 0.006f ;
+		:config_bio_gravity_drainage_length_scale = 20.f ;
+		:config_zsalinity_molecular_sublayer = 0.f ;
+		:config_zsalinity_gravity_drainage_scale = 0.028f ;
+		:config_snow_porosity_at_ice_surface = -0.3f ;
+		:config_new_ice_fraction_biotracer = 1.f ;
+		:config_fraction_biotracer_in_frazil = 0.8f ;
+		:config_ratio_Si_to_N_diatoms = 1.8f ;
+		:config_ratio_Si_to_N_small_plankton = 0.f ;
+		:config_ratio_Si_to_N_phaeocystis = 0.f ;
+		:config_ratio_S_to_N_diatoms = 0.03f ;
+		:config_ratio_S_to_N_small_plankton = 0.03f ;
+		:config_ratio_S_to_N_phaeocystis = 0.03f ;
+		:config_ratio_Fe_to_C_diatoms = 0.0033f ;
+		:config_ratio_Fe_to_C_small_plankton = 0.0033f ;
+		:config_ratio_Fe_to_C_phaeocystis = 0.1f ;
+		:config_ratio_Fe_to_N_diatoms = 0.023f ;
+		:config_ratio_Fe_to_N_small_plankton = 0.023f ;
+		:config_ratio_Fe_to_N_phaeocystis = 0.7f ;
+		:config_ratio_Fe_to_DON = 0.023f ;
+		:config_ratio_Fe_to_DOC_saccharids = 0.1f ;
+		:config_ratio_Fe_to_DOC_lipids = 0.033f ;
+		:config_respiration_fraction_of_growth = 0.05f ;
+		:config_rapid_mobile_to_stationary_time = 3600.f ;
+		:config_long_mobile_to_stationary_time = 7776000.f ;
+		:config_algal_maximum_velocity = 1.e-07f ;
+		:config_ratio_Fe_to_dust = 0.035f ;
+		:config_solubility_of_Fe_in_dust = 0.005f ;
+		:config_chla_absorptivity_of_diatoms = 0.03f ;
+		:config_chla_absorptivity_of_small_plankton = 0.01f ;
+		:config_chla_absorptivity_of_phaeocystis = 0.05f ;
+		:config_light_attenuation_diatoms = 0.3f ;
+		:config_light_attenuation_small_plankton = 0.2f ;
+		:config_light_attenuation_phaeocystis = 0.17f ;
+		:config_light_inhibition_diatoms = 0.001f ;
+		:config_light_inhibition_small_plankton = 0.001f ;
+		:config_light_inhibition_phaeocystis = 0.04f ;
+		:config_maximum_growth_rate_diatoms = 1.44f ;
+		:config_maximum_growth_rate_small_plankton = 0.41f ;
+		:config_maximum_growth_rate_phaeocystis = 0.63f ;
+		:config_temperature_growth_diatoms = 0.06f ;
+		:config_temperature_growth_small_plankton = 0.06f ;
+		:config_temperature_growth_phaeocystis = 0.06f ;
+		:config_grazed_fraction_diatoms = 0.f ;
+		:config_grazed_fraction_small_plankton = 0.7f ;
+		:config_grazed_fraction_phaeocystis = 0.7f ;
+		:config_mortality_diatoms = 0.007f ;
+		:config_mortality_small_plankton = 0.007f ;
+		:config_mortality_phaeocystis = 0.007f ;
+		:config_temperature_mortality_diatoms = 0.03f ;
+		:config_temperature_mortality_small_plankton = 0.03f ;
+		:config_temperature_mortality_phaeocystis = 0.03f ;
+		:config_exudation_diatoms = 0.f ;
+		:config_exudation_small_plankton = 0.f ;
+		:config_exudation_phaeocystis = 0.f ;
+		:config_nitrate_saturation_diatoms = 1.f ;
+		:config_nitrate_saturation_small_plankton = 1.f ;
+		:config_nitrate_saturation_phaeocystis = 1.f ;
+		:config_ammonium_saturation_diatoms = 0.3f ;
+		:config_ammonium_saturation_small_plankton = 0.3f ;
+		:config_ammonium_saturation_phaeocystis = 0.3f ;
+		:config_silicate_saturation_diatoms = 4.f ;
+		:config_silicate_saturation_small_plankton = 0.f ;
+		:config_silicate_saturation_phaeocystis = 0.f ;
+		:config_iron_saturation_diatoms = 1.f ;
+		:config_iron_saturation_small_plankton = 0.2f ;
+		:config_iron_saturation_phaeocystis = 0.1f ;
+		:config_fraction_spilled_to_DON = 0.6f ;
+		:config_degredation_of_DON = 0.03f ;
+		:config_fraction_DON_ammonium = 1.f ;
+		:config_fraction_loss_to_saccharids = 0.5f ;
+		:config_fraction_loss_to_lipids = 0.5f ;
+		:config_fraction_exudation_to_saccharids = 1.f ;
+		:config_fraction_exudation_to_lipids = 1.f ;
+		:config_remineralization_saccharids = 0.03f ;
+		:config_remineralization_lipids = 0.03f ;
+		:config_maximum_brine_temperature = 0.f ;
+		:config_salinity_dependence_of_growth = 1.f ;
+		:config_minimum_optical_depth = 0.1f ;
+		:config_slopped_grazing_fraction = 0.5f ;
+		:config_excreted_fraction = 0.5f ;
+		:config_fraction_mortality_to_ammonium = 0.9f ;
+		:config_fraction_iron_remineralized = 1.f ;
+		:config_nitrification_rate = 0.f ;
+		:config_desorption_loss_particulate_iron = 3065.f ;
+		:config_maximum_loss_fraction = 0.9f ;
+		:config_maximum_ratio_iron_to_saccharids = 0.2f ;
+		:config_respiration_loss_to_DMSPd = 0.9f ;
+		:config_DMSP_to_DMS_conversion_fraction = 0.7f ;
+		:config_DMSP_to_DMS_conversion_time = 5.f ;
+		:config_DMS_oxidation_time = 12.f ;
+		:config_mobility_type_diatoms = 0.f ;
+		:config_mobility_type_small_plankton = 0.f ;
+		:config_mobility_type_phaeocystis = 0.f ;
+		:config_mobility_type_nitrate = -1.f ;
+		:config_mobility_type_ammonium = 0.f ;
+		:config_mobility_type_silicate = -1.f ;
+		:config_mobility_type_DMSPp = 0.5f ;
+		:config_mobility_type_DMSPd = 0.f ;
+		:config_mobility_type_humics = 0.f ;
+		:config_mobility_type_saccharids = 0.f ;
+		:config_mobility_type_lipids = 0.f ;
+		:config_mobility_type_inorganic_carbon = -1.f ;
+		:config_mobility_type_proteins = 0.f ;
+		:config_mobility_type_dissolved_iron = 0.f ;
+		:config_mobility_type_particulate_iron = 0.5f ;
+		:config_mobility_type_black_carbon1 = 0.f ;
+		:config_mobility_type_black_carbon2 = 0.f ;
+		:config_mobility_type_dust1 = 0.f ;
+		:config_mobility_type_dust2 = 0.f ;
+		:config_mobility_type_dust3 = 0.f ;
+		:config_mobility_type_dust4 = 0.f ;
+		:config_ratio_C_to_N_diatoms = 7.f ;
+		:config_ratio_C_to_N_small_plankton = 7.f ;
+		:config_ratio_C_to_N_phaeocystis = 7.f ;
+		:config_ratio_chla_to_N_diatoms = 2.1f ;
+		:config_ratio_chla_to_N_small_plankton = 1.1f ;
+		:config_ratio_chla_to_N_phaeocystis = 0.84f ;
+		:config_scales_absorption_diatoms = 2.f ;
+		:config_scales_absorption_small_plankton = 4.f ;
+		:config_scales_absorption_phaeocystis = 5.f ;
+		:config_ratio_C_to_N_proteins = 5.f ;
+		:config_shortwave_type = "dEdd" ;
+		:config_albedo_type = "ccsm3" ;
+		:config_use_snicar_ad = "YES" ;
+		:config_visible_ice_albedo = 0.78f ;
+		:config_infrared_ice_albedo = 0.36f ;
+		:config_visible_snow_albedo = 0.98f ;
+		:config_infrared_snow_albedo = 0.7f ;
+		:config_variable_albedo_thickness_limit = 0.3f ;
+		:config_ice_shortwave_tuning_parameter = 0.f ;
+		:config_pond_shortwave_tuning_parameter = 0.f ;
+		:config_snow_shortwave_tuning_parameter = 1.5f ;
+		:config_temp_change_snow_grain_radius_change = 1.5f ;
+		:config_max_melting_snow_grain_radius = 1500.f ;
+		:config_algae_absorption_coefficient = 0.6f ;
+		:config_snow_redistribution_scheme = "ITDrdg" ;
+		:config_fallen_snow_radius = 54.526f ;
+		:config_use_snow_liquid_ponds = "YES" ;
+		:config_new_snow_density = 100.f ;
+		:config_max_snow_density = 450.f ;
+		:config_minimum_wind_compaction = 10.f ;
+		:config_wind_compaction_factor = 27.3f ;
+		:config_max_dry_snow_radius = 2800.f ;
+		:config_snow_to_ice_transition_depth = 0.f ;
+		:config_pond_refreezing_type = "hlid" ;
+		:config_pond_flushing_timescale = 0.001f ;
+		:config_min_meltwater_retained_fraction = 0.15f ;
+		:config_max_meltwater_retained_fraction = 1.f ;
+		:config_pond_depth_to_fraction_ratio = 0.8f ;
+		:config_snow_on_pond_ice_tapering_parameter = 0.03f ;
+		:config_critical_pond_ice_thickness = 0.01f ;
+		:config_thermodynamics_type = "mushy" ;
+		:config_heat_conductivity_type = "bubbly" ;
+		:config_rapid_mode_channel_radius = 0.0005f ;
+		:config_rapid_model_critical_Ra = 10.f ;
+		:config_rapid_mode_aspect_ratio = 1.f ;
+		:config_slow_mode_drainage_strength = -5.e-08f ;
+		:config_slow_mode_critical_porosity = 0.05f ;
+		:config_congelation_ice_porosity = 0.85f ;
+		:config_itd_conversion_type = "linear remap" ;
+		:config_category_bounds_type = "original" ;
+		:config_ice_strength_formulation = "Rothrock75" ;
+		:config_ridging_participation_function = "exponential" ;
+		:config_ridging_redistribution_function = "exponential" ;
+		:config_ridiging_efolding_scale = 3.f ;
+		:config_ratio_ridging_work_to_PE = 17.f ;
+		:config_atmos_boundary_method = "ccsm3" ;
+		:config_calc_surface_stresses = "YES" ;
+		:config_calc_surface_temperature = "YES" ;
+		:config_use_form_drag = "NO" ;
+		:config_use_high_frequency_coupling = "NO" ;
+		:config_boundary_layer_iteration_number = 5 ;
+		:config_use_ocean_mixed_layer = "NO" ;
+		:config_min_friction_velocity = 0.0005f ;
+		:config_ocean_heat_transfer_type = "constant" ;
+		:config_sea_freezing_temperature_type = "mushy" ;
+		:config_ocean_surface_type = "free" ;
+		:config_couple_biogeochemistry_fields = "NO" ;
+		:config_use_data_icebergs = "NO" ;
+		:config_check_state = "NO" ;
+		:config_prescribed_ice_stream_year_first = -999 ;
+		:config_prescribed_ice_stream_year_last = -999 ;
+		:config_prescribed_ice_model_year_align = -999 ;
+		:config_prescribed_ice_stream_fldvarname = "ice_cov" ;
+		:config_prescribed_ice_stream_fldfilename = "unset" ;
+		:config_prescribed_ice_stream_domtvarname = "time" ;
+		:config_prescribed_ice_stream_domxvarname = "xc" ;
+		:config_prescribed_ice_stream_domyvarname = "yc" ;
+		:config_prescribed_ice_stream_domareaname = "area" ;
+		:config_prescribed_ice_stream_dommaskname = "mask" ;
+		:config_prescribed_ice_stream_domfilename = "unset" ;
+		:config_prescribed_ice_stream_mapread = "NOT_SET" ;
+		:config_prescribed_ice_stream_fill = "NO" ;
+		:config_AM_highFrequencyOutput_enable = "NO" ;
+		:config_AM_highFrequencyOutput_compute_interval = "output_interval" ;
+		:config_AM_highFrequencyOutput_output_stream = "highFrequencyOutput" ;
+		:config_AM_highFrequencyOutput_compute_on_startup = "YES" ;
+		:config_AM_highFrequencyOutput_write_on_startup = "YES" ;
+		:config_AM_temperatures_enable = "NO" ;
+		:config_AM_temperatures_compute_interval = "dt" ;
+		:config_AM_temperatures_output_stream = "output" ;
+		:config_AM_temperatures_compute_on_startup = "YES" ;
+		:config_AM_temperatures_write_on_startup = "YES" ;
+		:config_AM_regionalStatistics_enable = "YES" ;
+		:config_AM_regionalStatistics_compute_interval = "0000-00-01_00:00:00" ;
+		:config_AM_regionalStatistics_output_stream = "regionalStatisticsOutput" ;
+		:config_AM_regionalStatistics_compute_on_startup = "YES" ;
+		:config_AM_regionalStatistics_write_on_startup = "YES" ;
+		:config_AM_regionalStatistics_ice_extent_limit = 0.15f ;
+		:config_AM_ridgingDiagnostics_enable = "YES" ;
+		:config_AM_ridgingDiagnostics_compute_interval = "dt" ;
+		:config_AM_ridgingDiagnostics_output_stream = "output" ;
+		:config_AM_ridgingDiagnostics_compute_on_startup = "YES" ;
+		:config_AM_ridgingDiagnostics_write_on_startup = "YES" ;
+		:config_AM_conservationCheck_enable = "NO" ;
+		:config_AM_conservationCheck_compute_interval = "dt" ;
+		:config_AM_conservationCheck_output_stream = "conservationCheckOutput" ;
+		:config_AM_conservationCheck_compute_on_startup = "NO" ;
+		:config_AM_conservationCheck_write_on_startup = "NO" ;
+		:config_AM_conservationCheck_write_to_logfile = "YES" ;
+		:config_AM_conservationCheck_restart_stream = "conservationCheckRestart" ;
+		:config_AM_geographicalVectors_enable = "YES" ;
+		:config_AM_geographicalVectors_compute_interval = "dt" ;
+		:config_AM_geographicalVectors_output_stream = "output" ;
+		:config_AM_geographicalVectors_compute_on_startup = "YES" ;
+		:config_AM_geographicalVectors_write_on_startup = "YES" ;
+		:config_AM_loadBalance_enable = "NO" ;
+		:config_AM_loadBalance_compute_interval = "output_interval" ;
+		:config_AM_loadBalance_output_stream = "loadBalanceOutput" ;
+		:config_AM_loadBalance_compute_on_startup = "YES" ;
+		:config_AM_loadBalance_write_on_startup = "YES" ;
+		:config_AM_loadBalance_nProcs = 32 ;
+		:config_AM_maximumIcePresence_enable = "NO" ;
+		:config_AM_maximumIcePresence_compute_interval = "dt" ;
+		:config_AM_maximumIcePresence_output_stream = "maximumIcePresenceOutput" ;
+		:config_AM_maximumIcePresence_compute_on_startup = "YES" ;
+		:config_AM_maximumIcePresence_write_on_startup = "YES" ;
+		:config_AM_maximumIcePresence_start_time = "0000-00-00_00:00:00" ;
+		:config_AM_miscellaneous_enable = "YES" ;
+		:config_AM_miscellaneous_compute_interval = "dt" ;
+		:config_AM_miscellaneous_output_stream = "none" ;
+		:config_AM_miscellaneous_compute_on_startup = "YES" ;
+		:config_AM_miscellaneous_write_on_startup = "YES" ;
+		:config_AM_areaVariables_enable = "YES" ;
+		:config_AM_areaVariables_compute_interval = "dt" ;
+		:config_AM_areaVariables_output_stream = "none" ;
+		:config_AM_areaVariables_compute_on_startup = "YES" ;
+		:config_AM_areaVariables_write_on_startup = "YES" ;
+		:config_AM_pondDiagnostics_enable = "YES" ;
+		:config_AM_pondDiagnostics_compute_interval = "dt" ;
+		:config_AM_pondDiagnostics_output_stream = "none" ;
+		:config_AM_pondDiagnostics_compute_on_startup = "YES" ;
+		:config_AM_pondDiagnostics_write_on_startup = "YES" ;
+		:config_AM_unitConversion_enable = "YES" ;
+		:config_AM_unitConversion_compute_interval = "dt" ;
+		:config_AM_unitConversion_output_stream = "none" ;
+		:config_AM_unitConversion_compute_on_startup = "NO" ;
+		:config_AM_unitConversion_write_on_startup = "NO" ;
+		:config_AM_pointwiseStats_enable = "NO" ;
+		:config_AM_pointwiseStats_compute_interval = "dt" ;
+		:config_AM_pointwiseStats_output_stream = "pointwiseStatsOutput" ;
+		:config_AM_pointwiseStats_compute_on_startup = "YES" ;
+		:config_AM_pointwiseStats_write_on_startup = "YES" ;
+		:config_AM_iceShelves_enable = "NO" ;
+		:config_AM_iceShelves_compute_interval = "output_interval" ;
+		:config_AM_iceShelves_output_stream = "iceShelvesOutput" ;
+		:config_AM_iceShelves_compute_on_startup = "YES" ;
+		:config_AM_iceShelves_write_on_startup = "YES" ;
+		:config_AM_icePresent_enable = "YES" ;
+		:config_AM_icePresent_compute_interval = "dt" ;
+		:config_AM_icePresent_output_stream = "none" ;
+		:config_AM_icePresent_compute_on_startup = "NO" ;
+		:config_AM_icePresent_write_on_startup = "NO" ;
+		:config_AM_timeSeriesStatsDaily_enable = "YES" ;
+		:config_AM_timeSeriesStatsDaily_compute_on_startup = "NO" ;
+		:config_AM_timeSeriesStatsDaily_write_on_startup = "NO" ;
+		:config_AM_timeSeriesStatsDaily_compute_interval = "dt" ;
+		:config_AM_timeSeriesStatsDaily_output_stream = "timeSeriesStatsDailyOutput" ;
+		:config_AM_timeSeriesStatsDaily_restart_stream = "timeSeriesStatsDailyRestart" ;
+		:config_AM_timeSeriesStatsDaily_operation = "avg" ;
+		:config_AM_timeSeriesStatsDaily_reference_times = "initial_time" ;
+		:config_AM_timeSeriesStatsDaily_duration_intervals = "repeat_interval" ;
+		:config_AM_timeSeriesStatsDaily_repeat_intervals = "reset_interval" ;
+		:config_AM_timeSeriesStatsDaily_reset_intervals = "00-00-01_00:00:00" ;
+		:config_AM_timeSeriesStatsDaily_backward_output_offset = "00-00-01_00:00:00" ;
+		:config_AM_timeSeriesStatsMonthly_enable = "YES" ;
+		:config_AM_timeSeriesStatsMonthly_compute_on_startup = "NO" ;
+		:config_AM_timeSeriesStatsMonthly_write_on_startup = "NO" ;
+		:config_AM_timeSeriesStatsMonthly_compute_interval = "0000-00-00_01:00:00" ;
+		:config_AM_timeSeriesStatsMonthly_output_stream = "timeSeriesStatsMonthlyOutput" ;
+		:config_AM_timeSeriesStatsMonthly_restart_stream = "none" ;
+		:config_AM_timeSeriesStatsMonthly_operation = "avg" ;
+		:config_AM_timeSeriesStatsMonthly_reference_times = "initial_time" ;
+		:config_AM_timeSeriesStatsMonthly_duration_intervals = "repeat_interval" ;
+		:config_AM_timeSeriesStatsMonthly_repeat_intervals = "reset_interval" ;
+		:config_AM_timeSeriesStatsMonthly_reset_intervals = "00-01-00_00:00:00" ;
+		:config_AM_timeSeriesStatsMonthly_backward_output_offset = "00-01-00_00:00:00" ;
+		:config_AM_timeSeriesStatsClimatology_enable = "NO" ;
+		:config_AM_timeSeriesStatsClimatology_compute_on_startup = "NO" ;
+		:config_AM_timeSeriesStatsClimatology_write_on_startup = "NO" ;
+		:config_AM_timeSeriesStatsClimatology_compute_interval = "00-00-00_01:00:00" ;
+		:config_AM_timeSeriesStatsClimatology_output_stream = "timeSeriesStatsClimatologyOutput" ;
+		:config_AM_timeSeriesStatsClimatology_restart_stream = "timeSeriesStatsClimatologyRestart" ;
+		:config_AM_timeSeriesStatsClimatology_operation = "avg" ;
+		:config_AM_timeSeriesStatsClimatology_reference_times = "00-01-01_00:00:00;00-04-01_00:00:00;00-07-01_00:00:00;00-10-01_00:00:00;00-03-01_00:00:00;00-06-01_00:00:00;00-09-01_00:00:00;00-12-01_00:00:00" ;
+		:config_AM_timeSeriesStatsClimatology_duration_intervals = "00-03-00_00:00:00;00-03-00_00:00:00;00-03-00_00:00:00;00-03-00_00:00:00;00-03-00_00:00:00;00-03-00_00:00:00;00-03-00_00:00:00;00-03-00_00:00:00" ;
+		:config_AM_timeSeriesStatsClimatology_repeat_intervals = "01-00-00_00:00:00;01-00-00_00:00:00;01-00-00_00:00:00;01-00-00_00:00:00;01-00-00_00:00:00;01-00-00_00:00:00;01-00-00_00:00:00;01-00-00_00:00:00" ;
+		:config_AM_timeSeriesStatsClimatology_reset_intervals = "10-00-00_00:00:00;10-00-00_00:00:00;10-00-00_00:00:00;10-00-00_00:00:00;10-00-00_00:00:00;10-00-00_00:00:00;10-00-00_00:00:00;10-00-00_00:00:00" ;
+		:config_AM_timeSeriesStatsClimatology_backward_output_offset = "00-03-00_00:00:00" ;
+		:config_AM_timeSeriesStatsCustom_enable = "NO" ;
+		:config_AM_timeSeriesStatsCustom_compute_on_startup = "NO" ;
+		:config_AM_timeSeriesStatsCustom_write_on_startup = "NO" ;
+		:config_AM_timeSeriesStatsCustom_compute_interval = "00-00-00_01:00:00" ;
+		:config_AM_timeSeriesStatsCustom_output_stream = "timeSeriesStatsCustomOutput" ;
+		:config_AM_timeSeriesStatsCustom_restart_stream = "timeSeriesStatsCustomRestart" ;
+		:config_AM_timeSeriesStatsCustom_operation = "avg" ;
+		:config_AM_timeSeriesStatsCustom_reference_times = "initial_time" ;
+		:config_AM_timeSeriesStatsCustom_duration_intervals = "repeat_interval" ;
+		:config_AM_timeSeriesStatsCustom_repeat_intervals = "reset_interval" ;
+		:config_AM_timeSeriesStatsCustom_reset_intervals = "00-00-07_00:00:00" ;
+		:config_AM_timeSeriesStatsCustom_backward_output_offset = "00-00-01_00:00:00" ;
+		:file_id = "2vn9t7m3mn" ;
+		:NCO = "netCDF Operators version 4.7.4 (http://nco.sf.net)" ;
+		:nco_openmp_thread_number = 1 ;
+		:remap_script = "ncremap" ;
+		:remap_command = "\'/blues/gpfs/home/software/spack-0.10.1/opt/spack/linux-centos7-x86_64/intel-17.0.4/nco-4.7.4-x4y66ep2ydoyegnckicvv5ljwrheniun/bin/ncremap -i /lcrc/group/acme/ac.szhang/acme_scratch/data/CVDP_RGD/v2.LR.historical/SE/v2.LR.historical.en00.SICONC.197901-201412.nc -m /lcrc/group/acme/ac.szhang/acme_scratch/data/regrid_maps/map_EC30to60E2r2_to_1.0x1.0degree_conserve.nc -o /lcrc/group/acme/ac.szhang/acme_scratch/data/CVDP_RGD/v2.LR.historical/v2.LR.historical.en00.SICONC.197901-201412.nc\'" ;
+		:remap_hostname = "b646" ;
+		:remap_version = "4.7.4" ;
+		:map_file = "/lcrc/group/acme/ac.szhang/acme_scratch/data/regrid_maps/map_EC30to60E2r2_to_1.0x1.0degree_conserve.nc" ;
+		:input_file = "/lcrc/group/acme/ac.szhang/acme_scratch/data/CVDP_RGD/v2.LR.historical/SE/v2.LR.historical.en00.SICONC.197901-201412.nc" ;
+}

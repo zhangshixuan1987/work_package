@@ -1,0 +1,14 @@
+CLDTOT,           CLDTOT,        fraction,                  1.,         1
+CLDLOW,           CLDLOW,        fraction,                  1.,         1 
+CLDHGH,           CLDHGH,        fraction,                  1.,         1 
+SWCF,             SWCRE,         W m~S~-2~N~,               1.,         2
+LWCF,             LWCRE,         W m~S~-2~N~,               1.,         3  
+NETCF,            CRE,           W m~S~-2~N~,               1.,         2
+FSNTOA,           FSNTOA,        W m~S~-2~N~,               1.,         2
+FLUT,             FLUT,          W m~S~-2~N~,               1.,         3
+PRECC,            PRECC,         mm day~S~-1~N~,     86400000.,         4 
+PRECL,            PRECL,         mm day~S~-1~N~,     86400000.,         4
+PRECT,            PRECT,         mm day~S~-1~N~,     86400000.,         4
+TGCLDLWP,         LWP,           g m~S~-2~N~,            1000.,         4
+TGCLDIWP,         IWP,           g m~S~-2~N~,            1000.,         4
+TS,               TS,            ~S~o~N~C,             -273.15,         5

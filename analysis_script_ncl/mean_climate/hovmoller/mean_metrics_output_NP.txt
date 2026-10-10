@@ -1,0 +1,6 @@
+PRECT(mm/day)  CLIM         TRMM            2.801   3.414   0.613   0.143   3.894   0.233   0.605   0.022
+PRECT(mm/day)  NDGUV        TRMM            2.801   3.262   0.461   0.085   2.502   0.087   0.829   0.008
+PRECT(mm/day)  NDGUVT       TRMM            2.801   3.260   0.459   0.039   2.265   0.072   0.859   0.006
+PRECT(mm/day)  NDGUVTQ      TRMM            2.801   2.601  -0.200   0.039   2.202   0.098   0.869   0.006
+PRECT(mm/day)  NDGUVTQ_SRF1 TRMM            2.801   2.772  -0.028   0.230   2.171   0.092   0.871   0.007
+PRECT(mm/day)  NDGUVTQ_SRF2 TRMM            2.801   2.838   0.037   0.195   2.165   0.089   0.870   0.006
