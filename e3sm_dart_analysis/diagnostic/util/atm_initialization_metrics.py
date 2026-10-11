@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Sequence, Optional
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import BoundaryNorm
+from matplotlib.ticker import MaxNLocator
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -109,17 +111,6 @@ def extract_exp_info(
             "da_run": {
                 "run_id": "f.e21.FHIST_BGC.f09_025.CAM6assim.011", "name": "DARTEN40", "period": "201112-201112",
                 "compset": "F20TR", "obs_diag": ["obs_seq", "obs_diag", "obs_common", "closest_member"],
-            },
-            "fc_run": None,
-            "wc_run": None,
-        },
-        "DART40INF0p6-S0": {
-            "nens": 40,
-            "key": "dart_en40",
-            # can treat 'alia' as documentation-only for now
-            "da_run": {
-                "compset": "F20TR", "name": "DARTEN40_INF0p6", "alia": "DARTEN40", "period": "201112-201112",
-                "obs_diag": ["obs_seq", "obs_diag", "obs_common", "closest_member"],
             },
             "fc_run": None,
             "wc_run": None,
@@ -214,6 +205,28 @@ def extract_exp_info(
         }
 
     return exp_dict
+class InvalidSpreadFile(ValueError):
+    """A remapped *_sd file that was not built with the corrected spread remap."""
+
+
+def check_spread_file(path):
+    """Reject remapped *_sd files built before the spread-remap fix.
+
+    Corrected files carry PS_ENSMEAN (the ensemble-mean surface pressure used
+    for the vertical interpolation). Older files interpolated with the PS
+    spread as surface pressure and are invalid below ~100 hPa; one CAM6 file
+    (CAM6-S0 2011-12-31 18Z, no native source) even holds ensemble-mean values.
+    """
+    with xr.open_dataset(path) as dataset:
+        if "PS_ENSMEAN" not in dataset.variables:
+            raise InvalidSpreadFile(
+                f"{os.path.basename(path)} lacks PS_ENSMEAN: not built with the corrected "
+                "spread remap (regenerate it, or skip this cycle)"
+            )
+
+
+
+
 class DartAssimOutput:
     """
     Read, analyze, and plot DART data assimilation outputs for one experiment
@@ -272,11 +285,31 @@ class DartAssimOutput:
             raise FileNotFoundError(post_sd_path)
 
         prior_mean = xr.open_dataset(prior_mean_path)
-        prior_sd   = xr.open_dataset(prior_sd_path)
+        prior_sd   = cls._open_spread(prior_sd_path, prior_mean)
         post_mean  = xr.open_dataset(post_mean_path)
-        post_sd    = xr.open_dataset(post_sd_path)
+        post_sd    = cls._open_spread(post_sd_path, post_mean)
 
         return cls(exp_name, timestamp, prior_mean, prior_sd, post_mean, post_sd)
+
+    @staticmethod
+    def _open_spread(path, mean_dataset):
+        """Open a remapped *_sd file; an invalid one is treated as missing.
+
+        The returned stand-in has the mean file's structure with every
+        floating-point field set to NaN, so spread-based metrics for this
+        cycle are missing while mean-based metrics are still derived.
+        """
+        try:
+            check_spread_file(path)
+        except InvalidSpreadFile as error:
+            print(f"[MISSING SPREAD] {error}; spread-based metrics for this cycle are NaN.")
+            missing = mean_dataset.copy()
+            for name, field in missing.data_vars.items():
+                if np.issubdtype(field.dtype, np.floating):
+                    missing[name] = field * np.nan
+            missing.attrs["missing_spread"] = f"invalid source: {os.path.basename(path)}"
+            return missing
+        return xr.open_dataset(path)
 
     # ------------------------------------------------------------------
     # Small helpers for coordinates and region
@@ -1008,6 +1041,16 @@ def plot_cached_maps(
     return fig
 
 
+def _area_weighted_mean(field, latitude_name):
+    """Cosine-latitude-weighted mean over finite grid cells."""
+    weights = np.cos(np.deg2rad(field[latitude_name])).broadcast_like(field)
+    valid = np.isfinite(field)
+    total = float(weights.where(valid).sum())
+    if total <= 0.0:
+        return np.nan
+    return float((field * weights).where(valid).sum()) / total
+
+
 def plot_combined_cached_maps(
     datasets,
     requests,
@@ -1018,12 +1061,22 @@ def plot_combined_cached_maps(
     title="",
     figsize=(16, 15),
     font_size=18,
+    vmax_percentile=99.0,
+    cmap="viridis",
+    missing_color="0.85",
+    show_area_mean=True,
 ):
     """Plot variable rows by experiment columns with one color scale per row.
 
     ``datasets`` is keyed by ``(variable, level)`` and then experiment. Each
     dataset must contain a two-dimensional ``metric`` field. Plot-only scale
     factors and units are supplied by the corresponding request dictionaries.
+
+    Each row's upper color limit is the ``vmax_percentile`` of all finite
+    values in that row (``None`` uses the maximum); larger values saturate and
+    the colorbar is extended. Missing cells, such as pressure surfaces below
+    terrain, are drawn in ``missing_color``. When ``show_area_mean`` is true,
+    each panel is annotated with its cosine-latitude-weighted mean.
     """
     if not requests:
         raise ValueError("At least one combined-map request is required.")
@@ -1039,6 +1092,7 @@ def plot_combined_cached_maps(
         squeeze=False,
         layout="constrained",
     )
+    colormap = plt.get_cmap(cmap)
 
     panel_index = 0
     for row, request in enumerate(requests):
@@ -1052,19 +1106,26 @@ def plot_combined_cached_maps(
             experiment: datasets[request_key][experiment]["metric"] * scale
             for experiment in experiments
         }
-        finite_maxima = []
-        for field in fields.values():
-            values = np.asarray(field.values, dtype=float)
-            finite = values[np.isfinite(values)]
-            if finite.size:
-                finite_maxima.append(float(finite.max()))
-        maximum = max(finite_maxima) if finite_maxima else 1.0
+        row_values = np.concatenate([
+            np.asarray(field.values, dtype=float).ravel()
+            for field in fields.values()
+        ])
+        row_values = row_values[np.isfinite(row_values)]
+        if row_values.size:
+            row_maximum = float(row_values.max())
+            maximum = (
+                row_maximum if vmax_percentile is None
+                else float(np.percentile(row_values, vmax_percentile))
+            )
+        else:
+            row_maximum = maximum = 1.0
         if maximum <= 0.0:
-            maximum = 1.0
+            maximum = row_maximum if row_maximum > 0.0 else 1.0
 
         row_image = None
         for column, experiment in enumerate(experiments):
             axis = axes[row, column]
+            axis.set_facecolor(missing_color)
             field = fields[experiment].squeeze(drop=True)
             latitude_name = next(
                 dim for dim in field.dims if dim.lower().startswith("lat")
@@ -1082,7 +1143,7 @@ def plot_combined_cached_maps(
                 field.values,
                 shading="auto",
                 transform=projection,
-                cmap="viridis",
+                cmap=colormap,
                 vmin=0.0,
                 vmax=maximum,
                 rasterized=True,
@@ -1116,30 +1177,56 @@ def plot_combined_cached_maps(
                 fontweight="normal",
                 fontsize=0.78 * font_size,
             )
-            experiment_label = (
-                label_map.get(experiment, experiment) if label_map else experiment
-            )
-            axis.set_title(
-                experiment_label,
-                loc="right",
-                fontweight="normal",
-                fontsize=0.78 * font_size,
-            )
+            if show_area_mean:
+                area_mean = _area_weighted_mean(field, latitude_name)
+                axis.set_title(
+                    f"mean {area_mean:.2f}",
+                    loc="right",
+                    fontweight="normal",
+                    fontsize=0.70 * font_size,
+                )
+            if row == 0:
+                experiment_label = (
+                    label_map.get(experiment, experiment)
+                    if label_map else experiment
+                )
+                axis.annotate(
+                    experiment_label,
+                    xy=(0.5, 1.0),
+                    xycoords="axes fraction",
+                    xytext=(0, 1.6 * font_size),
+                    textcoords="offset points",
+                    ha="center",
+                    va="bottom",
+                    fontsize=0.90 * font_size,
+                    fontweight="bold",
+                )
+            if column == 0:
+                axis.annotate(
+                    request.get("label", variable),
+                    xy=(0.0, 0.5),
+                    xycoords="axes fraction",
+                    xytext=(-3.2 * font_size, 0),
+                    textcoords="offset points",
+                    ha="right",
+                    va="center",
+                    rotation=90,
+                    fontsize=0.90 * font_size,
+                    fontweight="bold",
+                )
 
         if row_image is not None:
             unit = request.get("unit", "")
-            request_label = request.get("label", variable)
-            colorbar_label = f"{request_label} increment RMS"
-            if unit:
-                colorbar_label += f" ({unit})"
             colorbar = figure.colorbar(
                 row_image,
                 ax=axes[row, :].tolist(),
                 orientation="vertical",
-                shrink=0.80,
+                shrink=0.85,
                 pad=0.015,
+                extend="max" if row_maximum > maximum else "neither",
             )
-            colorbar.set_label(colorbar_label, fontsize=0.72 * font_size)
+            if unit:
+                colorbar.set_label(unit, fontsize=0.72 * font_size)
             colorbar.ax.tick_params(labelsize=0.65 * font_size)
 
     if title:
@@ -1466,15 +1553,374 @@ def cache_increment_cross_section(
     return dataset
 
 
+def increment_zonal_mean_square_cache_path(
+    cache_dir, experiment, timestamp, variable
+):
+    """Return the per-cycle zonal-mean squared-increment cache path."""
+    return Path(cache_dir) / (
+        f"{experiment}_{timestamp}_zonal-section_{variable}_"
+        "increment-mean-square-hpa.nc"
+    )
+
+
+def derive_increment_zonal_mean_square(dao, variable, lat_range, lon_range):
+    """Derive the zonal mean of the squared analysis increment.
+
+    Returns a ``metric`` field on (pressure in hPa, latitude). Cells where the
+    pressure surface lies below terrain are missing and excluded from the
+    zonal mean; ``valid_fraction`` records the fraction of longitudes used.
+    The square is kept (not its root) so cycles can be averaged before the
+    window RMS is taken.
+    """
+    prior = dao.subset_region(dao.prior_mean[[variable]], lat_range, lon_range)
+    posterior = dao.subset_region(dao.post_mean[[variable]], lat_range, lon_range)
+    prior, posterior = xr.align(prior, posterior, join="inner")
+
+    level_name = dao._guess_lev_name(posterior)
+    if level_name is None:
+        raise ValueError(f"{variable} has no vertical coordinate.")
+    latitude_name = dao._guess_lat_name(posterior)
+    longitude_name = dao._guess_lon_name(posterior)
+
+    squared = (posterior[variable] - prior[variable]) ** 2
+    extra_dimensions = [
+        dimension for dimension in squared.dims
+        if dimension not in (level_name, latitude_name, longitude_name)
+    ]
+    if extra_dimensions:
+        squared = squared.mean(extra_dimensions, skipna=True)
+    valid_fraction = np.isfinite(squared).mean(longitude_name)
+    zonal_mean = squared.mean(longitude_name, skipna=True)
+
+    dataset = xr.Dataset({
+        "metric": zonal_mean.transpose(level_name, latitude_name),
+        "valid_fraction": valid_fraction.transpose(level_name, latitude_name),
+    })
+    level_values = np.asarray(dataset[level_name].values, dtype=float)
+    level_units = str(dataset[level_name].attrs.get("units", "")).lower()
+    if level_units in {"pa", "pascal", "pascals"} or np.nanmax(level_values) > 2000:
+        dataset = dataset.assign_coords({level_name: dataset[level_name] / 100.0})
+    dataset[level_name].attrs.update({"long_name": "Pressure", "units": "hPa"})
+    dataset.attrs.update({
+        "experiment": dao.name,
+        "analysis_time": dao.analysis_time,
+        "variable": variable,
+        "metric": "increment_zonal_mean_square",
+        "product_type": "zonal_mean_section",
+    })
+    return dataset
+
+
+def cache_increment_zonal_mean_square(
+    path, dao, variable, lat_range, lon_range, force_compute=False,
+):
+    """Load a zonal-mean squared-increment cache, deriving it when required."""
+    path = Path(path)
+    if path.exists() and not force_compute:
+        return xr.load_dataset(path)
+    dataset = derive_increment_zonal_mean_square(
+        dao, variable, lat_range, lon_range
+    )
+    _atomic_to_netcdf(dataset, path)
+    return dataset
+
+
+def _global_rms_from_map(rms_field, latitude_name):
+    """Cosine-latitude-weighted global RMS of a gridpoint RMS map."""
+    return float(np.sqrt(_area_weighted_mean(rms_field ** 2, latitude_name)))
+
+
+def _global_rms_from_section(mean_square, level_name, latitude_name):
+    """Mass-weighted (cos-latitude x layer thickness) RMS of a zonal section."""
+    pressure = np.asarray(mean_square[level_name].values, dtype=float)
+    thickness = np.abs(np.gradient(pressure))
+    weights = (
+        xr.DataArray(thickness, dims=[level_name], coords={level_name: pressure})
+        * np.cos(np.deg2rad(mean_square[latitude_name]))
+    ).broadcast_like(mean_square)
+    valid = np.isfinite(mean_square)
+    total = float(weights.where(valid).sum())
+    if total <= 0.0:
+        return np.nan
+    return float(np.sqrt(float((mean_square * weights).where(valid).sum()) / total))
+
+
+SECTION_PRESSURE_TICKS_HPA = (1000, 700, 500,300, 200, 100, 50, 30, 20, 10, 5, 2, 1)
+
+
+def _format_pressure_axis(axis, bottom, top, log_pressure=True):
+    """Orient a pressure (hPa) axis from ``bottom`` (surface) up to ``top``."""
+    if log_pressure:
+        axis.set_yscale("log")
+        axis.set_yticks([
+            tick for tick in SECTION_PRESSURE_TICKS_HPA
+            if top <= tick <= bottom
+        ])
+        axis.yaxis.set_major_formatter(plt.FuncFormatter(lambda value, _: f"{value:g}"))
+        axis.yaxis.set_minor_locator(plt.NullLocator())
+    axis.set_ylim(bottom, top)
+
+
+def plot_map_and_zonal_sections(
+    map_datasets,
+    map_request,
+    section_datasets,
+    section_requests,
+    experiments,
+    lat_range,
+    lon_range,
+    label_map=None,
+    title="",
+    figsize=(16, 17),
+    font_size=18,
+    pressure_top=100.0,
+    log_pressure=False,
+    vmax_percentile=99.0,
+    cmap="YlGnBu",
+    missing_color="0.85",
+    color_bins=10,
+    show_global_rms=True,
+    gap_before=None,
+    gap_width=0.12,
+):
+    """Plot an RMS map row above zonal-mean RMS section rows.
+
+    ``map_datasets`` is keyed by experiment and holds a gridpoint RMS
+    ``metric`` map. ``section_datasets`` is keyed by variable and then
+    experiment and holds a window-mean squared increment ``metric`` on
+    (pressure, latitude); its square root is plotted. Each row shares one
+    discrete color scale of about ``color_bins`` round-valued intervals
+    whose top covers the ``vmax_percentile`` of that row; larger values
+    saturate and the colorbar is extended.
+    With ``show_global_rms``, panels are annotated with the area-weighted
+    (map) or mass-weighted (section, below ``pressure_top``) global RMS.
+    With ``log_pressure``, section rows use a logarithmic pressure axis.
+    ``gap_before`` (a column index) inserts an empty spacer column of relative
+    width ``gap_width`` before that column, e.g. to set apart another period.
+    """
+    if not experiments:
+        raise ValueError("At least one experiment is required.")
+    colormap = plt.get_cmap(cmap)
+    projection = ccrs.PlateCarree()
+    n_rows = 1 + len(section_requests)
+    n_columns = len(experiments)
+    figure = plt.figure(figsize=figsize, layout="constrained")
+    width_ratios = [1.0] * n_columns
+    if gap_before is not None:
+        if not 0 < gap_before < n_columns:
+            raise ValueError("gap_before must index an interior column.")
+        width_ratios.insert(gap_before, gap_width)
+    grid = figure.add_gridspec(
+        n_rows, len(width_ratios),
+        height_ratios=[1.0] + [1.05] * len(section_requests),
+        width_ratios=width_ratios,
+    )
+
+    def _grid_column(column):
+        """Gridspec column for a panel column, skipping the spacer."""
+        return column + (gap_before is not None and column >= gap_before)
+
+    def _row_scale(values):
+        """Return round color levels, a norm, and the colorbar extend mode."""
+        values = np.concatenate([np.asarray(v, dtype=float).ravel() for v in values])
+        values = values[np.isfinite(values)]
+        row_maximum = float(values.max()) if values.size else 1.0
+        maximum = (
+            row_maximum if vmax_percentile is None or not values.size
+            else float(np.percentile(values, vmax_percentile))
+        )
+        if maximum <= 0.0:
+            maximum = row_maximum if row_maximum > 0.0 else 1.0
+        levels = MaxNLocator(nbins=color_bins).tick_values(0.0, maximum)
+        levels = levels[levels >= 0.0]
+        if levels[-1] < maximum:
+            levels = np.append(levels, 2 * levels[-1] - levels[-2])
+        extend = "max" if row_maximum > levels[-1] else "neither"
+        norm = BoundaryNorm(levels, colormap.N, extend=extend)
+        return levels, norm, extend
+
+    def _annotate(axis, row, column, row_label, value, unit=""):
+        """Titles "(a) EXPERIMENT" / "(VAR)"; global RMS boxed inside the panel."""
+        panel_letter = chr(ord("a") + row * n_columns + column)
+        experiment = experiments[column]
+        experiment_label = (
+            label_map.get(experiment, experiment) if label_map else experiment
+        )
+        axis.set_title(
+            f"({panel_letter}) {experiment_label}",
+            loc="left", fontsize=0.72 * font_size,
+        )
+        axis.set_title(f"({row_label})", loc="right", fontsize=0.72 * font_size)
+        if show_global_rms and np.isfinite(value):
+            # Map: bottom-left corner; sections: upper left (quiet
+            # stratosphere, away from the near-surface Q signal).
+            x, y, ha, va = (
+                (0.02, 0.06, "left", "bottom") if row == 0
+                else (0.02, 0.96, "left", "top")
+            )
+            axis.text(
+                x, y,
+                f"Mean: {value:.2f}" + (f" {unit}" if unit else ""),
+                transform=axis.transAxes, ha=ha, va=va,
+                fontsize=0.62 * font_size, zorder=10,
+                bbox={
+                    "boxstyle": "round,pad=0.25", "facecolor": "none",
+                    "edgecolor": "0.6", "linewidth": 0.6,
+                },
+            )
+
+    # Row 0: horizontal RMS map.
+    scale = float(map_request.get("scale", 1.0))
+    map_fields = {
+        experiment: (map_datasets[experiment]["metric"] * scale).squeeze(drop=True)
+        for experiment in experiments
+    }
+    levels, norm, extend = _row_scale(f.values for f in map_fields.values())
+    map_axes = []
+    image = None
+    for column, experiment in enumerate(experiments):
+        axis = figure.add_subplot(grid[0, _grid_column(column)], projection=projection)
+        map_axes.append(axis)
+        axis.set_facecolor(missing_color)
+        field = map_fields[experiment]
+        latitude_name = next(d for d in field.dims if d.lower().startswith("lat"))
+        longitude_name = next(d for d in field.dims if d.lower().startswith("lon"))
+        image = axis.pcolormesh(
+            field[longitude_name].values, field[latitude_name].values,
+            field.values, shading="auto", transform=projection,
+            cmap=colormap, norm=norm, rasterized=True,
+        )
+        axis.coastlines(linewidth=0.7)
+        axis.set_extent(
+            [lon_range[0], lon_range[1], lat_range[0], lat_range[1]],
+            crs=projection,
+        )
+        gridlines = axis.gridlines(
+            draw_labels=True, linewidth=0.4, color="0.5", alpha=0.4,
+            linestyle="--", x_inline=False, y_inline=False,
+        )
+        gridlines.top_labels = False
+        gridlines.right_labels = False
+        gridlines.left_labels = column == 0
+        gridlines.xlabel_style = {"size": 0.65 * font_size}
+        gridlines.ylabel_style = {"size": 0.65 * font_size}
+        _annotate(
+            axis, 0, column, map_request.get("label", map_request["variable"]),
+            _global_rms_from_map(field, latitude_name),
+            map_request.get("unit", ""),
+        )
+    colorbar = figure.colorbar(
+        image, ax=map_axes, orientation="vertical", shrink=0.85, pad=0.015,
+        extend=extend, ticks=levels[::2],
+    )
+    colorbar.set_label(map_request.get("unit", ""), fontsize=0.72 * font_size)
+    colorbar.ax.tick_params(labelsize=0.65 * font_size)
+
+    # Rows 1..: zonal-mean RMS sections.
+    shared_axis = None
+    for row, request in enumerate(section_requests, start=1):
+        variable = request["variable"]
+        if variable not in section_datasets:
+            raise KeyError(f"Missing section request {variable}.")
+        scale = float(request.get("scale", 1.0))
+        fields = {}
+        for experiment in experiments:
+            mean_square = section_datasets[variable][experiment]["metric"]
+            level_name = next(
+                d for d in mean_square.dims if d.lower() in ("lev", "plev", "level")
+            )
+            mean_square = mean_square.where(
+                mean_square[level_name] >= pressure_top, drop=True
+            ) * scale ** 2
+            fields[experiment] = (mean_square, level_name)
+        levels, norm, extend = _row_scale(
+            np.sqrt(ms.values) for ms, _ in fields.values()
+        )
+        row_axes = []
+        image = None
+        for column, experiment in enumerate(experiments):
+            axis = figure.add_subplot(
+                grid[row, _grid_column(column)],
+                sharex=shared_axis, sharey=shared_axis,
+            )
+            shared_axis = shared_axis or axis
+            row_axes.append(axis)
+            axis.set_facecolor(missing_color)
+            mean_square, level_name = fields[experiment]
+            latitude_name = next(
+                d for d in mean_square.dims if d.lower().startswith("lat")
+            )
+            rms = np.sqrt(mean_square)
+            image = axis.contourf(
+                rms[latitude_name].values, rms[level_name].values, rms.values,
+                levels=levels, cmap=colormap, norm=norm, extend=extend,
+            )
+            axis.contour(
+                rms[latitude_name].values, rms[level_name].values, rms.values,
+                levels=levels[2::2], colors="k", linewidths=0.4, alpha=0.5,
+            )
+            axis.set_xlim(lat_range[0], lat_range[1])
+            _format_pressure_axis(
+                axis, float(rms[level_name].max()), pressure_top, log_pressure
+            )
+            axis.set_xticks(np.arange(-90, 91, 30))
+            axis.xaxis.set_major_formatter(plt.FuncFormatter(
+                lambda value, _: (
+                    "EQ" if value == 0
+                    else f"{abs(value):.0f}°{'N' if value > 0 else 'S'}"
+                )
+            ))
+            axis.grid(color="0.5", alpha=0.3, linestyle="--", linewidth=0.4)
+            axis.tick_params(labelsize=0.65 * font_size)
+            if column == 0:
+                axis.set_ylabel("Pressure (hPa)", fontsize=0.72 * font_size)
+            else:
+                axis.tick_params(labelleft=False)
+            if row != n_rows - 1:
+                axis.tick_params(labelbottom=False)
+            _annotate(
+                axis, row, column, request.get("label", variable),
+                _global_rms_from_section(mean_square, level_name, latitude_name),
+                request.get("unit", ""),
+            )
+        colorbar = figure.colorbar(
+            image, ax=row_axes, orientation="vertical", shrink=0.85, pad=0.015,
+            ticks=levels[::2],
+        )
+        colorbar.set_label(request.get("unit", ""), fontsize=0.72 * font_size)
+        colorbar.ax.tick_params(labelsize=0.65 * font_size)
+
+    if title:
+        figure.suptitle(title, fontsize=font_size)
+    return figure
+
+
 def plot_cached_increment_cross_sections(
     datasets, variable, increment_mode="absolute", label_map=None, title="",
+    pressure_top=None, log_pressure=False,
 ):
-    """Plot spatial sections of increment and posterior/prior spread ratio."""
+    """Plot spatial sections of increment and posterior/prior spread ratio.
+
+    ``pressure_top`` (hPa) drops levels above it before color limits are set;
+    ``log_pressure`` uses a logarithmic pressure axis.
+    """
     if increment_mode not in {"signed", "absolute"}:
         raise ValueError("increment_mode must be signed or absolute.")
     experiment_names = list(datasets)
     if not experiment_names:
         raise ValueError("datasets is empty; nothing to plot.")
+    if pressure_top is not None:
+        trimmed = {}
+        for name in experiment_names:
+            dataset = datasets[name]
+            level_name = next(
+                dimension for dimension in dataset["increment"].dims
+                if dimension.lower() in ("lev", "plev", "level")
+            )
+            trimmed[name] = dataset.where(
+                dataset[level_name] >= pressure_top, drop=True
+            )
+        datasets = trimmed
 
     fields_by_column = {
         key: [datasets[name][key] for name in experiment_names]
@@ -1525,7 +1971,11 @@ def plot_cached_increment_cross_sections(
                     else None
                 ),
             )
-            axis.invert_yaxis()
+            levels_hpa = field[level_name].values
+            _format_pressure_axis(
+                axis, float(np.max(levels_hpa)), float(np.min(levels_hpa)),
+                log_pressure,
+            )
             axis.set_xlabel(horizontal_name)
             level_units = field[level_name].attrs.get("units", "")
             axis.set_ylabel(

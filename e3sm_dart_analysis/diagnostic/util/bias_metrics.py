@@ -9,19 +9,24 @@ from pathlib import Path
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import xarray as xr
 import xskillscore as xs
 
 from util.array_stats import nanquantile
 
 
+# "da_source": model series used for analysis (da) runs. State variables that
+# DART updates (T, Q, PS) or that follow from them are read at the analysis
+# times (6hourly_da); flux/process variables, which are not representative at
+# the first model step (e.g. PRECT is ~1/3 too low), use the 6-h forecast means.
 ATM_VARIABLES = {
-    "FLUT": {"reference": "CERES-OAFlux", "candidates": ["FLUT", "OLR"], "units": "W m-2"},
-    "PRECT": {"reference": "GPCP", "candidates": ["PRECT", "pr", "precip"], "units": "mm day-1"},
-    "TMQ": {"reference": "ERA5", "candidates": ["TMQ", "tcwv"], "units": "kg m-2"},
-    "TS": {"reference": "ERA5", "candidates": ["TS", "skt", "skin_temperature"], "units": "degC"},
-    "TREFHT": {"reference": "ERA5", "candidates": ["TREFHT", "t2m"], "units": "degC"},
-    "PSL": {"reference": "ERA5", "candidates": ["PSL", "msl"], "units": "hPa"},
+    "FLUT": {"reference": "CERES-OAFlux", "candidates": ["FLUT", "OLR"], "units": "W m-2", "da_source": "6hourly"},
+    "PRECT": {"reference": "GPCP", "candidates": ["PRECT", "pr", "precip"], "units": "mm day-1", "da_source": "6hourly"},
+    "TMQ": {"reference": "ERA5", "candidates": ["TMQ", "tcwv"], "units": "kg m-2", "da_source": "6hourly_da"},
+    "TS": {"reference": "ERA5", "candidates": ["TS", "skt", "skin_temperature"], "units": "degC", "da_source": "6hourly_da"},
+    "TREFHT": {"reference": "ERA5", "candidates": ["TREFHT", "t2m"], "units": "degC", "da_source": "6hourly_da"},
+    "PSL": {"reference": "ERA5", "candidates": ["PSL", "msl"], "units": "hPa", "da_source": "6hourly_da"},
 }
 
 LND_VARIABLES = {
@@ -135,7 +140,10 @@ def _convert_units(data, variable, target_units, *, is_reference=False, referenc
         if "k" in source_units or (data.size and float(data.mean(skipna=True).compute()) > 100.0):
             data = data - 273.15
     elif target_units == "hPa":
-        if "pa" in source_units and "hpa" not in source_units:
+        if ("pa" in source_units and "hpa" not in source_units) or (
+            not source_units and data.size
+            and float(abs(data).mean(skipna=True).compute()) > 2000.0
+        ):
             data = data * 0.01
     elif variable == "PRECT" and target_units == "mm day-1":
         if not (is_reference and reference == "GPCP") and ("s-1" in source_units or "s**-1" in source_units or source_units in {"m/s", "m s-1"}):
@@ -171,12 +179,38 @@ def _open_files(files):
     return xr.open_mfdataset(files, combine="by_coords", parallel=True, chunks={})
 
 
-def read_model_ensemble(data_root, experiment, season, run_segment, component, variable, period=None, lat_range=(-90, 90), lon_range=(-180, 180), max_members=None):
-    """Read monthly climatology files beneath each EN## member directory."""
+MODEL_SOURCES = ("clim", "6hourly", "6hourly_da", "daily")
+
+
+def default_model_source(component, run_segment, variable=None):
+    """Model input used when a caller does not choose one.
+
+    Analysis (``da``) runs are restarted every 6-h cycle, so their ``h0``
+    "monthly" files only average the final cycle. Atmosphere analyses use the
+    6-hourly series instead: the analysis-time values (``6hourly_da``) for
+    state variables and the 6-h forecast (``6hourly``) for flux/process
+    variables, per ``ATM_VARIABLES[variable]["da_source"]``.
+    """
+    if component == "atm" and run_segment == "da":
+        return ATM_VARIABLES.get(variable, {}).get("da_source", "6hourly")
+    return "clim"
+
+
+def read_model_ensemble(data_root, experiment, season, run_segment, component, variable, period=None, lat_range=(-90, 90), lon_range=(-180, 180), max_members=None, source=None):
+    """Read monthly-mean member fields beneath each EN## member directory.
+
+    ``source`` selects the post-processed input: ``"clim"`` (monthly ``h0``
+    files) or a time-series directory (``"6hourly"``, ``"6hourly_da"``,
+    ``"daily"``) that is averaged to calendar months. ``None`` uses
+    :func:`default_model_source`.
+    """
     registry = experiment_registry(data_root, season, run_segment)
     if experiment not in registry:
         raise ValueError(f"{experiment!r} is unavailable; choose from {list(registry)}")
-    config = registry[experiment]
+    source = source or default_model_source(component, run_segment, variable)
+    if source not in MODEL_SOURCES:
+        raise ValueError(f"source must be one of {MODEL_SOURCES}")
+    config = dict(registry[experiment], model_source=source)
     period = period or config["period"]
     variable_config = (ATM_VARIABLES if component == "atm" else LND_VARIABLES)[variable]
     count = config["nens"] if max_members is None else min(max_members, config["nens"])
@@ -184,7 +218,8 @@ def read_model_ensemble(data_root, experiment, season, run_segment, component, v
     opened = []
     try:
         for member_number in range(1, count + 1):
-            members.append(_lazy_member_field(
+            reader = _lazy_member_field if source == "clim" else _lazy_member_series_field
+            members.append(reader(
                 config, member_number, component, variable, variable_config,
                 period, lat_range, lon_range, opened,
             ))
@@ -193,7 +228,40 @@ def read_model_ensemble(data_root, experiment, season, run_segment, component, v
     finally:
         for dataset in opened:
             dataset.close()
+    ensemble.attrs["model_source"] = source
     return ensemble, config
+
+
+def _select_member_variable(dataset, variable, variable_config, source_file):
+    """Return ``variable`` (or PRECC+PRECL for PRECT) with its units kept."""
+    if variable not in dataset:
+        if variable == "PRECT" and {"PRECC", "PRECL"} <= set(dataset):
+            field = dataset["PRECC"] + dataset["PRECL"]
+            field.attrs = dict(dataset["PRECC"].attrs)
+            return field
+        raise KeyError(f"{variable} not found in {source_file}")
+    return _reduce_land_variable(dataset, variable, variable_config.get("reducer"))
+
+
+def _check_month_coverage(dataset, source_file, month_key):
+    """Reject ``h0`` files whose time bounds do not span their month.
+
+    Cycled analysis runs write an ``h0`` file that averages only the last
+    restart segment (e.g. the final 6 h of the month).
+    """
+    bounds_name = next(
+        (name for name in ("time_bnds", "time_bounds") if name in dataset), None
+    )
+    if bounds_name is None:
+        return
+    bounds = dataset[bounds_name].values.ravel()
+    span_days = (bounds.max() - bounds.min()) / np.timedelta64(1, "D")
+    if span_days < 25:
+        raise ValueError(
+            f"{source_file} averages only {span_days * 24:.1f} h of month "
+            f"{month_key}, not the whole month. Use a time-series source "
+            f"(e.g. source='6hourly') for cycled analysis runs."
+        )
 
 
 def _lazy_member_field(config, member_number, component, variable, variable_config, period, lat_range, lon_range, opened):
@@ -215,21 +283,71 @@ def _lazy_member_field(config, member_number, component, variable, variable_conf
     for monthly_file, month_key in files:
         dataset = xr.open_dataset(monthly_file, chunks={})
         opened.append(dataset)
-        if variable not in dataset:
-            if variable == "PRECT" and {"PRECC", "PRECL"} <= set(dataset):
-                field = dataset["PRECC"] + dataset["PRECL"]
-            else:
-                raise KeyError(f"{variable} not found in {monthly_file}")
-        else:
-            field = _reduce_land_variable(
-                dataset, variable, variable_config.get("reducer")
-            )
+        _check_month_coverage(dataset, monthly_file, month_key)
+        field = _select_member_variable(dataset, variable, variable_config, monthly_file)
         if "time" in field.dims:
-            field = field.mean("time", skipna=True)
+            # keep_attrs: _convert_units relies on the "units" attribute.
+            field = field.mean("time", skipna=True, keep_attrs=True)
         field = _subset_region(field, lat_range, lon_range)
         field = _convert_units(field, variable, variable_config["units"])
         monthly_fields.append(field.reset_coords(drop=True).expand_dims(time=[month_key]))
     return xr.concat(monthly_fields, dim="time").expand_dims(ens=[member])
+
+
+def _lazy_member_series_field(config, member_number, component, variable, variable_config, period, lat_range, lon_range, opened):
+    """Average one member's sub-monthly time series to calendar months."""
+    member = f"EN{member_number:02d}"
+    source = config["model_source"]
+    series_dir = config["path"] / member / "archive/post" / component / "180x360_aave/ts" / source
+    y0, m0, y1, m1, years = _period_years(period)
+    names = [variable] + (["PRECC", "PRECL"] if variable == "PRECT" else [])
+    files = []
+    for year in years:
+        for name in names:
+            path = series_dir / f"{name}.{member}.{year}.nc"
+            if path.is_file():
+                files.append(path)
+                break
+        else:
+            raise FileNotFoundError(f"No {variable} {source} series for {year} in {series_dir}")
+    dataset = _open_files(files)
+    opened.append(dataset)
+    field = _select_member_variable(dataset, variable, variable_config, files[0])
+    # Assign each record to the restart cycle it came from (time-bounds lower
+    # edge): 6-h means and instantaneous fields are stamped at the cycle end,
+    # which puts the last cycle of a month into the next month.
+    cycle_start = field.time
+    if "time_bnds" in dataset:
+        bounds = dataset["time_bnds"]
+        cycle_start = bounds.isel({bounds.dims[-1]: 0}).reset_coords(drop=True).compute()
+        if source == "6hourly":
+            # Older files prepend the zero-width analysis-time record.
+            width = bounds.isel({bounds.dims[-1]: 1}) - bounds.isel({bounds.dims[-1]: 0})
+            keep = (width > np.timedelta64(0, "s")).compute()
+            field, cycle_start = field.where(keep, drop=True), cycle_start.where(keep, drop=True)
+    keys = _month_keys(cycle_start).compute()
+    lower, upper = y0 * 100 + m0, y1 * 100 + m1
+    inside = ((keys >= lower) & (keys <= upper)).compute()
+    field, cycle_start, keys = (
+        x.where(inside, drop=True) for x in (field, cycle_start, keys)
+    )
+    days = cycle_start.dt.floor("D")
+    for month_key in range(lower, upper + 1):
+        if not 1 <= month_key % 100 <= 12:
+            continue
+        expected = pd.Period(f"{month_key // 100}-{month_key % 100:02d}").days_in_month
+        present = np.unique(days.where(keys == month_key, drop=True).values).size
+        if present < expected:
+            raise ValueError(
+                f"{source} series for {member} covers {present}/{expected} days "
+                f"of {month_key} in {series_dir}"
+            )
+    field = field.groupby(keys.astype("int32").rename("month")).mean(
+        "time", skipna=True, keep_attrs=True
+    ).rename(month="time")
+    field = _subset_region(field, lat_range, lon_range)
+    field = _convert_units(field, variable, variable_config["units"])
+    return field.reset_coords(drop=True).expand_dims(ens=[member])
 
 
 def read_reference(reference_root, component, variable, period, lat_range=(-90, 90), lon_range=(-180, 180)):
@@ -256,7 +374,7 @@ def read_reference(reference_root, component, variable, period, lat_range=(-90, 
     return field
 
 
-def derive_metric_dataset(model, reference, *, experiment, variable, component, run_segment, season, period, n_bootstrap=0, random_seed=42):
+def derive_metric_dataset(model, reference, *, experiment, variable, component, run_segment, season, period, n_bootstrap=0, random_seed=42, model_source=None):
     """Compute bias, RMSE, spread, CRPS, and optional ensemble-bootstrap CIs."""
     model, reference = xr.align(model, reference, join="inner")
     if model.sizes.get("time", 0) == 0:
@@ -296,12 +414,19 @@ def derive_metric_dataset(model, reference, *, experiment, variable, component, 
         "reference": (ATM_VARIABLES if component == "atm" else LND_VARIABLES)[variable]["reference"],
         "ensemble_members": model.sizes["ens"],
         "bootstrap_samples": n_bootstrap,
+        "model_source": model_source or model.attrs.get("model_source", "clim"),
     })
     return dataset
 
 
 def cache_path(cache_dir, experiment, variable, period):
     return Path(cache_dir) / f"{experiment}_{variable}_{period}_ensemble_bias_metrics.nc"
+
+
+def cache_matches_source(path, model_source):
+    """True when a cached metric file was built from ``model_source``."""
+    with xr.open_dataset(path) as cached:
+        return cached.attrs.get("model_source", "clim") == model_source
 
 
 def cache_bias_metrics(path, *, model=None, reference=None, force_compute=False, **metadata):
@@ -377,17 +502,25 @@ def run_bias_metrics(
     *, data_root, reference_root, cache_dir, season, run_segment, component,
     experiments, variables, lat_range=(-90, 90), lon_range=(-180, 180),
     n_bootstrap=0, random_seed=42, max_members=None, force_compute=False,
+    model_source=None,
 ):
-    """Compute and cache metrics for every experiment/variable not yet cached."""
+    """Compute and cache metrics for every experiment/variable not yet cached.
+
+    Caches built from a different ``model_source`` are rebuilt. ``None`` uses
+    each variable's default input (:func:`default_model_source`).
+    """
+    requested_source = model_source
     registry = _validated_registry(data_root, season, run_segment, component, experiments, variables)
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
     for variable in variables:
+        model_source = requested_source or default_model_source(component, run_segment, variable)
         references = {}
         try:
             for experiment in experiments:
                 period = registry[experiment]["period"]
                 output = cache_path(cache_dir, experiment, variable, period)
-                if output.is_file() and not force_compute:
+                if (output.is_file() and not force_compute
+                        and cache_matches_source(output, model_source)):
                     print(f"Reusing {output.name}")
                     continue
                 if period not in references:
@@ -397,12 +530,12 @@ def run_bias_metrics(
                 model, _ = read_model_ensemble(
                     data_root, experiment, season, run_segment, component, variable,
                     period=period, lat_range=lat_range, lon_range=lon_range,
-                    max_members=max_members,
+                    max_members=max_members, source=model_source,
                 )
                 try:
                     cache_bias_metrics(
                         output, model=model, reference=references[period],
-                        force_compute=force_compute, experiment=experiment,
+                        force_compute=True, experiment=experiment,
                         variable=variable, component=component, run_segment=run_segment,
                         season=season, period=period, n_bootstrap=n_bootstrap,
                         random_seed=random_seed,

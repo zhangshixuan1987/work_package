@@ -137,19 +137,6 @@ DEFAULT_EXPERIMENTS: Dict[str, ExperimentSpec] = {
         fc_run=None,
         wc_run=None,
     ),
-    "DART40INF0p6-S0": ExperimentSpec(
-        nens=40,
-        key="dart_en40",
-        da_run=RunSpec(
-            compset="F20TR",
-            name="DARTEN40_INF0p6",
-            period="201112-201112",
-            obs_diag=["obs_seq", "obs_diag", "obs_common", "closest_member"],
-            extra={"alia": "DARTEN40"},
-        ),
-        fc_run=None,
-        wc_run=None,
-    ),
     "CTRL10-S1": ExperimentSpec(
         nens=10,
         key="ctrl_en10",

@@ -17,9 +17,14 @@ def _select_period(data,period):
     y0,m0,y1,m1=map(int,m.groups()); key=data.time.dt.year*100+data.time.dt.month
     return data.where((key>=y0*100+m0)&(key<=y1*100+m1),drop=True)
 
-def _open_member_field(root,member,variable,period,run_segment,opened):
+def _open_member_field(root,member,variable,period,run_segment,opened,window=None):
     years=range(int(period[:4]),int(period[7:11])+1)
-    choices=("6hourly_da","daily","6hourly") if run_segment=="da" else ("daily","6hourly")
+    # Analysis (da) runs restart every 6 h: their analysis-time (6hourly_da) and
+    # "daily" values are first-model-step snapshots, which are not
+    # representative for fluxes. Use the 6-h forecast means (6hourly), stamped
+    # at their interval midpoints so daily grouping is exact. Forecast runs are
+    # continuous, so their daily files are true daily means.
+    choices=("6hourly",) if run_segment=="da" else ("daily","6hourly")
     candidates=("LHFLX","QFLX") if variable=="LHFLX" else (variable,)
     for freq in choices:
         for candidate in candidates:
@@ -29,26 +34,44 @@ def _open_member_field(root,member,variable,period,run_segment,opened):
                 ds=xr.open_mfdataset(files,combine="by_coords",parallel=True,chunks={}); opened.append(ds)
                 field=ds[candidate]
                 if candidate=="QFLX": field=field*2.5e6
-                if freq.startswith("6hourly"): field=field.resample(time="1D").mean()
-                return _select_period(field,period)
+                if freq.startswith("6hourly"):
+                    counts=field.time.resample(time="1D").count()
+                    field=field.resample(time="1D").mean()
+                    if run_segment=="da":
+                        field=field.where(counts==4)  # incomplete days -> missing
+                field=_select_period(field,period)
+                if window is not None:
+                    field=field.sel(time=slice(str(window[0]),str(window[-1])))
+                    if run_segment=="da" and bool(field.isnull().all(("lat","lon")).any()):
+                        raise ValueError(f"{candidate} {freq} for {member}: a day in {window[0]}..{window[-1]} lacks 4 cycles")
+                field.attrs["model_source"]=freq
+                return field
     raise FileNotFoundError(f"No {variable} files for {member} under {root}")
 
-def energy_budget_cache_path(cache_dir,experiment,member,period):
-    return Path(cache_dir)/experiment/f"surface_energy_budget_{member}_{period}.nc"
+def _window_tag(window):
+    return f"{np.datetime_as_string(np.datetime64(str(window[0])),'D').replace('-','')}-" \
+           f"{np.datetime_as_string(np.datetime64(str(window[-1])),'D').replace('-','')}"
 
-def cache_surface_energy_budget(path,*,data_root,experiment,season,run_segment,member,period=None,force_compute=False):
+def energy_budget_cache_path(cache_dir,experiment,member,period,window=None):
+    """Cache path; a day window (first, last) is part of the name."""
+    tag=period if window is None else _window_tag(window)
+    return Path(cache_dir)/experiment/f"surface_energy_budget_{member}_{tag}.nc"
+
+def cache_surface_energy_budget(path,*,data_root,experiment,season,run_segment,member,period=None,window=None,force_compute=False):
+    """Member-level daily surface energy budget, optionally restricted to ``window`` days."""
     path=Path(path)
     if path.is_file() and not force_compute: return xr.load_dataset(path)
     registry=experiment_registry(data_root,season,run_segment)
     if experiment not in registry: raise ValueError(f"{experiment} unavailable; choose {list(registry)}")
     meta=registry[experiment]; period=period or meta["period"]; opened=[]
     try:
-        fields={v:_open_member_field(meta["path"],member,v,period,run_segment,opened) for v in INPUT_VARIABLES}
+        fields={v:_open_member_field(meta["path"],member,v,period,run_segment,opened,window) for v in INPUT_VARIABLES}
         ds=xr.Dataset(fields); rn=ds.FSNS-ds.FLNS; residual=rn-(ds.LHFLX+ds.SHFLX)
         out=xr.Dataset({"Rn":rn,"LE":ds.LHFLX,"SH":ds.SHFLX,"Residual":residual,"BowenRatio":xr.where(np.abs(ds.LHFLX)>1e-6,ds.SHFLX/ds.LHFLX,np.nan)}).compute()
     finally:
         for opened_ds in opened: opened_ds.close()
-    out.attrs.update(experiment=experiment,member=member,season=season,run_segment=run_segment,period=period,input_variables=",".join(INPUT_VARIABLES))
+    out.attrs.update(experiment=experiment,member=member,season=season,run_segment=run_segment,period=period,input_variables=",".join(INPUT_VARIABLES),
+                     model_source=fields["SHFLX"].attrs.get("model_source",""),window="" if window is None else _window_tag(window))
     path.parent.mkdir(parents=True,exist_ok=True); tmp=path.with_suffix(path.suffix+".tmp"); out.to_netcdf(tmp); os.replace(tmp,path)
     return out
 
@@ -71,7 +94,7 @@ def regional_timeseries(datasets,variable,region,landmask_file):
     series=[]
     for member,ds in datasets.items():
         field=ds[variable]; mask=_mask_for(field,region,landmask_file)
-        weights=np.cos(np.deg2rad(field.lat)).clip(min=0).broadcast_like(field.isel(time=0)).where(mask)
+        weights=np.cos(np.deg2rad(field.lat)).clip(min=0).broadcast_like(field.isel(time=0)).where(mask,0.0)
         ts=field.where(mask).weighted(weights).mean(("lat","lon"),skipna=True)
         series.append(ts.expand_dims(member=[member]))
     return xr.concat(series,dim="member")
