@@ -78,7 +78,7 @@ for i in $(seq 1 ${my_ensnum}); do
       yymm=$(printf "%04d-%02d" ${year} ${month})
 
       # Link h1 files
-      for ff in "${input}/${CASE_NAME}.${hist1}.${yymm}"*.nc; do
+      for ff in "${input}/${CASE_NAME}.${hist1}.${yymm}"-??-?????.nc; do
         [ -f "${ff}" ] && ln -sf "${ff}" .
       done
 

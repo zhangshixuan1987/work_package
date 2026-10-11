@@ -89,7 +89,7 @@ for i in $(seq 1 ${my_ensnum}); do
       [ -f "${h0file}" ] && ln -sf "${h0file}" .
 
       # Link h1 files
-      for ff in "${input}/${CASE_NAME}.${hist1}.${yymm}"*.nc; do
+      for ff in "${input}/${CASE_NAME}.${hist1}.${yymm}"-??-?????.nc; do
         [ -f "${ff}" ] && ln -sf "${ff}" .
       done
 
@@ -97,7 +97,7 @@ for i in $(seq 1 ${my_ensnum}); do
   done
 
   ls ${CASE_NAME}.${hist0}.????-??.nc > input0.txt
-  ls ${CASE_NAME}.${hist1}.????-??-*.nc > input1.txt
+  ls ${CASE_NAME}.${hist1}.????-??-??-?????.nc > input1.txt
 
   # === Step 1: Regrid monthly h0 climatology files ===
   clim_dest="${outdir}/lnd/180x360_aave/clim"

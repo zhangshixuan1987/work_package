@@ -31,6 +31,13 @@ my_wkdir=${PWD}
 cd ${my_wkdir}
 source ./create_and_setup_case.sh
 
+# Optional overrides for reprocessing another run/period or a member subset:
+#   POST_CASENAME, POST_YMDS, POST_YMDE, POST_MEM_BEG, POST_MEM_END
+if [ -n "${POST_CASENAME}" ]; then
+  my_casename=${POST_CASENAME}
+  my_modeldir="${my_runpath}/${my_casename}"
+fi
+
 # Environment setup (assumes these are exported externally or in create_and_setup_case.sh)
 # E3SM_ROOT, DART_ROOT, my_modeldir, my_ensnum, my_casename, etc.
 
@@ -40,8 +47,8 @@ ARCHIVE_DIR="${my_modeldir}/archive"
 MAP_FILE=${my_e3sm_rgdmap}
 
 # Dates
-ymds="2011-12-01"
-ymde="2011-12-31"
+ymds=${POST_YMDS:-"2011-12-01"}
+ymde=${POST_YMDE:-"2011-12-31"}
 
 read -r sy sm sd <<< "$(echo ${ymds} | tr '-' ' ')"
 read -r ey em ed <<< "$(echo ${ymde} | tr '-' ' ')"
@@ -51,24 +58,25 @@ mday=(31 28 31 30 31 30 31 31 30 31 30 31)
 var2_list=(FLUT FLUTC LHFLX SHFLX PRECT PRECC PRECL PS PSL QFLX QREFHT TMQ TS TREFHT TUQ TVQ OMEGA500 PRECSL SWCF LWCF
            TTOP TAUX TAUY TGCLDCWP TGCLDIWP TGCLDLWP U90M V90M U10 CLDTOT CLDLOW CLDMED FLDS FLDSC FLNS FLNSC
            FLNT FLNTC FSDS FSDSC FSNS FSNSC FSNT FSNTC FSNTOA FSNTOAC FSUTOA)
-var2_list=(FSNS)
 
 hist2="eam.h2"
 freq2="6hourly"
-input="${ARCHIVE_DIR}/atm/hist"
-outdir="${ARCHIVE_DIR}/post"
-
-mkdir -p "${outdir}"
-
 jobid=${SLURM_JOBID}
 
-for i in $(seq 1 ${my_ensnum}); do
+for i in $(seq ${POST_MEM_BEG:-1} ${POST_MEM_END:-${my_ensnum}}); do
+  ENSTR=$(printf "EN%02d" ${i})
+  CASE_NAME="${my_casename}.${ENSTR}"
+
+  # Archives are stored per member: <case>/ENxx/archive/{atm/hist,post}
+  input="${my_modeldir}/${ENSTR}/archive/atm/hist"
+  outdir="${my_modeldir}/${ENSTR}/archive/post"
+  if [ ! -d "${input}" ]; then
+    echo "Error: ${input} not found"; exit 1
+  fi
+  mkdir -p "${outdir}"
   cd ${outdir}
   workdir=$(mktemp -d tmp.${jobid}.XXXX)
   cd ${workdir}
-
-  ENSTR=$(printf "EN%02d" ${i})
-  CASE_NAME="${my_casename}.${ENSTR}"
 
   echo "=== Starting ensemble member ${ENSTR} ==="
 
@@ -81,7 +89,7 @@ for i in $(seq 1 ${my_ensnum}); do
       yymm=$(printf "%04d-%02d" ${year} ${month})
 
       # Link h2 files
-      for ff in "${input}/${CASE_NAME}.${hist2}.${yymm}"*.nc; do
+      for ff in "${input}/${CASE_NAME}.${hist2}.${yymm}"-??-?????.nc; do
         [ -f "${ff}" ] && ln -sf "${ff}" .
       done
     done
@@ -97,19 +105,25 @@ for i in $(seq 1 ${my_ensnum}); do
   echo ${ffiles2[@]}
   for year in $(seq ${sy} ${ey}); do
     yyyy=$(printf "%04d" ${year})
-    start_time="${yyyy}-01-01 00:00:0.0"
-    end_time="${yyyy}-12-31 23:59:59.0"
     for var in "${var2_list[@]}"; do
       outfile="${var}.${ENSTR}.${yyyy}.nc"
       [ -f "${outfile}" ] && rm -vf "${outfile}"
-      if [ "${#ffiles2[@]}" -gt 0 ]; then
-        ncrcat -O -d time,"${start_time}","${end_time}" -v "${var}" ${ffiles2[@]}  ${var}_tmp_all.nc
-        ncks -d time,0,,2  ${var}_tmp_all.nc ${var}_tmp_prior.nc 
-        ncremap -m "${MAP_FILE}" -i  ${var}_tmp_prior.nc -o "${ts_dest1}/${outfile}"
-        ncks -d time,1,,2  ${var}_tmp_all.nc ${var}_tmp_time1.nc
-        ncks -d time,0     ${var}_tmp_all.nc ${var}_tmp_time0.nc
-        ncrcat -d time,0,  ${var}_tmp_time0.nc ${var}_tmp_time1.nc ${var}_tmp_post.nc
-        ncremap -m "${MAP_FILE}" -i  ${var}_tmp_post.nc -o "${ts_dest2}/${outfile}"
+      # Each restart-cycle h2 file holds 2 records: [0] the zero-width value at
+      # the cycle start (analysis time) and [1] the 6-h segment, stamped at its
+      # end (e.g. the Dec 31 18Z mean is stamped Jan 1 00Z). Select cycles by
+      # file name, not by time stamp, so every cycle of the year is kept.
+      year_files=(${CASE_NAME}.${hist2}.${yyyy}-??-??-?????.nc)  # cycle files only, no stray *.tmp.*.nc
+      if [ -f "${year_files[0]}" ]; then
+        ncrcat -O -d time,0,,2 -v "${var}" ${year_files[@]} ${var}_tmp_da.nc
+        ncremap -m "${MAP_FILE}" -i ${var}_tmp_da.nc -o "${ts_dest1}/${outfile}"
+        ncrcat -O -d time,1,,2 -v "${var}" ${year_files[@]} ${var}_tmp_seg.nc
+        # Stamp 6-h means at their interval midpoint so they fall in the right
+        # day/month; instantaneous (time: point) fields keep their valid time.
+        if ncks -m -v "${var}" ${var}_tmp_seg.nc | grep -q 'cell_methods = "time: mean"'; then
+          ncap2 -O -s 'time=0.5*(time_bnds(:,0)+time_bnds(:,1))' ${var}_tmp_seg.nc ${var}_tmp_seg.nc
+        fi
+        ncremap -m "${MAP_FILE}" -i ${var}_tmp_seg.nc -o "${ts_dest2}/${outfile}"
+        rm -f ${var}_tmp_da.nc ${var}_tmp_seg.nc
       else
         echo "Warning: No hist2 files found for ${ENSTR}, year ${yyyy}, var ${var}"
       fi

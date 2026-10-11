@@ -79,13 +79,13 @@ for i in $(seq 1 ${my_ensnum}); do
       yymm=$(printf "%04d-%02d" ${year} ${month})
 
       # Link h2 files
-      for ff in "${input}/${CASE_NAME}.${hist2}.${yymm}"*.nc; do
+      for ff in "${input}/${CASE_NAME}.${hist2}.${yymm}"-??-?????.nc; do
         [ -f "${ff}" ] && ln -sf "${ff}" .
       done
     done
   done
 
-  ls ${CASE_NAME}.${hist2}.????-??-*.nc > input2.txt
+  ls ${CASE_NAME}.${hist2}.????-??-??-?????.nc > input2.txt
 
   # === Step 3: Regrid var2_list from hist2 (6-hourly) ===
   ts_dest2="${outdir}/atm/180x360_aave/ts/${freq2}"

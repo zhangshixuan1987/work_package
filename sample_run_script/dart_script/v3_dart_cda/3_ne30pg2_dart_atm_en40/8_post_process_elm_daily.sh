@@ -78,7 +78,7 @@ for i in $(seq 1 ${my_ensnum}); do
       yymm=$(printf "%04d-%02d" ${year} ${month})
 
       # Link h1 files
-      for ff in "${input}/${CASE_NAME}.${hist1}.${yymm}"*.nc; do
+      for ff in "${input}/${CASE_NAME}.${hist1}.${yymm}"-??-?????.nc; do
         [ -f "${ff}" ] && ln -sf "${ff}" .
       done
 
@@ -90,7 +90,7 @@ for i in $(seq 1 ${my_ensnum}); do
 
       # === Step 2: Regrid var1_list from hist1 (daily) ===
       for dd in `seq 1 ${nday}`;do 
-         xfiles=${CASE_NAME}.${hist1}.`printf "%04d" ${year}`-`printf "%02d" ${month}`-`printf "%02d" ${dd}`*.nc
+         xfiles=${CASE_NAME}.${hist1}.`printf "%04d" ${year}`-`printf "%02d" ${month}`-`printf "%02d" ${dd}`-?????.nc
          echo ${xfiles[@]}
          ncra ${xfiles[@]} ftmp_`printf "%02d" ${dd}`.nc
       done 
