@@ -46,9 +46,9 @@ Each notebook reads raw fields only for missing or forced products. Existing req
 Bias verification is split by period and component:
 
 1. `jupyter/analysis_atm_bias/01_compute_and_plot_bias_metrics.ipynb` - atmospheric DA-analysis-period verification.
-2. `jupyter/analysis_lnd_bias/01_compute_and_plot_bias_metrics.ipynb` - land DA-analysis-period verification.
+2. `jupyter/analysis_lnd_init/01_compute_and_plot_bias_metrics.ipynb` - land DA-analysis-period verification.
 3. `jupyter/fcst_atm_bias/01_compute_and_plot_bias_metrics.ipynb` - atmospheric forecast-period verification.
-4. `jupyter/fcst_lnd_bias/01_compute_and_plot_bias_metrics.ipynb` - land forecast-period verification.
+4. `jupyter/fcst_lnd_eval/01_compute_and_plot_bias_metrics.ipynb` - land forecast-period verification.
 
 All four use `util/bias_metrics.py`, keep analysis and forecast caches separate, and reuse existing NetCDF products unless `force_compute = True`.
 The broader legacy variable metadata is preserved in `configs/bias_variable_catalog.py`.
@@ -67,18 +67,17 @@ Active data-assimilation diagnostic workflow drivers live in `jupyter/analysis_a
 
 Initial-land diagnostics follow the same notebook-driver layout:
 
-1. `jupyter/analysis_lnd_init/01_soil_moisture_distribution.ipynb` drives the soil-moisture map workflow.
-2. `jupyter/analysis_lnd_init/02_surface_variable_distribution.ipynb` processes and plots PRECT/TREFHT bias and spread.
-3. `jupyter/analysis_lnd_init/03_restart_processing.ipynb` drives column-to-gridcell restart aggregation and optional conservative regridding.
-4. `jupyter/analysis_lnd_init/04_process_initial_condition_errors.ipynb` computes ensemble soil-moisture bias, spread, and significance products.
-5. `jupyter/analysis_lnd_init/05_plot_initial_condition_error_maps.ipynb` plots those processed initial-condition products.
-6. `jupyter/analysis_lnd_init/06_plot_soil_point_timeseries.ipynb` extracts cached or direct point time series.
-7. `configs/initial_land_experiment_config.py`, `configs/initial_land_experiment_registry.py`, and `configs/initial_land_observation_registry.py` store paths and experiment/observation definitions.
-8. `util/initial_lnd_model_data.py`, `util/initial_lnd_observation_data.py`, `util/initial_lnd_restart_aggregation.py`, and `util/initial_lnd_restart_regridding.py` hold reusable processing.
-9. `script/run_process_land_rest.bash` drives the complete batch workflow; `script/initial_land/aggregate_restart.py` and `script/initial_land/regrid_restart.py` expose its individual stages.
-10. Regrid reference grids and map files are expected under `/compyfs/zhan391/v3_dart_cda_scratch/reference/regrid_maps/` by default.
-11. Initial-land support files such as `dzsoi_elm.nc` and `landmask_1x1.nc` are generated under `/compyfs/zhan391/v3_dart_cda_scratch/reference/lnd_sea_mask/` when missing.
-12. Generated initial-land NetCDF/log outputs live under `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/data/analysis_lnd_init/`; generated figures live under `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/figure/analysis_lnd_init/`.
+1. `jupyter/analysis_lnd_init/01`–`02` map land bias metrics during the DA windows and the end-of-window soil-moisture state; `03_restart_processing.ipynb` drives restart aggregation and optional conservative regridding.
+2. `jupyter/analysis_lnd_eval/01`–`04` verify the land and near-surface fields (land forcing scorecard, daily soil-moisture skill, atmospheric-DA impact on soil moisture, PRECT/TREFHT).
+3. `jupyter/fcst_lnd_eval/02`–`04` evaluate forecast soil moisture: point time series and forecast-start soil-moisture errors.
+4. Forecast-start products share `util/initial_lnd_file_collection.py`.
+5. See `jupyter/README.md` for the per-notebook list and the `util/` module behind each.
+6. `configs/initial_land_experiment_config.py`, `configs/initial_land_experiment_registry.py`, and `configs/initial_land_observation_registry.py` store paths and experiment/observation definitions.
+7. `util/initial_lnd_model_data.py`, `util/initial_lnd_observation_data.py`, `util/initial_lnd_restart_aggregation.py`, and `util/initial_lnd_restart_regridding.py` hold reusable processing.
+8. `script/run_process_land_rest.bash` drives the complete batch workflow; `script/initial_land/aggregate_restart.py` and `script/initial_land/regrid_restart.py` expose its individual stages.
+9. Regrid reference grids and map files are expected under `/compyfs/zhan391/v3_dart_cda_scratch/reference/regrid_maps/` by default.
+10. Initial-land support files such as `dzsoi_elm.nc` and `landmask_1x1.nc` are generated under `/compyfs/zhan391/v3_dart_cda_scratch/reference/lnd_sea_mask/` when missing.
+11. Generated initial-land NetCDF/log outputs live under `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/data/analysis_lnd_init/`; generated figures live under `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/figure/analysis_lnd_init/`.
 
 The former `7_mjo_analysis/` workflow is consolidated under `jupyter/analysis_mjo/`:
 `01_hovmoller_phase_composites.ipynb` handles configurable PRECT/FLUT

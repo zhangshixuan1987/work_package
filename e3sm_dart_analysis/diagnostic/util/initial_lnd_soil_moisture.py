@@ -214,6 +214,8 @@ class SoilMoistureDifferencePlotter:
                 pcc = np.nan
                 rmse = np.nan
             processed.append(xr.Dataset({
+                "model_mean": model_mean,
+                "obs": obs_field,
                 "bias": bias,
                 "spread": spread,
                 "significant": significance,

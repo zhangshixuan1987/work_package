@@ -56,19 +56,11 @@ Each notebook is independently runnable and lists its available variables and me
 
 1. `01_compute_and_plot_bias_metrics.ipynb` - compute cached atmospheric bias, RMSE, spread, and CRPS maps for DA analysis periods.
 
-## `analysis_lnd_bias/`
-
-1. `01_compute_and_plot_bias_metrics.ipynb` - compute cached land bias, RMSE, spread, and CRPS maps for DA analysis periods.
-
 ## `fcst_atm_bias/`
 
 1. `01_compute_and_plot_bias_metrics.ipynb` - compute the same atmospheric metrics for forecast periods only.
 
-## `fcst_lnd_bias/`
-
-1. `01_compute_and_plot_bias_metrics.ipynb` - compute the same land metrics for forecast periods only.
-
-The four bias workflows are intentionally separated by period and component. Each notebook reads, processes, caches, and plots independently; cached products are reused unless `force_compute = True`.
+The land counterparts are `analysis_lnd_init/01_compute_and_plot_bias_metrics.ipynb` (DA analysis periods) and `fcst_lnd_eval/01_compute_and_plot_bias_metrics.ipynb` (forecast periods). The four bias workflows are intentionally separated by period and component. Each notebook reads, processes, caches, and plots independently; cached products are reused unless `force_compute = True`.
 
 
 ## `fcst_atm_timeseries/`
@@ -100,24 +92,29 @@ Analysis-period verification:
 
 1. `analysis_atm_eval/01_compute_and_plot_ensemble_metrics.ipynb` - atmospheric maps, scalar verification metrics, rank histograms, and optional bootstrap confidence intervals.
 2. `analysis_atm_eval/02_compute_and_plot_surface_energy_budget.ipynb` - atmospheric surface-energy-budget terms and regional ensemble time series.
-3. `analysis_lnd_eval/01_compute_and_plot_ensemble_metrics.ipynb` - land maps and scalar ensemble verification metrics.
+3. `analysis_lnd_eval/01_land_forcing_scorecard.ipynb` - land-only DA scorecard on the 64 scorecard cycles: % RMSE change of DART10/20/40 vs CTRL10 for TS, TREFHT, surface fluxes (LHFLX, SHFLX, FSNS), and atmospheric forcing (PRECT, FSDS, FLDS) (`util/da_scorecard.py`).
+4. `analysis_lnd_eval/02_soil_moisture_daily_skill.ipynb` - daily top-5 cm soil-moisture anomaly correlation and ubRMSE of DART40-S0/S1 against ESA CCI over the scorecard windows (`util/lnd_sm_daily_skill.py`).
+5. `analysis_lnd_eval/03_plot_atm_da_land_impact.ipynb` - spread ratio, mean shift, and error change of DART vs CTRL10 top-5 cm soil moisture at the end of the S0 window; reads the snapshot from `analysis_lnd_init/02` (`util/initial_lnd_da_impact.py`).
+6. `analysis_lnd_eval/04_surface_variable_distribution.ipynb` - PRECT/TREFHT ensemble bias, spread, and significance vs GPCP/ERA5 on selected January forecast dates (`util/initial_lnd_surface_variables.py`).
 
 Forecast-period verification:
 
 1. `fcst_atm_eval/01_compute_and_plot_ensemble_metrics.ipynb` - forecast atmospheric ensemble verification.
 2. `fcst_atm_eval/02_compute_and_plot_surface_energy_budget.ipynb` - forecast surface-energy-budget terms and regional ensemble time series.
 3. `fcst_lnd_eval/01_compute_and_plot_ensemble_metrics.ipynb` - forecast land ensemble verification.
+4. `fcst_lnd_eval/02_plot_soil_point_timeseries.ipynb` - cached member spaghetti or mean ± spread of forecast soil moisture against ESA CCI at selected points (`util/initial_lnd_point_timeseries.py`).
+5. `fcst_lnd_eval/03_process_initial_condition_errors.ipynb` - top-10 cm soil-moisture bias, spread, and significance vs ESA CCI on the forecast start dates (January/June 2012) (`util/initial_lnd_file_collection.py`, `util/initial_lnd_soil_error.py`).
+6. `fcst_lnd_eval/04_plot_initial_condition_error_maps.ipynb` - 2x2 bias/spread maps of two experiments from notebook 03.
 
 Each notebook reads, processes, caches, and plots independently. The notes list every supported variable and metric; existing request-keyed NetCDF products are reused unless `force_compute = True`.
 
 ## `analysis_lnd_init/`
 
-1. `01_soil_moisture_distribution.ipynb` - soil-moisture bias and spread maps.
-2. `02_surface_variable_distribution.ipynb` - PRECT/TREFHT bias and spread.
-3. `03_restart_processing.ipynb` - cached restart aggregation and optional conservative regridding by calling reusable `util/` implementations directly.
-4. `04_process_initial_condition_errors.ipynb` - process ensemble soil-moisture bias, spread, and significance.
-5. `05_plot_initial_condition_error_maps.ipynb` - plot processed initial-condition error maps.
-6. `06_plot_soil_point_timeseries.ipynb` - extract and plot soil-moisture time series at selected points.
+Land state during the DA (analysis) periods. Implementation lives in `../util/`; notebooks are thin drivers. Verification over the DA windows is in `analysis_lnd_eval/`, forecast-period land diagnostics in `fcst_lnd_eval/` (see Model evaluation workflows).
+
+1. `01_compute_and_plot_bias_metrics.ipynb` - cached land bias, RMSE, spread, and CRPS maps for the DA analysis periods (`util/bias_metrics.py`).
+2. `02_soil_moisture_distribution.ipynb` - top-5 cm soil-moisture bias and spread vs ESA CCI at the end of the DA window; writes the processed snapshot used by `analysis_lnd_eval/03` (`util/initial_lnd_soil_moisture.py`).
+3. `03_restart_processing.ipynb` - ELM restart column-to-gridcell aggregation and optional conservative regridding (`util/initial_lnd_restart_aggregation.py`, `util/initial_lnd_restart_regridding.py`).
 
 ## `analysis_lac/`
 

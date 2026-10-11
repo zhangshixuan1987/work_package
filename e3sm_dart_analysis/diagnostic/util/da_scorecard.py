@@ -82,6 +82,42 @@ def default_rows():
     return rows
 
 
+def land_rows():
+    """Land-surface state and land-atmosphere exchange, scored over land only.
+
+    No soil-moisture or snow series exist for every experiment (CTRL10/DART10
+    ELM history output lacks them), so the land state is verified through
+    what ERA5 6-hourly provides: skin and 2 m temperature (analysis) and the
+    surface energy and water fluxes (daily means of the 6-h forecasts). FLNS
+    is omitted: the ERA5 6-hourly FLNS/FLNSC files are mostly zeros.
+    """
+    era5 = dict(reference="era5_daily4", units="W m-2")
+    return [
+        Row("A Land surface state", "TS", "TS", "ts_6h", "era5_6h", reference_variable="TS", units="K"),
+        Row("A Land surface state", "TREFHT", "TREFHT", "ts_6h", "era5_6h", reference_variable="TREFHT", units="K"),
+        Row("B Surface fluxes", "LHFLX", "LHFLX", "ts_daily", reference_variable="LHFLX", **era5),
+        Row("B Surface fluxes", "SHFLX", "SHFLX", "ts_daily", reference_variable="SHFLX", **era5),
+        Row("B Surface fluxes", "FSNS", "FSNS", "ts_daily", reference_variable="FSNS", **era5),
+        Row("C Forcing", "PRECT (GPCP)", "PRECT", "ts_daily", "gpcp", units="mm day-1"),
+        Row("C Forcing", "PRECT (IMERG)", "PRECT", "ts_daily", "imerg", units="mm day-1"),
+        Row("C Forcing", "PRECT (ERA5)", "PRECT", "ts_daily", "era5_daily4", reference_variable="PRECT", units="mm day-1"),
+        Row("C Forcing", "FSDS", "FSDS", "ts_daily", reference_variable="FSDS", **era5),
+        Row("C Forcing", "FLDS", "FLDS", "ts_daily", reference_variable="FLDS", **era5),
+    ]
+
+
+def land_mask_like(field, land_fraction, *, threshold=0.5, south=-60.0):
+    """Boolean land mask on ``field``'s grid: land fraction >= ``threshold``, north of ``south``.
+
+    ``south`` drops Antarctica so the ice sheet does not dominate SH land.
+    """
+    land = _standard_grid(land_fraction)
+    if float(field.lon.min()) < 0 <= float(land.lon.min()):
+        land = land.assign_coords(lon=((land.lon + 180) % 360) - 180).sortby("lon")
+    land = land.interp(lat=field.lat, lon=field.lon, method="nearest")
+    return (land >= threshold) & (field.lat >= south)
+
+
 # ---------------------------------------------------------------- time axes
 def analysis_times(season):
     return pd.date_range(WINDOW_START[season], periods=N_CYCLES, freq="6h")
@@ -245,8 +281,12 @@ def per_time_scores(mean, sd, obs, mask):
     return xr.concat(list(out.values()), pd.Index(list(out), name="region"))
 
 
-def score_row(row, season, experiments, *, data_root, remap_root, reference_root, states=STATES, log=print):
+def score_row(row, season, experiments, *, data_root, remap_root, reference_root, states=STATES,
+              land_fraction=None, log=print):
     """Per-time scores for every experiment/state of one row and season.
+
+    With ``land_fraction`` (a 2-D land-fraction field) only land cells are
+    scored; see :func:`land_mask_like`.
 
     Returns a Dataset with dims (experiment, state, time, region) and the
     ensemble size per experiment; states without data are NaN.
@@ -270,6 +310,8 @@ def score_row(row, season, experiments, *, data_root, remap_root, reference_root
             log(f"  loaded {season} {row.name} {experiment} {state}")
     # one mask for every experiment and state: compare like with like
     mask = reference.notnull()
+    if land_fraction is not None:
+        mask = mask & land_mask_like(reference, land_fraction)
     for mean, sd in fields.values():
         mask = mask & mean.notnull() & sd.notnull()
     scores = []
@@ -280,7 +322,7 @@ def score_row(row, season, experiments, *, data_root, remap_root, reference_root
     out = out.reindex(state=list(STATES))
     out["ensemble_members"] = ("experiment", [registry[e]["nens"] for e in experiments])
     out["valid_fraction"] = mask.mean(("lat", "lon")).mean("time")
-    out.attrs.update(row=row.name, group=row.group, variable=row.variable, units=row.units,
+    out.attrs.update(domain="land" if land_fraction is not None else "all", row=row.name, group=row.group, variable=row.variable, units=row.units,
                      reference=row.reference, season=season, kind=row.kind,
                      verification="6-hourly" if row.kind != "ts_daily" else "daily",
                      n_times=len(times))
@@ -293,7 +335,7 @@ def score_cache_path(cache_dir, season, row):
 
 
 def compute_scorecard(rows, seasons, *, data_root, remap_root, reference_root, cache_dir,
-                      force_compute=False, log=print):
+                      force_compute=False, land_fraction=None, log=print):
     """Score every row/season (cached); return ``{(season, row_name): Dataset}`` and failures."""
     results, failures = {}, []
     for season, experiments in seasons.items():
@@ -307,7 +349,7 @@ def compute_scorecard(rows, seasons, *, data_root, remap_root, reference_root, c
                     continue
             try:
                 ds = score_row(row, season, experiments, data_root=data_root, remap_root=remap_root,
-                               reference_root=reference_root, log=log)
+                               reference_root=reference_root, land_fraction=land_fraction, log=log)
             except Exception as error:
                 failures.append((season, row.name, f"{type(error).__name__}: {error}"))
                 log(f"[FAIL] {season} {row.name}: {type(error).__name__}: {error}")
@@ -467,7 +509,7 @@ def _latitude(value):
 
 def plot_change_heatmap(table, *, variable_order, experiment_order, experiment_label, region_order=tuple(REGIONS),
                         limit=40, title="", cbar_label="RMSE change (%)", fontsize=8,
-                        value="change_pct", levels=None, cmap="RdBu_r", fmt="{:.0f}"):
+                        value="change_pct", levels=None, cmap="RdBu_r", fmt="{:.0f}", region_bounds=None):
     """Scorecard heat map: experiments (within regions) on y, variables on x.
 
     ``table`` has one ``value`` per (row, region, experiment), e.g. a
@@ -477,7 +519,8 @@ def plot_change_heatmap(table, *, variable_order, experiment_order, experiment_l
     discrete levels symmetric about 0 out to about +-``limit``, blue = error
     reduced; pass ``levels`` and ``cmap`` for a sequential metric. If the table
     has a ``significant`` column, cells whose 95% bootstrap interval includes 0
-    are hatched with grey text.
+    are hatched with grey text. ``region_bounds`` overrides the latitude range
+    shown in the panel titles (default :data:`REGIONS`).
     """
     import matplotlib.pyplot as plt
     from matplotlib.colors import BoundaryNorm
@@ -548,7 +591,7 @@ def plot_change_heatmap(table, *, variable_order, experiment_order, experiment_l
         ax.set_xticklabels(columns if k == len(region_order) - 1 else [], rotation=90, fontsize=fontsize)
         ax.set_yticks(range(n_exp))
         ax.set_yticklabels(experiment_order, fontsize=fontsize)
-        south, north = REGIONS[region]
+        south, north = (region_bounds or REGIONS)[region]
         label = f"({'abcdefgh'[k]}) {region}"
         if (south, north) != (-90, 90):
             label += f" ({_latitude(south)}–{_latitude(north)})"
