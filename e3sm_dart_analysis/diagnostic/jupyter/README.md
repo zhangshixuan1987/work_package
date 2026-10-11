@@ -16,6 +16,10 @@ than values in `../configs/`. Edit them per run, or pass them with papermill
 INPUT_DATA_ROOT = Path("/compyfs/zhan391/v3_dart_cda_scratch")
 WORK_DIR = Path("/compyfs/zhan391/work_package/e3sm_dart_analysis")
 DIAGNOSTIC_OUTPUT_ROOT = Path("/compyfs/www/zhan391/e3sm_dart/diag_dart_2026")
+# only where used:
+OBSERVATION_ROOT = Path("/compyfs/zhan391/acme_init/Observations")   # observations
+LAND_SUPPORT_DIR = Path("/compyfs/zhan391/acme_init/lnd_sea_mask")   # land mask, soil-layer thickness
+REGRID_MAP_DIR = Path("/compyfs/zhan391/acme_init/map_file")         # regrid grids and maps
 ```
 
 The parameter cell holds plain values only. `sys.path` setup and
@@ -26,11 +30,14 @@ reading fixed defaults.
 
 Outputs are derived consistently as
 `DIAGNOSTIC_OUTPUT_ROOT/data/<workflow>/...` for NetCDF and intermediate data,
-and `DIAGNOSTIC_OUTPUT_ROOT/figure/<workflow>/...` for figures. Input products
-are resolved beneath `INPUT_DATA_ROOT`; repository modules are loaded from
-`WORK_DIR/diagnostic`. The regional forecast time-series notebook additionally
-exposes `OBSERVATION_ROOT` because its IMERG and NOAA products live in the shared
-observation archive.
+and `DIAGNOSTIC_OUTPUT_ROOT/figure/<workflow>/...` for figures. Model output
+is resolved beneath `INPUT_DATA_ROOT`; observations beneath `OBSERVATION_ROOT`
+(the shared archive, one copy per product; ESA CCI soil moisture is in
+`ESA_CCI/H20SOI/`); land masks and soil-layer thicknesses in `LAND_SUPPORT_DIR`;
+regrid grids and maps in `REGRID_MAP_DIR`. Module defaults for these locations
+are in `../configs/input_paths.py` (overridable with `E3SM_DART_OBS_ROOT`,
+`E3SM_DART_LAND_REFERENCE_DIR`, `E3SM_DART_REGRID_MAP_DIR`). Repository modules
+are loaded from `WORK_DIR/diagnostic`.
 
 ## `analysis_atm_da/`
 

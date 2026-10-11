@@ -212,7 +212,7 @@ RAW_OBS_GROUP = {
     },
     "ESA_CCI": {
         "daily": {
-            "path": "ESA_CCI/daily",
+            "path": "ESA_CCI/H20SOI/daily",
             "template": "H2OSOI.daily.%(year)d.nc",
             "period": "2001-2020",
         }

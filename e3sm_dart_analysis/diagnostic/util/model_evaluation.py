@@ -11,6 +11,8 @@ import cartopy.crs as ccrs
 
 import pandas as pd
 
+from configs.input_paths import OBSERVATION_ROOT, product_dir
+
 from util.bias_metrics import (
     ATM_VARIABLES, LND_VARIABLES, experiment_registry, read_model_ensemble,
     read_reference, derive_metric_dataset, default_model_source, MODEL_SOURCES,
@@ -235,7 +237,7 @@ def model_input_files(config, component, variable, period, *, source, max_member
 def reference_input_files(reference_root, variable, period):
     product = variable_config(variable)["reference"]
     *_, years = _period_years(period)
-    return [Path(reference_root) / product / "monthly" / _REFERENCE_PATTERNS[product].format(year=year)
+    return [product_dir(product, reference_root) / "monthly" / _REFERENCE_PATTERNS[product].format(year=year)
             for year in years]
 
 
@@ -304,7 +306,7 @@ def evaluate_cases(kind, cases, variables, *, data_root, cache_dir, component="a
     if kind not in METRIC_KINDS:
         raise ValueError(f"kind must be one of {METRIC_KINDS}")
     sources = {v: model_source or default_model_source(component, run_segment, v) for v in variables}
-    reference_root = Path(reference_root or Path(data_root) / "reference")
+    reference_root = Path(reference_root or OBSERVATION_ROOT)
     registries = validate_cases(cases, variables, data_root=data_root, component=component,
                                 run_segment=run_segment, model_source=sources)
     results, failures, references = {}, [], {}

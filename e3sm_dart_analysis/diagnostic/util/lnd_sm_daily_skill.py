@@ -28,6 +28,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from configs.input_paths import product_dir
+
 REGIONS = {
     "Global": (-60, 90),
     "Tropics": (-20, 20),
@@ -66,7 +68,7 @@ def load_ensemble_top_sm(config, days, weights, *, log=print) -> tuple[xr.DataAr
 
 
 def load_esa_cci(reference_root, days) -> xr.DataArray:
-    path = Path(reference_root) / "ESA_CCI/daily" / f"H2OSOI.daily.{days[0].year}.nc"
+    path = product_dir("ESA_CCI", reference_root) / "daily" / f"H2OSOI.daily.{days[0].year}.nc"
     with xr.open_dataset(path) as ds:
         obs = ds["H2OSOI"]
         return obs.assign_coords(time=obs.time.dt.floor("D")).sel(time=days.values).load()

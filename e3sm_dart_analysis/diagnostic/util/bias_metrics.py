@@ -13,6 +13,8 @@ import pandas as pd
 import xarray as xr
 import xskillscore as xs
 
+from configs.input_paths import product_dir
+
 from util.array_stats import nanquantile
 
 
@@ -356,7 +358,7 @@ def read_reference(reference_root, component, variable, period, lat_range=(-90, 
     product = config["reference"]
     _, _, _, _, years = _period_years(period)
     pattern = _REFERENCE_PATTERNS[product]
-    files = [Path(reference_root) / product / "monthly" / pattern.format(year=year) for year in years]
+    files = [product_dir(product, reference_root) / "monthly" / pattern.format(year=year) for year in years]
     missing = [path for path in files if not path.is_file()]
     if missing:
         raise FileNotFoundError("Missing reference files: " + ", ".join(map(str, missing)))

@@ -6,43 +6,25 @@ import os
 from pathlib import Path
 
 from configs.output_paths import OUTPUT_DATA_ROOT, OUTPUT_FIGURE_ROOT
+from configs.input_paths import OBSERVATION_ROOT, LAND_SUPPORT_DIR, REGRID_MAP_DIR, PRODUCT_DIRS
+from configs.initial_land_experiment_registry import build_experiments
 
 
 DEFAULT_DATA_ROOT = Path(os.environ.get("E3SM_DART_INITIAL_LAND_DATA_ROOT", "/compyfs/zhan391/v3_dart_cda_scratch"))
-DEFAULT_OBS_ROOT = Path(os.environ.get("E3SM_DART_OBS_ROOT", "/compyfs/zhan391/v3_dart_cda_scratch/reference"))
+DEFAULT_OBS_ROOT = OBSERVATION_ROOT
 DEFAULT_FIGURE_DIR = OUTPUT_FIGURE_ROOT / "analysis_lnd_init"
 DEFAULT_DIAG_DIR = OUTPUT_DATA_ROOT / "analysis_lnd_init"
-DEFAULT_REGRID_MAP_DIR = Path(os.environ.get("E3SM_DART_REGRID_MAP_DIR", "/compyfs/zhan391/v3_dart_cda_scratch/reference/regrid_maps"))
-DEFAULT_LAND_REFERENCE_DIR = Path(os.environ.get("E3SM_DART_LAND_REFERENCE_DIR", "/compyfs/zhan391/v3_dart_cda_scratch/reference/lnd_sea_mask"))
+DEFAULT_REGRID_MAP_DIR = REGRID_MAP_DIR
+DEFAULT_LAND_REFERENCE_DIR = LAND_SUPPORT_DIR
 DEFAULT_LANDMASK_FILE = DEFAULT_LAND_REFERENCE_DIR / "landmask_1x1.nc"
 DEFAULT_SOIL_LAYER_FILE = DEFAULT_LAND_REFERENCE_DIR / "dzsoi_elm.nc"
 
-DEFAULT_MODEL_EXPERIMENTS = {
-    "CTRLEN10": {
-        "path": DEFAULT_DATA_ROOT / "CTRLEN10_15day_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy/archive/post/lnd/180x360_aave/ts/daily",
-        "template": "H2OSOI.%(ensemble)s.%(year)s.nc",
-        "frequency": "daily",
-        "nens": 10,
-    },
-    "CAPTEN10": {
-        "path": DEFAULT_DATA_ROOT / "CAPTEN10_15day_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy/archive/post/lnd/180x360_aave/ts/daily",
-        "template": "H2OSOI.%(ensemble)s.%(year)s.nc",
-        "frequency": "daily",
-        "nens": 10,
-    },
-    "DARTEN20": {
-        "path": DEFAULT_DATA_ROOT / "DARTEN20_15day_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy/archive/post/lnd/180x360_aave/ts/daily",
-        "template": "H2OSOI.%(ensemble)s.%(year)s.nc",
-        "frequency": "daily",
-        "nens": 20,
-    },
-    "DARTEN40": {
-        "path": DEFAULT_DATA_ROOT / "DARTEN40_15day_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy/archive/post/lnd/180x360_aave/ts/daily",
-        "template": "H2OSOI.%(ensemble)s.%(year)s.nc",
-        "frequency": "daily",
-        "nens": 40,
-    },
+DA_SOIL_MOISTURE_EXPERIMENTS = {
+    "S0": ("CTRL10-S0", "DART10-S0", "DART20-S0", "DART40-S0"),
+    "S1": ("DART40-S1",),
 }
+
+DA_TARGET_DATES = {"S0": "2012-01-01", "S1": "2012-06-01"}
 
 DEFAULT_OBSERVATIONS = {
     "CPC_SOM": {
@@ -52,7 +34,7 @@ DEFAULT_OBSERVATIONS = {
         "nens": 1,
     },
     "ESA_CCI": {
-        "path": DEFAULT_OBS_ROOT / "ESA_CCI/daily",
+        "path": DEFAULT_OBS_ROOT / PRODUCT_DIRS["ESA_CCI"] / "daily",
         "template": "H2OSOI.daily.%(year)s.nc",
         "frequency": "daily",
         "nens": 1,
@@ -66,7 +48,7 @@ DEFAULT_OBSERVATIONS = {
 }
 
 DEFAULT_SOIL_MOISTURE_PLOT = {
-    "model_keys": ["CTRLEN10", "CAPTEN10", "DARTEN20", "DARTEN40"],
+    "model_keys": list(DA_SOIL_MOISTURE_EXPERIMENTS["S0"]),
     "obs_key": "ESA_CCI",
     "target_date": "2012-01-01",
     "depth_cm": 5,
@@ -102,12 +84,25 @@ def get_soil_moisture_data_dict(
     *,
     data_root=DEFAULT_DATA_ROOT,
     obs_root=DEFAULT_OBS_ROOT,
+    season="S0",
+    run_segment="da",
     include_observations=True,
     include_models=True,
 ):
-    """Return data definitions rebased beneath notebook-configured input roots."""
+    """Return DA land-state inputs rebased beneath notebook-configured roots.
+
+    Model files come from the cycled DA runs, never the 15-day hindcasts. The
+    remapped ELM ``h0`` file represents the final six-hour DA cycle: 1 January
+    for S0 and 1 June for S1.
+    """
     data_root = Path(data_root)
     obs_root = Path(obs_root)
+    if run_segment != "da":
+        raise ValueError("Initial-land soil-moisture diagnostics require run_segment='da'.")
+    if season not in DA_SOIL_MOISTURE_EXPERIMENTS:
+        raise ValueError(
+            f"season must be one of {sorted(DA_SOIL_MOISTURE_EXPERIMENTS)}"
+        )
     data = {}
     if include_observations:
         for key, spec in DEFAULT_OBSERVATIONS.items():
@@ -115,8 +110,20 @@ def get_soil_moisture_data_dict(
             item["path"] = obs_root / Path(spec["path"]).relative_to(DEFAULT_OBS_ROOT)
             data[key] = item
     if include_models:
-        for key, spec in DEFAULT_MODEL_EXPERIMENTS.items():
-            item = dict(spec)
-            item["path"] = data_root / Path(spec["path"]).relative_to(DEFAULT_DATA_ROOT)
-            data[key] = item
+        registry = build_experiments(str(data_root))
+        for experiment in DA_SOIL_MOISTURE_EXPERIMENTS[season]:
+            metadata = registry[experiment]
+            run = metadata["runs"][run_segment]
+            if run is None:
+                raise ValueError(f"{experiment} has no {run_segment!r} run.")
+            year_month = f"{run.period[:4]}-{run.period[4:6]}"
+            data[experiment] = {
+                "path": data_root / run.run_id,
+                "template": (
+                    f"%(ensemble)s/archive/post/lnd/180x360_aave/clim/"
+                    f"{run.run_id}.%(ensemble)s.elm.h0.{year_month}.nc"
+                ),
+                "frequency": "final_da_cycle",
+                "nens": metadata["nens"],
+            }
     return stringify_paths(data)

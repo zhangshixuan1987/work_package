@@ -70,12 +70,12 @@ class ObsDataReader:
             },
             'ESA_CCI': {
                 'daily': {
-                    'path': '/compyfs/zhan391/acme_init/Observations/ESA_CCI/daily',
+                    'path': '/compyfs/zhan391/acme_init/Observations/ESA_CCI/H20SOI/daily',
                     'template': 'H2OSOI.monthly.%(year)s.nc',
                     'period': '2001-2020'
                 },
                 'monthly': {
-                    'path': '/compyfs/zhan391/acme_init/Observations/ESA_CCI/monthly',
+                    'path': '/compyfs/zhan391/acme_init/Observations/ESA_CCI/H20SOI/monthly',
                     'template': 'H2OSOI.monthly.%(year)s.nc',
                     'period': '2001-2020'
                 }
