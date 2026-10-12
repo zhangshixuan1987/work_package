@@ -42,6 +42,7 @@ from util.s2s_time_windows import (
     build_windows_from_start
 )
 from util.array_stats import nanquantile
+from util.time_labels import label_by_interval_start
 
 @dataclass(frozen=True)
 class FileCollectionConfig:
@@ -392,13 +393,12 @@ class S2SWindowedTCCBaseBuilder:
         return out
 
     @staticmethod
-    def _open_var(files: List[str], var: str) -> xr.DataArray:
+    def _open_var(files: List[str], var: str, *, interval_start: bool = False) -> xr.DataArray:
+        """Open ``var``; ``interval_start`` relabels model interval means (see util.time_labels)."""
         ds = xr.open_mfdataset(files, combine="by_coords")
-        if var in ds:
-            return ds[var]
-        for k in ds.data_vars:
-            if k.lower() == var.lower():
-                return ds[k]
+        name = var if var in ds else next((k for k in ds.data_vars if k.lower() == var.lower()), None)
+        if name is not None:
+            return label_by_interval_start(ds, ds[name]) if interval_start else ds[name]
         raise KeyError(f"Variable '{var}' not found in files. Available={list(ds.data_vars)}")
 
     @staticmethod
@@ -789,7 +789,7 @@ class S2SWindowedTCCBaseBuilder:
         if not model_files:
             raise FileNotFoundError(f"No model files for exp={exp} var={var} ens={ens}")
 
-        mem = self._open_var(model_files, var)
+        mem = self._open_var(model_files, var, interval_start=True)
         mem = self._select_period_time(mem, period)
         mem = self._normalize_physics(mem, var_key=var, source="MODEL")
         if self.cfg.verbose:
@@ -935,7 +935,7 @@ class S2SWindowedTCCBaseBuilder:
         for ens, files in model_by_ens.items():
             if not files:
                 continue
-            da = self._open_var(files, var)
+            da = self._open_var(files, var, interval_start=True)
             da = self._select_period_time(da, period)
             da = self._normalize_physics(da, var_key=var, source="MODEL")
             members.append(da)

@@ -19,6 +19,7 @@ from xskillscore import rmse, pearson_r
 from dataclasses import dataclass
 
 from util.array_stats import nanquantile
+from util.time_labels import label_by_interval_start
 from util.s2s_experiments import (
     build_experiments,
     DEFAULT_EXPERIMENTS
@@ -338,17 +339,16 @@ class S2SSkillAssessor:
         return da.sel(time=slice(t0, t1))
 
     @staticmethod
-    def _open_var(files: List[str], var: str) -> xr.DataArray:
+    def _open_var(files: List[str], var: str, *, interval_start: bool = False) -> xr.DataArray:
+        """Open ``var``; ``interval_start`` relabels model interval means (see util.time_labels)."""
         ds = xr.open_mfdataset(files, combine="by_coords")
-        if var in ds:
-            return ds[var]
-        for k in ds.data_vars:
-            if k.lower() == var.lower():
-                return ds[k]
+        name = var if var in ds else next((k for k in ds.data_vars if k.lower() == var.lower()), None)
+        if name is not None:
+            return label_by_interval_start(ds, ds[name]) if interval_start else ds[name]
         raise KeyError(f"Variable '{var}' not found. Available={list(ds.data_vars)}")
 
     def _open_member(self, files: List[str], *, var: str, period: str) -> xr.DataArray:
-        da = self._open_var(files, var)
+        da = self._open_var(files, var, interval_start=True)
         da = self._select_period_time(da, period)
         da = self._to_daily_date_time(da)
         return da
@@ -573,7 +573,7 @@ class S2SSkillAssessor:
         for ens, files in model_files_by_ens.items():
             if not files:
                 continue
-            da = cls._open_var(files, var)
+            da = cls._open_var(files, var, interval_start=True)
             da = cls._select_period_time(da, period)
             members.append(da)
             ens_names.append(ens)
@@ -1059,9 +1059,9 @@ class S2SSkillAssessor:
                 member_vars["ACC_member_quantile"] = nanquantile(ACCm, list(qs), "ens").rename({"quantile": "q"})
                 member_vars["RMSE_member_quantile"] = nanquantile(RMSEm, list(qs), "ens").rename({"quantile": "q"})
 
-        # lead_days based on ACC time coordinate
+        # lead_days based on ACC time coordinate; day 1 is the first forecast day
         t = ACC["time"]
-        lead = ((t - t.isel(time=0)) / np.timedelta64(1, "D")).astype("float32").rename("lead_days")
+        lead = ((t - t.isel(time=0)) / np.timedelta64(1, "D") + 1).astype("float32").rename("lead_days")
 
         ds = xr.Dataset(
             data_vars=dict(
@@ -1175,13 +1175,12 @@ class BiweeklyAccMapAssessor:
         return da.sel(time=slice(t0, t1))
 
     @staticmethod
-    def _open_var(files: List[str], var: str) -> xr.DataArray:
+    def _open_var(files: List[str], var: str, *, interval_start: bool = False) -> xr.DataArray:
+        """Open ``var``; ``interval_start`` relabels model interval means (see util.time_labels)."""
         ds = xr.open_mfdataset(files, combine="by_coords")
-        if var in ds:
-            return ds[var]
-        for k in ds.data_vars:
-            if k.lower() == var.lower():
-                return ds[k]
+        name = var if var in ds else next((k for k in ds.data_vars if k.lower() == var.lower()), None)
+        if name is not None:
+            return label_by_interval_start(ds, ds[name]) if interval_start else ds[name]
         raise KeyError(f"Variable '{var}' not found. Available={list(ds.data_vars)}")
 
     @staticmethod
@@ -1304,7 +1303,7 @@ class BiweeklyAccMapAssessor:
         for ens, files in model_files_by_ens.items():
             if not files:
                 continue
-            da = cls._open_var(files, var)
+            da = cls._open_var(files, var, interval_start=True)
             da = cls._select_period_time(da, period)
             members.append(da)
             ens_names.append(ens)
@@ -1319,7 +1318,7 @@ class BiweeklyAccMapAssessor:
     def _add_lead_day_coord(self, da: xr.DataArray) -> xr.DataArray:
         init = np.datetime64(self.cfg.init_time)
         t = da["time"].values
-        lead = ((t - init) / np.timedelta64(1, "D")).astype("float32")
+        lead = ((t - init) / np.timedelta64(1, "D") + 1).astype("float32")  # day 1 = init date
         return da.assign_coords(lead_day=("time", lead))
 
     @staticmethod
@@ -1601,7 +1600,7 @@ class BiweeklyAccMapAssessor:
             if not files:
                 continue
             try:
-                mem = self._open_var(files, var)
+                mem = self._open_var(files, var, interval_start=True)
                 mem = self._maybe_convert_geopotential_to_height(
                     mem, var_key=var, verbose=self.cfg.verbose
                 )
