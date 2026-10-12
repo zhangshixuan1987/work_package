@@ -27,7 +27,7 @@ workflow needs to run unattended or from a scheduler, put that entry point in
 
 Every maintained notebook begins with a tagged parameter cell defining `INPUT_DATA_ROOT`, `WORK_DIR`, and `DIAGNOSTIC_OUTPUT_ROOT`. Data products are written under `DIAGNOSTIC_OUTPUT_ROOT/data/<workflow>/`; figures are written under `DIAGNOSTIC_OUTPUT_ROOT/figure/<workflow>/`. The repository defaults are `/compyfs/zhan391/v3_dart_cda_scratch`, `/compyfs/zhan391/work_package/e3sm_dart_analysis`, and `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026`, respectively.
 
-Active land-atmosphere workflow drivers live in `jupyter/analysis_lac/`:
+Active land-atmosphere workflow drivers live in `jupyter/fcst_lac_eval/`:
 
 1. `01_prepare_metrics.ipynb` - configure and compute lag-correlation and spatial-feedback metrics.
 2. `02_compute_correlation_coupling.ipynb` - compute the LHFLX-TREFHT squared-correlation coupling diagnostic.
@@ -47,7 +47,7 @@ Bias verification is split by period and component:
 
 1. `jupyter/analysis_atm_bias/01_compute_and_plot_bias_metrics.ipynb` - atmospheric DA-analysis-period verification.
 2. `jupyter/analysis_lnd_init/01_compute_and_plot_bias_metrics.ipynb` - land DA-analysis-period verification.
-3. `jupyter/fcst_atm_bias/01_compute_and_plot_bias_metrics.ipynb` - atmospheric forecast-period verification.
+3. `jupyter/fcst_atm_eval/01_compute_and_plot_bias_metrics.ipynb` - atmospheric forecast-period verification.
 4. `jupyter/fcst_lnd_eval/01_compute_and_plot_bias_metrics.ipynb` - land forecast-period verification.
 
 All four use `util/bias_metrics.py`, keep analysis and forecast caches separate, and reuse existing NetCDF products unless `force_compute = True`.
@@ -63,7 +63,6 @@ Active data-assimilation diagnostic workflow drivers live in `jupyter/analysis_a
 6. `06_state_update_profiles.ipynb` - compute long-window pressure-profile state increments, normalized increments, and spread responses.
 7. `07_state_update_spatial_patterns.ipynb` - map representative posterior-minus-prior increments and spatial spread responses as a case-study companion to notebook 06.
 8. `08_obs_profile_diagnostics.ipynb` - plot bias, RMSE, total spread, spread/RMSE, and rejection-rate profiles; switch modes with `PROFILE_MODE`.
-9. `09_compute_and_plot_ens_ranges.ipynb` - cache and compare CTRL/DART ensemble-member spatial ranges.
 
 Initial-land diagnostics follow the same notebook-driver layout:
 
@@ -79,7 +78,7 @@ Initial-land diagnostics follow the same notebook-driver layout:
 10. Initial-land support files such as `dzsoi_elm.nc` and `landmask_1x1.nc` live in `/compyfs/zhan391/acme_init/lnd_sea_mask/` (`LAND_SUPPORT_DIR`) and are generated there when missing; observations are read from `/compyfs/zhan391/acme_init/Observations/` (`OBSERVATION_ROOT`).
 11. Generated initial-land NetCDF/log outputs live under `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/data/analysis_lnd_init/`; generated figures live under `/compyfs/www/zhan391/e3sm_dart/diag_dart_2026/figure/analysis_lnd_init/`.
 
-The former `7_mjo_analysis/` workflow is consolidated under `jupyter/analysis_mjo/`:
+The former `7_mjo_analysis/` workflow is consolidated under `jupyter/fcst_atm_mjo/`:
 `01_hovmoller_phase_composites.ipynb` handles configurable PRECT/FLUT
 Hovmöller and phase composites, while `02_rmm_diagnostics.ipynb` handles
 ensemble RMM/EOF diagnostics. Reusable implementations live in `util/`, and
@@ -92,11 +91,11 @@ S2S forecast verification is consolidated into two parameterized workflows:
 1. `jupyter/fcst_s2s_pcc/` computes regional PCC/ACC and RMSE, horizontal ACC maps, and plots cached regional skill.
 2. `jupyter/fcst_s2s_tcc/` computes lead-window TCC/RMSE/bias maps, reduces them regionally, and plots cached map or regional products.
 3. Shared experiment, observation, metric, and plotting implementations live in `configs/s2s_config.py` and `util/s2s_*.py`.
-4. `jupyter/fcst_atm_timeseries/` provides cached regional PRECT/FLUT ensemble time series, and `jupyter/fcst_atm_initial_shock/` diagnoses experiment-minus-baseline decay timescales.
+4. `jupyter/fcst_atm_eval/02_compute_and_plot_regional_timeseries.ipynb` provides cached regional PRECT/FLUT ensemble time series, and `jupyter/fcst_atm_eval/01_compute_and_plot_decay_timescales.ipynb` diagnoses experiment-minus-baseline decay timescales.
 
 The TCC workflow also includes the Dec2011 `da` analysis selection inherited from `6_s2s_skills/`; weekly, biweekly, 15-day, and monthly caches remain separate. The former seasonal and ensemble-slice notebook copies in `analysis_s2s_pcc/` and `analysis_s2s_tcc/` are superseded by notebook parameters. Cached NetCDF products are reused unless `force_compute = True`.
 
-The legacy `cross_correlation/` workflow is consolidated into `jupyter/analysis_lac/06_compute_and_plot_ensemble_cross_correlation.ipynb`, and the generic `ensemble_plot/` notebook is now `jupyter/analysis_atm_da/09_compute_and_plot_ens_ranges.ipynb`, which compares cached CTRL and DART hindcast spatial-range ensembles. The duplicate `fcst_initial_shock/` notebook is superseded by the cached `jupyter/fcst_atm_initial_shock/` workflow.
+The legacy `cross_correlation/` workflow is consolidated into `jupyter/fcst_lac_eval/06_compute_and_plot_ensemble_cross_correlation.ipynb`, and the generic `ensemble_plot/` notebook is now `jupyter/fcst_atm_eval/03_compute_and_plot_ens_ranges.ipynb`, which compares cached CTRL and DART hindcast spatial-range ensembles. The duplicate `fcst_initial_shock/` notebook is superseded by the cached `jupyter/fcst_atm_eval/01_compute_and_plot_decay_timescales.ipynb` workflow.
 
 Atmospheric restart stability checking is maintained in `jupyter/analysis_atm_init/04_check_restart_stability.ipynb` with reusable processing in `util/atm_restart_stability.py`. It supersedes the broken one-off `sanity_check/` notebook and caches request-specific range, non-finite, spatial, and transition diagnostics.
 
