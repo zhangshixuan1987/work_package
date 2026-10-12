@@ -18,7 +18,6 @@ WORKFLOW_NAMES = (
     "analysis_mjo",
     "fcst_atm_bias",
     "fcst_atm_initial_shock",
-    "fcst_atm_timeseries",
     "fcst_atm_ensemble_ts",
     "fcst_lnd_bias",
     "fcst_atm_model_evaluation",

@@ -1,11 +1,10 @@
-"""Cached regional ensemble/observation time series for atmospheric forecasts."""
+"""Regional boxes and daily regional-mean ensemble series for atmospheric forecasts."""
 from __future__ import annotations
-import os,re
-from pathlib import Path
+import re
 import numpy as np
 import xarray as xr
-import matplotlib.pyplot as plt
 from util.bias_metrics import experiment_registry
+from util.time_labels import label_by_interval_start
 
 REGIONS={
  "global":((-90.,90.),(-180.,180.)),
@@ -16,11 +15,11 @@ REGIONS={
  "MAR_CONT":((-10.,10.),(95.,150.)),
 }
 VARIABLES={
- "PRECT":{"observation":"GPM","obs_dir":"IMERG","obs_file":"PRECT.daily.{year}.nc","units":"mm day-1"},
- "FLUT":{"observation":"NOAA-OLR","obs_dir":"NOAA_IOLR","obs_file":"FLUT.daily.{year}.nc","units":"W m-2"},
- "TS":{"observation":"ERA5","units":"K"},
- "TREFHT":{"observation":"ERA5","units":"K"},
- "PSL":{"observation":"ERA5","units":"hPa"},
+ "PRECT":{"units":"mm day-1"},
+ "FLUT":{"units":"W m-2"},
+ "TS":{"units":"K"},
+ "TREFHT":{"units":"K"},
+ "PSL":{"units":"hPa"},
 }
 
 def _period(period):
@@ -31,18 +30,6 @@ def _period(period):
 def _select_period(field,period):
  y0,m0,y1,m1,_=_period(period); key=field.time.dt.year*100+field.time.dt.month
  return field.where((key>=y0*100+m0)&(key<=y1*100+m1),drop=True)
-
-def label_by_interval_start(ds,field):
- """Label interval means by their start and drop zero-width (initial-state) records.
-
- Forecast ts files stamp each mean at its interval end (the Jan 1 daily mean is
- stamped Jan 2 00Z) and begin with a zero-width snapshot of the initial state.
- """
- name=ds.time.attrs.get("bounds") or next((n for n in ("time_bnds","time_bounds") if n in ds),None)
- if name is None: return field
- bounds=ds[name].load(); start=bounds.isel({bounds.dims[-1]:0}); end=bounds.isel({bounds.dims[-1]:1})
- keep=(end>start).values
- return field.isel(time=keep).assign_coords(time=start.values[keep])
 
 def _normalize(field):
  rename={}
@@ -62,7 +49,7 @@ def _regional_mean(field,region):
  field=_subset(field,region); weights=np.cos(np.deg2rad(field.lat)).clip(min=0).broadcast_like(field.isel(time=0))
  return field.weighted(weights).mean(("lat","lon"),skipna=True)
 
-def _convert(field,variable,is_obs=False):
+def _convert(field,variable):
  units=str(field.attrs.get("units","")).lower()
  if variable=="PRECT" and ("s-1" in units or units in {"m/s","m s-1"}): field=field*86400*1000
  if variable=="PSL" and "pa" in units and "hpa" not in units: field=field*.01
@@ -87,43 +74,3 @@ def read_model_regional_series(data_root,experiment,season,run_segment,variable,
  finally:
   for ds in opened: ds.close()
  return ensemble,meta
-
-def read_observation_regional_series(reference_root,variable,region,period):
- cfg=VARIABLES[variable]; *_,years=_period(period); folder=Path(reference_root)/cfg["obs_dir"]/"daily"
- files=[folder/cfg["obs_file"].format(year=year) for year in years]
- for path in files:
-  if not path.is_file(): raise FileNotFoundError(path)
- ds=xr.open_mfdataset(files,combine="by_coords",parallel=True,chunks={})
- try:
-  name=next((x for x in (variable,"OLR","olr","precip") if x in ds),None)
-  if name is None: raise KeyError(f"{variable} not found in {files[0]}: {list(ds.data_vars)}")
-  field=_convert(_select_period(ds[name],period),variable,is_obs=True).assign_coords(time=lambda x:x.time.dt.floor("D"))
-  series=_regional_mean(field,region).compute()
- finally: ds.close()
- series.attrs["units"]=VARIABLES[variable]["units"]
- return series
-
-def timeseries_cache_path(cache_dir,variable,region,season,run_segment,period):
- return Path(cache_dir)/f"{variable}_{region}_{season}_{run_segment}_{period}_regional_timeseries.nc"
-
-def cache_regional_timeseries(path,*,data_root=None,reference_root=None,experiments=None,season=None,run_segment=None,variable=None,region=None,period=None,max_members=None,force_compute=False):
- path=Path(path)
- if path.is_file() and not force_compute: return xr.load_dataset(path)
- if any(x is None for x in (data_root,reference_root,experiments,season,run_segment,variable,region,period)): raise ValueError("raw-data parameters are required for a missing cache")
- model=[]
- for experiment in experiments:
-  field,_=read_model_regional_series(data_root,experiment,season,run_segment,variable,region,period,max_members=max_members)
-  model.append(field.expand_dims(exp=[experiment]))
- model=xr.concat(model,dim="exp",join="outer"); obs=read_observation_regional_series(reference_root,variable,region,period)
- model,obs=xr.align(model,obs,join="inner"); ds=xr.Dataset({"model_member":model,"observation":obs})
- ds["model_mean"]=model.mean("ens",skipna=True); ds["model_q25"]=model.quantile(.25,"ens",skipna=True).reset_coords("quantile",drop=True); ds["model_q75"]=model.quantile(.75,"ens",skipna=True).reset_coords("quantile",drop=True)
- ds.attrs.update(variable=variable,region=region,season=season,run_segment=run_segment,period=period,observation=VARIABLES[variable]["observation"])
- path.parent.mkdir(parents=True,exist_ok=True); tmp=path.with_suffix(path.suffix+".tmp"); ds.to_netcdf(tmp); os.replace(tmp,path); return ds
-
-def plot_regional_timeseries(ds,label_map=None,title=""):
- fig,ax=plt.subplots(figsize=(10,4.5)); lead=np.arange(ds.sizes["time"])
- for exp in ds.exp.values:
-  mean=ds.model_mean.sel(exp=exp); lo=ds.model_q25.sel(exp=exp); hi=ds.model_q75.sel(exp=exp); label=(label_map or {}).get(str(exp),str(exp))
-  ax.plot(lead,mean,label=label); ax.fill_between(lead,lo,hi,alpha=.16)
- ax.plot(lead,ds.observation,color="black",lw=2,label=ds.attrs.get("observation","Observation")); ax.set_xlabel("Lead day"); ax.set_ylabel(ds.model_member.attrs.get("units",VARIABLES[ds.attrs["variable"]]["units"])); ax.grid(alpha=.3); ax.legend(ncol=2)
- ax.set_title(title or f"{ds.attrs['variable']} — {ds.attrs['region']}"); fig.tight_layout(); return fig

@@ -62,7 +62,7 @@ _EXPERIMENTS = {
         "CTRL10-S0": {"nens": 10, "label": "CTRL (ENS=10)", "da": ("CTRLEN10", "201112-201112"), "fc": ("CTRLEN10_15day", "201201-201202")},
         "CTRF10-S0": {"nens": 10, "label": "Free run (ENS=10)", "da": ("CTRFEN10", "201112-201112"), "fc": None},
         "CAPT10-S0": {"nens": 10, "label": "CAPT (ENS=10)", "da": None, "fc": ("CAPTEN10_15day", "201201-201202")},
-        "DART10-S0": {"nens": 10, "label": "EAM-DART (ENS=10)", "da": ("DARTEN10", "201112-201112"), "fc": None},
+        "DART10-S0": {"nens": 10, "label": "EAM-DART (ENS=10)", "da": ("DARTEN10", "201112-201112"), "fc": ("DARTEN10_15day", "201201-201202")},
         "DART20-S0": {"nens": 20, "label": "EAM-DART (ENS=20)", "da": ("DARTEN20", "201112-201112"), "fc": ("DARTEN20_15day", "201201-201202")},
         "DART40-S0": {"nens": 40, "label": "EAM-DART (ENS=40)", "da": ("DARTEN40", "201112-201112"), "fc": ("DARTEN40_15day", "201201-201202")},
     },

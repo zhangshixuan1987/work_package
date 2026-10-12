@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 from util.bias_metrics import experiment_registry
-from util.forecast_regional_timeseries import label_by_interval_start
+from util.time_labels import label_by_interval_start
 
 INPUT_VARIABLES=("LHFLX","SHFLX","FSNS","FLNS")
 OUTPUT_VARIABLES=("Rn","LE","SH","Residual","BowenRatio")

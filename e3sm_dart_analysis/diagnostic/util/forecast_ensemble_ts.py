@@ -5,7 +5,8 @@ carry ``time_bnds``: the first record has zero width and holds the initial
 state; later records are interval means (``time: mean``) or end-of-interval
 values (``time: point``). Every record is placed at its lead time (interval
 midpoint for means, interval end for point values) and, where available,
-verified against ERA5 6-hourly samples averaged over the same interval.
+verified against a reference averaged over the same interval: ERA5 6-hourly
+samples, or daily means (GPM IMERG precipitation, NOAA interpolated OLR).
 """
 from __future__ import annotations
 
@@ -22,8 +23,26 @@ from util.forecast_regional_timeseries import REGIONS as BOX_REGIONS
 
 FREQUENCIES = ("6hourly", "daily")
 REGIONS = ("global", "land", "ocean") + tuple(r for r in BOX_REGIONS if r != "global")
-# Variables with an ERA5 6-hourly reference on the model's 180x360 grid.
-REFERENCE_VARIABLES = ("PSL", "TS", "TREFHT", "PRECT")
+# Reference products on the model's 180x360 grid. "samples": 6-hourly values at
+# 00/06/12/18Z; "daily": calendar-day means (any stamp within the day).
+REFERENCE_PRODUCTS = {
+    "ERA5": {"kind": "samples", "file": "ERA5/6hourly/ERA5.6hourly.en00.{variable}.{year}01-{year}12.nc"},
+    "GPM": {"kind": "daily", "file": "IMERG/daily/{variable}.daily.{year}.nc"},
+    "NOAA OLR": {"kind": "daily", "file": "NOAA_IOLR/daily/{variable}.daily.{year}.nc"},
+}
+# Products available per variable; the first is the default.
+REFERENCES = {
+    "PSL": ("ERA5",),
+    "TS": ("ERA5",),
+    "TREFHT": ("ERA5",),
+    "PRECT": ("ERA5", "GPM"),
+    "FLUT": ("NOAA OLR",),
+}
+REFERENCE_VARIABLES = tuple(REFERENCES)
+MEMBER_DISPLAYS = ("members", "quartiles", "none")
+# Bump when cached content changes meaning; older caches are rebuilt.
+CACHE_VERSION = 2
+_RESOLUTION_HOURS = {"samples": 6.0, "daily": 24.0}
 _HPA = {"PS", "PSL"}
 _PRECIPITATION = {"PRECT", "PRECC", "PRECL"}
 
@@ -33,16 +52,16 @@ DIAGNOSTICS = {
     "member_max": "regional maximum per member",
     "member_tendency": "regional mean of |dX/dt| per member (units per day)",
     "ensemble_spread": "regional mean of the gridpoint ensemble standard deviation",
-    "reference_mean": "ERA5 regional mean over the same intervals",
-    "reference_tendency": "ERA5 regional mean of |dX/dt| (units per day)",
-    "ensemble_mean_rmse": "gridpoint RMSE of the ensemble mean against ERA5",
+    "reference_mean": "reference regional mean over the same intervals",
+    "reference_tendency": "reference regional mean of |dX/dt| (units per day); missing when the reference is coarser than the model output",
+    "ensemble_mean_rmse": "gridpoint RMSE of the ensemble mean against the reference",
 }
 SUMMARY_METRICS = {
     "tendency_ratio": "mean |dX/dt| over the shock window / over the settled window",
-    "tendency_ratio_era5": "mean |dX/dt| over the shock window / ERA5 over the same leads",
+    "tendency_ratio_ref": "mean |dX/dt| over the shock window / the reference's over the same leads",
     "adjustment_days": "last lead before the settled window where the 1-day running |dX/dt| exceeds (1 + tolerance) x the settled level",
-    "initial_bias": "ensemble-mean minus ERA5 regional mean at lead 0",
-    "drift": "bias change from lead 0 to the last day of the shock window",
+    "initial_bias": "ensemble-mean minus reference regional mean at the first lead with a reference (lead 0 for ERA5)",
+    "drift": "bias change from that lead to the last day of the shock window",
     "spread_ratio": "ensemble spread at the end of the shock window / at lead 0",
 }
 
@@ -134,41 +153,64 @@ def read_member_ensemble(config, variable, period, *, frequency="6hourly", max_m
     return field, opened
 
 
-def read_era5_reference(reference_root, variable, field):
-    """ERA5 6-hourly samples averaged (trapezoid) over each model interval.
+def reference_product(variable, product=None):
+    """Validated reference product name for ``variable`` (None -> its default)."""
+    choices = REFERENCES.get(variable, ())
+    if product is None:
+        return choices[0] if choices else None
+    if product not in choices:
+        raise ValueError(f"{variable}: reference {product!r} unavailable; choose from {list(choices)}")
+    return product
 
-    Zero-width records take the sample at that time. For 6-hourly model means
-    the reference is the mean of the two bounding samples, an approximation of
-    the interval mean.
+
+def read_reference(reference_root, variable, field, product=None):
+    """Reference averaged over each model interval, on the model grid.
+
+    ``samples`` (ERA5 6-hourly): trapezoid mean of the samples in the interval;
+    zero-width and instantaneous records take the sample at their time. For
+    6-hourly model means this is the mean of the two bounding samples, an
+    approximation of the interval mean. ``daily`` (GPM, NOAA OLR): overlap-weighted
+    mean of the calendar days the interval covers; zero-width records have no
+    reference. Gridpoints the product does not cover stay missing.
     """
+    name = reference_product(variable, product)
+    spec = REFERENCE_PRODUCTS[name]
     start = pd.DatetimeIndex(field.interval_start.values)
     end = pd.DatetimeIndex(field.interval_end.values)
-    folder = Path(reference_root) / "ERA5" / "6hourly"
-    files = [folder / f"ERA5.6hourly.en00.{variable}.{year}01-{year}12.nc"
+    files = [Path(reference_root) / spec["file"].format(variable=variable, year=year)
              for year in range(start.min().year, end.max().year + 1)]
     missing = [str(p) for p in files if not p.is_file()]
     if missing:
-        raise FileNotFoundError("Missing ERA5 files: " + ", ".join(missing))
+        raise FileNotFoundError(f"Missing {name} files: " + ", ".join(missing))
     with xr.open_mfdataset(files, combine="by_coords") as ds:
-        era5 = _normalize(ds[variable]).sel(time=slice(start.min(), end.max())).load()
-    era5 = _units(era5, variable)
-    times = pd.DatetimeIndex(era5.time.values)
+        data = _normalize(ds[variable]).sel(time=slice(start.min().floor("D"), end.max())).load()
+    data = _units(data, variable)
+    times = pd.DatetimeIndex(data.time.values)
+    day_start = times.floor("D").values
+    day_end = day_start + np.timedelta64(1, "D")
     weights = np.zeros((len(start), len(times)))
+    point = "time: point" in str(field.attrs.get("cell_methods", ""))
     for row, (a, b) in enumerate(zip(start, end)):
-        inside = (times >= a) & (times <= b)
-        if a == b or "time: point" in str(field.attrs.get("cell_methods", "")):
-            inside = times == b
-        weights[row, inside] = 1.0
-        if a != b:
+        if spec["kind"] == "daily":
+            if a < b:
+                a64, b64 = a.to_datetime64(), b.to_datetime64()
+                overlap = (np.minimum(day_end, b64) - np.maximum(day_start, a64)) / np.timedelta64(1, "h")
+                weights[row] = np.clip(overlap, 0, None)
+        elif a == b or point:
+            weights[row, times == b] = 1.0
+        else:
+            inside = (times >= a) & (times <= b)
+            weights[row, inside] = 1.0
             weights[row, times == a] *= 0.5
             weights[row, times == b] *= 0.5
         if weights[row].sum() == 0:
             weights[row] = np.nan
     weights /= weights.sum(axis=1, keepdims=True)
     weights = xr.DataArray(weights, dims=("lead", "time"), coords={"lead": field.lead})
-    reference = xr.dot(weights, era5.fillna(0), dim="time").where(era5.notnull().all("time"))
+    reference = xr.dot(weights, data.fillna(0), dim="time").where(data.notnull().all("time"))
     reference = reference.assign_coords(lat=field.lat, lon=field.lon)
-    reference.attrs["units"] = era5.attrs["units"]
+    reference.attrs.update(units=data.attrs["units"], name=name,
+                           resolution_hours=_RESOLUTION_HOURS[spec["kind"]])
     return reference
 
 
@@ -176,31 +218,46 @@ def _area_mean(values, weights):
     return values.weighted(weights).mean(("lat", "lon"), skipna=True)
 
 
-def _abs_tendency(values):
-    step = np.diff(values.lead.values) / 24.0
-    change = np.abs(values.diff("lead")) / xr.DataArray(step, dims="lead", coords={"lead": values.lead.values[1:]})
+def _abs_tendency(values, point=True):
+    """|dX/dt| per day between consecutive records, labelled by the later record.
+
+    For interval means (``point=False``) the step from the zero-width initial
+    snapshot to the first mean compares different quantities, so tendencies
+    start at the first interval mean.
+    """
+    series = values if point else values.isel(lead=slice(1, None))
+    step = np.diff(series.lead.values) / 24.0
+    change = np.abs(series.diff("lead")) / xr.DataArray(step, dims="lead", coords={"lead": series.lead.values[1:]})
     return change.reindex(lead=values.lead)
 
 
 def derive_ensemble_ts(field, masks, reference=None):
-    """Regional member, spread, tendency, and (optional) ERA5 diagnostics."""
+    """Regional member, spread, tendency, and (optional) reference diagnostics."""
     intervals = {name: field[name] for name in ("interval_start", "interval_end")}
+    point = "time: point" in str(field.attrs.get("cell_methods", ""))
     field = field.drop_vars(list(intervals))
     if reference is not None:
         reference = reference.drop_vars(list(intervals), errors="ignore")
+        # Restrict every diagnostic to gridpoints the reference covers, so model
+        # and reference regional means describe the same area.
+        masks = masks & reference.notnull().any("lead")
     weights = np.cos(np.deg2rad(field.lat)).clip(min=0) * masks
     masked = field.where(masks)
     out = xr.Dataset({
         "member_mean": _area_mean(field, weights),
         "member_min": masked.min(("lat", "lon")),
         "member_max": masked.max(("lat", "lon")),
-        "member_tendency": _area_mean(_abs_tendency(field), weights),
+        "member_tendency": _area_mean(_abs_tendency(field, point), weights),
         "ensemble_spread": _area_mean(field.std("member", ddof=1), weights),
     })
     if reference is not None:
         error = field.mean("member") - reference
         out["reference_mean"] = _area_mean(reference, weights)
-        out["reference_tendency"] = _area_mean(_abs_tendency(reference), weights)
+        step = float(np.median(np.diff(field.lead.values[1:])))
+        tendency = _area_mean(_abs_tendency(reference, point), weights)
+        # A reference coarser than the model output has no within-interval change.
+        resolved = reference.attrs["resolution_hours"] <= step * 1.01
+        out["reference_tendency"] = tendency if resolved else xr.full_like(tendency, np.nan)
         out["ensemble_mean_rmse"] = np.sqrt(_area_mean(error ** 2, weights))
     out = out.compute().assign_coords(intervals)
     for name in out.data_vars:
@@ -214,31 +271,38 @@ def ensemble_ts_cache_path(cache_dir, experiment, variable, frequency, period):
     return Path(cache_dir) / f"{experiment}_{variable}_{frequency}_{period}_ensemble_ts.nc"
 
 
-def ensemble_ts_cache_status(path, *, regions, members, use_reference):
+def ensemble_ts_cache_status(path, *, regions, members, reference=None):
     """'' when the cache covers the request, otherwise why it must be rebuilt."""
     path = Path(path)
     if not path.is_file():
         return "missing"
     with xr.open_dataset(path) as cached:
+        if int(cached.attrs.get("cache_version", 1)) != CACHE_VERSION:
+            return f"cache version {cached.attrs.get('cache_version', 1)}, current {CACHE_VERSION}"
         missing = set(regions) - set(cached.region.values.tolist())
         if missing:
             return f"regions {sorted(missing)} not cached"
         if cached.sizes["member"] != members:
             return f"members: cached {cached.sizes['member']}, requested {members}"
-        if use_reference and "reference_mean" not in cached:
-            return "no ERA5 reference cached"
+        cached_reference = str(cached.attrs.get("reference", ""))
+        if reference and not cached_reference.startswith(reference):
+            return f"reference: cached {cached_reference or 'none'}, requested {reference}"
     return ""
 
 
 def cache_ensemble_ts(path, *, config, experiment, variable, period, frequency, regions,
-                      landmask_file, reference_root=None, max_members=None, force_compute=False,
-                      log=print):
-    """Compute or reuse one experiment/variable cache covering ``regions``."""
+                      landmask_file, reference_root=None, reference=None, max_members=None,
+                      force_compute=False, log=print):
+    """Compute or reuse one experiment/variable cache covering ``regions``.
+
+    ``reference`` picks the product for variables with several (see
+    ``REFERENCES``); None uses the default. No ``reference_root`` -> model only.
+    """
     path = Path(path)
     members = config["nens"] if max_members is None else min(max_members, config["nens"])
-    use_reference = reference_root is not None and variable in REFERENCE_VARIABLES
+    reference = reference_product(variable, reference) if reference_root is not None else None
     reason = "forced" if force_compute else ensemble_ts_cache_status(
-        path, regions=regions, members=members, use_reference=use_reference)
+        path, regions=regions, members=members, reference=reference)
     if not reason:
         log(f"[REUSE] {path.name}")
         return xr.load_dataset(path).sel(region=list(regions))
@@ -246,14 +310,15 @@ def cache_ensemble_ts(path, *, config, experiment, variable, period, frequency, 
                                          max_members=max_members)
     try:
         masks = region_masks(field.lat, field.lon, regions, landmask_file)
-        reference = read_era5_reference(reference_root, variable, field) if use_reference else None
-        ds = derive_ensemble_ts(field, masks, reference)
+        reference_field = (read_reference(reference_root, variable, field, reference)
+                           if reference else None)
+        ds = derive_ensemble_ts(field, masks, reference_field)
     finally:
         for opened_ds in opened:
             opened_ds.close()
     ds.attrs.update(experiment=experiment, label=config["label"], variable=variable,
                     period=period, frequency=frequency, ensemble_members=members,
-                    reference="ERA5 6-hourly" if use_reference else "",
+                    reference=reference or "", cache_version=CACHE_VERSION,
                     lead_definition="hours from the initial time to the interval midpoint "
                                     "(time: mean) or interval end (time: point)")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -293,9 +358,9 @@ def shock_summary(datasets, *, shock_days=2.0, settled_days=(10.0, 30.0), tolera
             spread = sel.ensemble_spread
             row["spread_ratio"] = float(spread.where(shock_end).mean()) / float(spread.isel(lead=0))
             if "reference_mean" in sel:
-                row["tendency_ratio_era5"] = (float(tendency.where(shock).mean())
-                                              / float(sel.reference_tendency.where(shock).mean()))
-                bias = sel.member_mean.mean("member") - sel.reference_mean
+                row["tendency_ratio_ref"] = (float(tendency.where(shock).mean())
+                                             / float(sel.reference_tendency.where(shock).mean()))
+                bias = (sel.member_mean.mean("member") - sel.reference_mean).dropna("lead")
                 row["initial_bias"] = float(bias.isel(lead=0))
                 row["drift"] = float(bias.where(shock_end).mean()) - row["initial_bias"]
             rows.append(row)
@@ -307,26 +372,36 @@ def _ylabel(ds, name):
     return f"{ds.attrs['variable']} ({ds[name].attrs.get('units', '')})"
 
 
-def plot_ensemble_timeseries(datasets, region, *, labels, colors, zoom_days=10, show_members=True,
-                             title=""):
-    """Members, ensemble mean, and ERA5 over the full forecast and the first ``zoom_days``."""
+def plot_ensemble_timeseries(datasets, region, *, labels, colors, zoom_days=10,
+                             member_display="members", title=""):
+    """Ensemble mean and reference over the full forecast and the first ``zoom_days``.
+
+    ``member_display``: "members" draws every member, "quartiles" shades the
+    25th-75th percentile envelope, "none" shows only ensemble means.
+    """
+    if member_display not in MEMBER_DISPLAYS:
+        raise ValueError(f"member_display must be one of {MEMBER_DISPLAYS}")
     fig, axes = plt.subplots(1, 2, figsize=(14, 4.5), gridspec_kw={"width_ratios": (3, 2)})
     reference = None
     for experiment, ds in datasets.items():
         sel = ds.sel(region=region)
         days = sel.lead / 24.0
+        color = colors[experiment]
+        if member_display == "quartiles":
+            low, high = sel.member_mean.quantile([0.25, 0.75], "member")
         for ax in axes:
-            if show_members:
+            if member_display == "members":
                 for member in sel.member.values:
-                    ax.plot(days, sel.member_mean.sel(member=member), color=colors[experiment],
-                            lw=0.5, alpha=0.3)
-            ax.plot(days, sel.member_mean.mean("member"), color=colors[experiment], lw=2,
+                    ax.plot(days, sel.member_mean.sel(member=member), color=color, lw=0.5, alpha=0.3)
+            elif member_display == "quartiles":
+                ax.fill_between(days, low, high, color=color, alpha=0.2, lw=0)
+            ax.plot(days, sel.member_mean.mean("member"), color=color, lw=2,
                     label=labels[experiment])
         if reference is None and "reference_mean" in sel:
-            reference = sel.reference_mean
+            reference, reference_name = sel.reference_mean, ds.attrs.get("reference") or "reference"
     for ax in axes:
         if reference is not None:
-            ax.plot(reference.lead / 24.0, reference, color="black", lw=1.5, ls="--", label="ERA5")
+            ax.plot(reference.lead / 24.0, reference, color="black", lw=1.5, ls="--", label=reference_name)
         ax.set_xlabel("Lead (days)")
         ax.grid(alpha=0.3)
     first = next(iter(datasets.values()))
@@ -343,7 +418,7 @@ def plot_shock_diagnostics(datasets, region, *, labels, colors, zoom_days=10, ti
     """Tendency, drift, RMSE/spread, and spatial range over the first ``zoom_days``."""
     fig, axes = plt.subplots(2, 2, figsize=(13, 8), sharex=True)
     (ax_tend, ax_bias), (ax_err, ax_range) = axes
-    reference_drawn = False
+    reference_name = None
     for experiment, ds in datasets.items():
         sel = ds.sel(region=region)
         days = sel.lead / 24.0
@@ -353,9 +428,11 @@ def plot_shock_diagnostics(datasets, region, *, labels, colors, zoom_days=10, ti
         if "reference_mean" in sel:
             ax_bias.plot(days, mean - sel.reference_mean, color=color, lw=1.5)
             ax_err.plot(days, sel.ensemble_mean_rmse, color=color, lw=1.5)
-            if not reference_drawn:
-                ax_tend.plot(days, sel.reference_tendency, color="black", ls="--", lw=1.2, label="ERA5")
-                reference_drawn = True
+            if reference_name is None:
+                reference_name = ds.attrs.get("reference") or "reference"
+                if bool(sel.reference_tendency.notnull().any()):
+                    ax_tend.plot(days, sel.reference_tendency, color="black", ls="--", lw=1.2,
+                                 label=reference_name)
         else:
             ax_bias.plot(days, mean - mean.isel(lead=0), color=color, lw=1.5)
         ax_err.plot(days, sel.ensemble_spread, color=color, lw=1.5, ls=":")
@@ -365,8 +442,9 @@ def plot_shock_diagnostics(datasets, region, *, labels, colors, zoom_days=10, ti
     units = first.member_mean.attrs.get("units", "")
     ax_tend.set_ylabel(f"|d{first.attrs['variable']}/dt| ({units} day-1)")
     ax_tend.set_title("Regional mean absolute tendency")
-    has_reference = reference_drawn
-    ax_bias.set_title("Ensemble-mean bias vs ERA5" if has_reference else "Ensemble-mean change since lead 0")
+    has_reference = reference_name is not None
+    ax_bias.set_title(f"Ensemble-mean bias vs {reference_name}" if has_reference
+                      else "Ensemble-mean change since lead 0")
     ax_bias.axhline(0, color="gray", lw=0.7)
     ax_bias.set_ylabel(units)
     ax_err.set_title("Ensemble-mean RMSE (solid) and spread (dotted)" if has_reference
@@ -400,7 +478,7 @@ def plot_shock_summary(summary, metrics, *, colors, title=""):
             label = rows["label"].iloc[0] if len(rows) else experiment
             ax.bar(x + (index - (len(experiments) - 1) / 2) * width, values, width,
                    color=colors[experiment], label=label)
-        if metric in {"tendency_ratio", "tendency_ratio_era5", "spread_ratio"}:
+        if metric in {"tendency_ratio", "tendency_ratio_ref", "spread_ratio"}:
             ax.axhline(1, color="gray", lw=0.8, ls="--")
         else:
             ax.axhline(0, color="gray", lw=0.8)
