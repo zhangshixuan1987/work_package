@@ -18,8 +18,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from util.bias_metrics import _period_years
+from util.bias_metrics import _period_years, experiment_registry
 from util.forecast_regional_timeseries import REGIONS as BOX_REGIONS
+from util.model_evaluation import experiment_colors
 
 FREQUENCIES = ("6hourly", "daily")
 REGIONS = ("global", "land", "ocean") + tuple(r for r in BOX_REGIONS if r != "global")
@@ -40,6 +41,10 @@ REFERENCES = {
 }
 REFERENCE_VARIABLES = tuple(REFERENCES)
 MEMBER_DISPLAYS = ("members", "quartiles", "none")
+PLOT_KINDS = ("timeseries", "shock")
+_FIGURE_SUFFIX = {"timeseries": "ensemble_ts", "shock": "shock_diagnostics"}
+MODE_DEFAULTS = {"references": {}, "member_display": "members", "zoom_days": 10, "plots": PLOT_KINDS}
+MODE_OPTIONS = ("frequency", "variables", *MODE_DEFAULTS)
 # Bump when cached content changes meaning; older caches are rebuilt.
 CACHE_VERSION = 2
 _RESOLUTION_HOURS = {"samples": 6.0, "daily": 24.0}
@@ -368,6 +373,85 @@ def shock_summary(datasets, *, shock_days=2.0, settled_days=(10.0, 30.0), tolera
     return pd.DataFrame(rows).reindex(columns=columns)
 
 
+def validate_mode(mode, modes):
+    """Settings of ``modes[mode]`` with defaults filled in, after checking every option."""
+    if mode not in modes:
+        raise ValueError(f"Unknown mode {mode!r}; choose from {list(modes)}")
+    config = {**MODE_DEFAULTS, **modes[mode]}
+    missing = {"frequency", "variables"} - set(config)
+    if missing:
+        raise ValueError(f"Mode {mode!r} lacks {sorted(missing)}")
+    unknown = set(config) - set(MODE_OPTIONS)
+    if unknown:
+        raise ValueError(f"{mode}: unknown options {sorted(unknown)}; choose from {list(MODE_OPTIONS)}")
+    if config["frequency"] not in FREQUENCIES:
+        raise ValueError(f"{mode}: frequency must be one of {FREQUENCIES}")
+    if config["member_display"] not in MEMBER_DISPLAYS:
+        raise ValueError(f"{mode}: member_display must be one of {MEMBER_DISPLAYS}")
+    unknown = set(config["plots"]) - set(PLOT_KINDS)
+    if unknown:
+        raise ValueError(f"{mode}: unknown plots {sorted(unknown)}; choose from {PLOT_KINDS}")
+    for variable, product in config["references"].items():
+        reference_product(variable, product)
+    return config
+
+
+def validate_regions(regions):
+    unknown = set(regions) - set(REGIONS)
+    if unknown:
+        raise ValueError(f"Unknown regions {sorted(unknown)}; choose from {list(REGIONS)}")
+
+
+def read_or_process_ensemble_ts(cases, variables, *, data_root, cache_dir, frequency, regions,
+                                landmask_file, reference_root=None, references=None,
+                                max_members=None, force_compute=False, log=print):
+    """Reuse or build every case/variable/experiment cache.
+
+    Returns ``(results, registries, failures)`` with
+    ``results[season][variable][experiment] -> Dataset``; a failing request is
+    logged and skipped.
+    """
+    references = references or {}
+    registries, results, failures = {}, {}, []
+    for season, experiments in cases.items():
+        registry = registries[season] = experiment_registry(data_root, season, "fc")
+        unknown = set(experiments) - set(registry)
+        if unknown:
+            raise ValueError(f"{season}: {sorted(unknown)} unavailable; choose from {list(registry)}")
+        for variable in variables:
+            for experiment in experiments:
+                meta = registry[experiment]
+                target = ensemble_ts_cache_path(cache_dir, experiment, variable, frequency, meta["period"])
+                try:
+                    ds = cache_ensemble_ts(
+                        target, config=meta, experiment=experiment, variable=variable,
+                        period=meta["period"], frequency=frequency, regions=regions,
+                        landmask_file=landmask_file, reference_root=reference_root,
+                        reference=references.get(variable), max_members=max_members,
+                        force_compute=force_compute, log=log,
+                    )
+                except Exception as error:  # keep going; report at the end
+                    failures.append((season, variable, experiment, f"{type(error).__name__}: {error}"))
+                    log(f"[FAIL] {season} {variable} {experiment}: {type(error).__name__}: {error}")
+                    continue
+                results.setdefault(season, {}).setdefault(variable, {})[experiment] = ds
+    return results, registries, failures
+
+
+def shock_summary_table(results, *, shock_days=2.0, settled_days=(10.0, 30.0), tolerance=0.2):
+    """``shock_summary`` for every season and variable, with a leading season column."""
+    tables = [
+        shock_summary(datasets, shock_days=shock_days, settled_days=settled_days,
+                      tolerance=tolerance).assign(season=season)
+        for season, by_variable in results.items()
+        for datasets in by_variable.values()
+    ]
+    if not tables:
+        return pd.DataFrame()
+    table = pd.concat(tables, ignore_index=True)
+    return table[["season"] + [c for c in table.columns if c != "season"]]
+
+
 def _ylabel(ds, name):
     return f"{ds.attrs['variable']} ({ds[name].attrs.get('units', '')})"
 
@@ -381,7 +465,13 @@ def plot_ensemble_timeseries(datasets, region, *, labels, colors, zoom_days=10,
     """
     if member_display not in MEMBER_DISPLAYS:
         raise ValueError(f"member_display must be one of {MEMBER_DISPLAYS}")
-    fig, axes = plt.subplots(1, 2, figsize=(14, 4.5), gridspec_kw={"width_ratios": (3, 2)})
+    last_day = max(float(ds.lead.max()) for ds in datasets.values()) / 24.0
+    zoomed = zoom_days is not None and zoom_days < last_day
+    if zoomed:
+        fig, axes = plt.subplots(1, 2, figsize=(14, 4.5), gridspec_kw={"width_ratios": (3, 2)})
+    else:  # the zoom would repeat the full forecast
+        fig, axis = plt.subplots(figsize=(10, 4.5))
+        axes = [axis]
     reference = None
     for experiment, ds in datasets.items():
         sel = ds.sel(region=region)
@@ -406,8 +496,9 @@ def plot_ensemble_timeseries(datasets, region, *, labels, colors, zoom_days=10,
         ax.grid(alpha=0.3)
     first = next(iter(datasets.values()))
     axes[0].set_ylabel(_ylabel(first, "member_mean"))
-    axes[1].set_xlim(0, zoom_days)
-    axes[1].set_title(f"First {zoom_days:g} days")
+    if zoomed:
+        axes[1].set_xlim(0, zoom_days)
+        axes[1].set_title(f"First {zoom_days:g} days")
     axes[0].legend(fontsize=8, ncol=2)
     fig.suptitle(title)
     fig.tight_layout()
@@ -489,3 +580,60 @@ def plot_shock_summary(summary, metrics, *, colors, title=""):
     fig.suptitle(title)
     fig.tight_layout()
     return fig
+
+
+def results_colors(results):
+    """Fixed color per experiment across every season and variable."""
+    return experiment_colors(e for by_variable in results.values()
+                             for datasets in by_variable.values() for e in datasets)
+
+
+def plot_ensemble_ts_figures(results, registries, *, regions, figure_dir, tag, plots=PLOT_KINDS,
+                             colors=None, zoom_days=10, member_display="members", dpi=200,
+                             show=True, log=print):
+    """Draw and save the requested figure kinds per season/variable/region; return the paths."""
+    colors = colors or results_colors(results)
+    figure_dir = Path(figure_dir)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for season, by_variable in results.items():
+        registry = registries[season]
+        for variable, datasets in by_variable.items():
+            labels = {name: registry[name]["label"] for name in datasets}
+            for region in regions:
+                for kind in plots:
+                    if kind == "timeseries":
+                        fig = plot_ensemble_timeseries(
+                            datasets, region, labels=labels, colors=colors, zoom_days=zoom_days,
+                            member_display=member_display,
+                            title=f"{variable} {region} ({season} fc, {tag})")
+                    else:
+                        fig = plot_shock_diagnostics(
+                            datasets, region, labels=labels, colors=colors, zoom_days=zoom_days,
+                            title=f"{variable} {region}: initial shock ({season} fc, {tag})")
+                    output = figure_dir / f"{variable}_{region}_{season}_fc_{tag}_{_FIGURE_SUFFIX[kind]}.png"
+                    fig.savefig(output, dpi=dpi, bbox_inches="tight")
+                    written.append(output)
+                    log(f"[FIGURE] {output}")
+                    if not show:
+                        plt.close(fig)
+    return written
+
+
+def plot_shock_summary_figures(summary, *, figure_dir, tag, colors, metrics=None, dpi=200,
+                               show=True, log=print):
+    """One grouped-bar summary figure per season and region; return the paths."""
+    metrics = list(metrics or SUMMARY_METRICS)
+    figure_dir = Path(figure_dir)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for (season, region), table in summary.groupby(["season", "region"], sort=False):
+        fig = plot_shock_summary(table, metrics, colors=colors,
+                                 title=f"Initial-shock summary: {region} ({season} fc, {tag})")
+        output = figure_dir / f"shock_summary_{region}_{season}_fc_{tag}.png"
+        fig.savefig(output, dpi=dpi, bbox_inches="tight")
+        written.append(output)
+        log(f"[FIGURE] {output}")
+        if not show:
+            plt.close(fig)
+    return written
