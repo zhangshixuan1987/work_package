@@ -6,6 +6,7 @@ import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 from util.bias_metrics import experiment_registry
+from util.forecast_regional_timeseries import label_by_interval_start
 
 INPUT_VARIABLES=("LHFLX","SHFLX","FSNS","FLNS")
 OUTPUT_VARIABLES=("Rn","LE","SH","Residual","BowenRatio")
@@ -22,9 +23,12 @@ def _open_member_field(root,member,variable,period,run_segment,opened,window=Non
     # Analysis (da) runs restart every 6 h: their analysis-time (6hourly_da) and
     # "daily" values are first-model-step snapshots, which are not
     # representative for fluxes. Use the 6-h forecast means (6hourly), stamped
-    # at their interval midpoints so daily grouping is exact. Forecast runs are
-    # continuous, so their daily files are true daily means.
-    choices=("6hourly",) if run_segment=="da" else ("daily","6hourly")
+    # at their interval midpoints so daily grouping is exact. Forecast (fc)
+    # 6-hourly means are stamped at interval end after a zero-width initial
+    # record, and their daily flux files average by that stamp (the initial
+    # record plus a 6-h offset), so forecasts also use 6hourly, relabelled by
+    # interval start; daily files are only a fallback.
+    choices=("6hourly",) if run_segment=="da" else ("6hourly","daily")
     candidates=("LHFLX","QFLX") if variable=="LHFLX" else (variable,)
     for freq in choices:
         for candidate in candidates:
@@ -34,11 +38,11 @@ def _open_member_field(root,member,variable,period,run_segment,opened,window=Non
                 ds=xr.open_mfdataset(files,combine="by_coords",parallel=True,chunks={}); opened.append(ds)
                 field=ds[candidate]
                 if candidate=="QFLX": field=field*2.5e6
+                if run_segment=="fc": field=label_by_interval_start(ds,field)
                 if freq.startswith("6hourly"):
                     counts=field.time.resample(time="1D").count()
                     field=field.resample(time="1D").mean()
-                    if run_segment=="da":
-                        field=field.where(counts==4)  # incomplete days -> missing
+                    field=field.where(counts==4)  # incomplete days -> missing
                 field=_select_period(field,period)
                 if window is not None:
                     field=field.sel(time=slice(str(window[0]),str(window[-1])))

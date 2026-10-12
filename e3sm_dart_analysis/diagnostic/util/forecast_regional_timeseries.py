@@ -32,6 +32,18 @@ def _select_period(field,period):
  y0,m0,y1,m1,_=_period(period); key=field.time.dt.year*100+field.time.dt.month
  return field.where((key>=y0*100+m0)&(key<=y1*100+m1),drop=True)
 
+def label_by_interval_start(ds,field):
+ """Label interval means by their start and drop zero-width (initial-state) records.
+
+ Forecast ts files stamp each mean at its interval end (the Jan 1 daily mean is
+ stamped Jan 2 00Z) and begin with a zero-width snapshot of the initial state.
+ """
+ name=ds.time.attrs.get("bounds") or next((n for n in ("time_bnds","time_bounds") if n in ds),None)
+ if name is None: return field
+ bounds=ds[name].load(); start=bounds.isel({bounds.dims[-1]:0}); end=bounds.isel({bounds.dims[-1]:1})
+ keep=(end>start).values
+ return field.isel(time=keep).assign_coords(time=start.values[keep])
+
 def _normalize(field):
  rename={}
  if "latitude" in field.dims: rename["latitude"]="lat"
@@ -67,7 +79,7 @@ def read_model_regional_series(data_root,experiment,season,run_segment,variable,
    files=[folder/f"{variable}.{member}.{year}.nc" for year in years]; missing=[p for p in files if not p.is_file()]
    if missing: raise FileNotFoundError("Missing model files: "+", ".join(map(str,missing)))
    ds=xr.open_mfdataset(files,combine="by_coords",parallel=True,chunks={}); opened.append(ds)
-   field=_convert(_select_period(ds[variable],period),variable).assign_coords(time=lambda x:x.time.dt.floor("D"))
+   field=_convert(_select_period(label_by_interval_start(ds,ds[variable]),period),variable).assign_coords(time=lambda x:x.time.dt.floor("D"))
    series=_regional_mean(field,region); series.attrs["units"]=VARIABLES[variable]["units"]
    members.append(series.expand_dims(ens=[member]))
   # One dask graph over all members so files are read in parallel.
