@@ -1,0 +1,370 @@
+&model_nml
+   eam_template_filename               = 'eaminput.nc'
+   eam_phis_filename                   = 'eam_phis.nc'
+   eam_use_pgrid                       = .true.
+   homme_map_file                      = 'SEMapping.nc'
+   cs_grid_file                        = 'SEMapping_cs_grid.nc'
+   custom_routine_to_generate_ensemble = .true.
+   fields_to_perturb                   = ''
+   perturbation_amplitude              = 0.1
+   state_variables  = 'T',     'QTY_TEMPERATURE',         'NA', 'NA', 'UPDATE'
+                      'U',     'QTY_U_WIND_COMPONENT',    'NA', 'NA', 'UPDATE'
+                      'V',     'QTY_V_WIND_COMPONENT',    'NA', 'NA', 'UPDATE'
+                      'Q',     'QTY_SPECIFIC_HUMIDITY',   'NA', 'NA', 'UPDATE'
+                      'CLDLIQ','QTY_CLOUD_LIQUID_WATER',  'NA', 'NA', 'UPDATE'
+                      'CLDICE','QTY_CLOUD_ICE',           'NA', 'NA', 'UPDATE'
+                      'PS',    'QTY_SURFACE_PRESSURE',    'NA', 'NA', 'UPDATE'
+   use_log_vertical_scale              = .true.
+   use_variable_mean_mass              = .false.
+   no_normalization_of_scale_heights   = .true.
+   vertical_localization_coord         = 'SCALEHEIGHT'
+   no_obs_assim_above_level            = 5
+   model_damping_ends_at_level         = -1
+   using_chemistry                     = .false.
+   assimilation_period_days            = 0
+   assimilation_period_seconds         = 21600
+   suppress_grid_info_in_output        = .false.
+   debug_level                         = 0
+   /
+
+! Not usually assimilated.  No fundamental reason not to.
+!                               'RADIOSONDE_SPECIFIC_HUMIDITY',
+! Available from mid-2006 onward.  Build filter with obs_def_gps_mod.f90
+!                               'GPSRO_REFRACTIVITY',
+! EAM/WACCM can use higher observations than CAM.
+! An example can be included via obs_def_SABER_mod.f90.
+!                               'SABER_TEMPERATURE',
+
+&obs_kind_nml
+   assimilate_these_obs_types = 'RADIOSONDE_U_WIND_COMPONENT',
+                                'RADIOSONDE_V_WIND_COMPONENT',
+                                'RADIOSONDE_TEMPERATURE',
+                                'RADIOSONDE_SPECIFIC_HUMIDITY',
+                                'AIRCRAFT_U_WIND_COMPONENT',
+                                'AIRCRAFT_V_WIND_COMPONENT',
+                                'AIRCRAFT_TEMPERATURE',
+                                'ACARS_U_WIND_COMPONENT',
+                                'ACARS_V_WIND_COMPONENT',
+                                'ACARS_TEMPERATURE',
+                                'AIRS_TEMPERATURE',
+                                'AIRS_SPECIFIC_HUMIDITY',
+                                'SAT_U_WIND_COMPONENT',
+                                'SAT_V_WIND_COMPONENT',
+                                'GPSRO_REFRACTIVITY'
+
+   evaluate_these_obs_types = ''
+   /
+
+
+&location_nml
+   horiz_dist_only                 = .false.
+   vert_normalization_pressure     = 20000.0
+   vert_normalization_height       = 10000.0
+   vert_normalization_level        = 20.0
+   vert_normalization_scale_height = 1.5
+   approximate_distance            = .false.
+   nlon                            = 141
+   nlat                            = 72
+   output_box_info                 = .false.
+   print_box_level                 = 0
+   /
+
+&perfect_model_obs_nml
+   single_file_in             = .false.,
+   read_input_state_from_file = .false.,
+   input_state_files          = "",
+   init_time_days             = 0,
+   init_time_seconds          = 0,
+
+   single_file_out            = .false.,
+   output_state_files         = "",
+   write_output_state_to_file = .false.,
+   output_interval            = 1,
+
+   async                      = 0,
+   adv_ens_command            = "./advance_model.csh",
+   tasks_per_model_advance    = 1,
+
+   obs_seq_in_file_name       = "obs_seq.in",
+   obs_seq_out_file_name      = "obs_seq.out",
+   first_obs_days             = -1,
+   first_obs_seconds          = -1,
+   last_obs_days              = -1,
+   last_obs_seconds           = -1,
+   obs_window_days            = -1,
+   obs_window_seconds         = -1,
+
+   trace_execution            = .false.,
+   output_timestamps          = .false.,
+   print_every_nth_obs        = 0,
+   output_forward_op_errors   = .false.,
+   silence                    = .false.,
+/
+
+&quality_control_nml
+   input_qc_threshold          =  3.0
+   outlier_threshold           =  3.0
+   enable_special_outlier_code = .false.
+   /
+
+&state_vector_io_nml
+   buffer_state_io         = .false.
+   single_precision_output = .false.
+   /
+
+&ensemble_manager_nml
+   layout         = 2
+   tasks_per_node = 40
+   /
+
+#========================================================================
+# diagnostic tools
+#========================================================================
+
+! The times in the namelist for the obs_diag program are vectors
+! that follow the following sequence:
+! year   month   day   hour   minute   second
+! max_num_bins can be used to specify a fixed number of bins,
+! in which case last_bin_center should be safely in the future.
+!
+! Acceptable latitudes range from  [-90,  90]
+! Acceptable longitudes range from [  0, Inf]
+!
+! Other available namelist variables, not in the default obs_diag.nml:
+!  hlevel
+!  mlevel
+!  print_obs_locations
+!  outliers_in_histogram
+!  plevel_edges
+!  hlevel_edges
+!  mlevel_edges
+! Standard layers:
+! 1000, 925, 850, 700, 600, 500, 400, 300,  250,  200,  150,  100,   70,   50,   30,   20,   10 hPa
+!    +950(MetOffc)     -600(skipped in obs_diag.f90 defaults)   -70 and less skipped in obs_diag.f90
+! Corresponding heights (assuming a standard atmosphere)
+! 200,  650, 1350, 2900,4100,5480,7090,9080,10280,11700,13520,16100,18358,21060,24640,27480,32330
+! I've changed the height vertical axis in plot_rmse_xxx* to be logarithmic 
+! in order to make the layers look more like the pressure layers.
+! So the bottom edge can't be 0.
+! The lowest GPS ob is 200, so that's the new lowest edge
+!
+!    plevel = 1000.,925.,850.,700.,500.,400.,300.,250.,200.,150.,100.,50.,20.,10.
+!    hlevel = 1000., 2000., 3000., 4000., 5000., 6000., 7000., 8000., 9000., 10000.,11000.
+!             0, 1500, 2500, 3500, 4500, 5500, 6500, 7500, 9500, 11500, 13500, 15500
+!
+! Defaults
+!    plevel = 1000.,850.,700.,500.,400.,300.,200.,150.,100.
+!    Nregions   = 4
+!    lonlim1    =   0.0,   0.0,   0.0, 235.0
+!    lonlim2    = 360.0, 360.0, 360.0, 295.0
+!    latlim1    =  20.0, -80.0, -20.0,  25.0
+!    latlim2    =  80.0, -20.0,  20.0,  55.0
+!    reg_names  = 'Northern Hemisphere', 'Southern Hemisphere', 'Tropics', 'North America'
+!
+! for WACCM you will want to change the plevel to match
+! the higher vertical range of the model.
+!   plevel = 1000.,850.,700.,500.,400.,300.,200.,150.,100.
+! these are specified in hectopascals (hPa)
+
+&obs_diag_nml
+   obs_sequence_name = 'obs_seq.final'
+   obs_sequence_list = ''
+   first_bin_center  =  BOGUS_YEAR, 1, 1, 0, 0, 0
+   last_bin_center   =  BOGUS_YEAR, 1, 2, 0, 0, 0
+   bin_separation    =     0, 0, 0, 6, 0, 0
+   bin_width         =     0, 0, 0, 6, 0, 0
+   time_to_skip      =     0, 0, 1, 0, 0, 0
+   max_num_bins      = 1000
+   trusted_obs       = 'null'
+   plevel_edges = 1035.5, 962.5, 887.5, 775, 600, 450, 350, 275, 225,   175,   125,   75,   35,   15,    2
+   hlevel_edges =    200, 630,   930,  1880,3670,5680,7440,9130,10530,12290, 14650,18220,23560,29490,43000
+   Nregions     = 5
+   reg_names    = 'Global', 'Northern Hemisphere', 'Tropics', 'Southern Hemisphere', 'North America'
+   lonlim1      = 0.0,     0.0,   0.0,   0.0,   235.0
+   lonlim2      = 360.0,   360.0, 360.0, 360.0, 295.0
+   latlim1      = -90.0,   20.0,  -20.0, -90.0, 25.0
+   latlim2      =  90.0,   90.0,   20.0, -20.0, 55.0
+   print_mismatched_locs = .false.
+   create_rank_histogram = .true.
+   outliers_in_histogram = .true.
+   use_zero_error_obs    = .false.
+   verbose               = .false.
+   /
+
+
+&schedule_nml
+   calendar             = 'Gregorian'
+   first_bin_start      =  1601,  1,  1,  0,  0,  0
+   first_bin_end        =  2999,  1,  1,  0,  0,  0
+   last_bin_end         =  2999,  1,  1,  0,  0,  0
+   bin_interval_days    = 1000000
+   bin_interval_seconds = 0
+   max_num_bins         = 1000
+   print_table          = .true.
+   /
+
+
+&obs_seq_to_netcdf_nml
+   obs_sequence_name = 'obs_seq.final'
+   obs_sequence_list = ''
+   append_to_netcdf  = .false.
+   lonlim1    =    0.0
+   lonlim2    =  360.0
+   latlim1    =  -90.0
+   latlim2    =   90.0
+   verbose    = .false.
+   /
+
+
+&model_mod_check_nml
+   input_state_files     = 'eaminput.nc'
+   output_state_files    = 'mmc_output.nc'
+   test1thru             = 0
+   run_tests             = 1,2,3,4,5,7
+   x_ind                 = 175001
+
+   quantity_of_interest  = 'QTY_U_WIND_COMPONENT'
+   loc_of_interest       = 254.727854, 39.9768545, 50000.0
+
+   interp_test_lonrange  = 0.0, 360.0
+   interp_test_dlon      = 1.0
+   interp_test_latrange  = -90.0, 90.0
+   interp_test_dlat      = 1.0
+   interp_test_vertrange = 10000.0,  90000.0
+   interp_test_dvert     = 10000.0
+   interp_test_vertcoord = 'VERTISPRESSURE'
+   verbose               = .false.
+   /
+
+
+! different methods to compute 'distance' from mean:
+!  1 = simple absolute difference
+!  2 = normalized absolute difference
+!  3 = simple rmse difference
+!  4 = normalized rmse difference
+
+&closest_member_tool_nml
+   input_restart_file_list = 'eam_in.txt'
+   output_file_name        = 'closest_restart'
+   ens_size                = 3
+   single_restart_file_in  = .false.
+   difference_method       = 4
+   /
+
+
+&perturb_single_instance_nml
+   ens_size               = 3
+   input_files            = 'eaminput.nc'
+   output_files           = 'eam_pert1.nc','eam_pert2.nc','eam_pert3.nc'
+   output_file_list       = ''
+   perturbation_amplitude = 0.1
+   /
+
+
+&quad_interpolate_nml
+   debug = 0
+   /
+
+&compute_error_nml
+   truth_file_name   = 'true_state.nc'
+   diag_file_name    = 'preassim.nc'
+   skip_first_ntimes = 0
+  /
+
+&compare_states_nml
+   do_all_numeric_fields   = .true.
+   fieldnames              = 'U','V','T','Q'
+   fieldlist_file          = ''
+   fail_on_missing_field   = .true.
+   only_report_differences = .true.
+   debug                   = .false.
+  /
+
+&obs_sequence_nml
+   write_binary_obs_sequence = .false.
+   /
+
+&utilities_nml
+   TERMLEVEL      = 2
+   module_details = .false.
+   logfilename    = 'dart_log.out'
+   nmlfilename    = 'dart_log.nml'
+   /
+
+&obs_common_subset_nml
+ num_to_compare_at_once = 2,
+ filename_seq           = '',
+ filename_seq_list      = '',
+ filename_out_suffix    = '.common' ,
+ print_every            = 10000,
+ dart_qc_threshold      = 3,
+ calendar               = 'Gregorian',
+ print_only             = .false.,
+ eval_and_assim_can_match = .false.,
+   /
+
+&obs_sequence_tool_nml
+   filename_seq         = ''
+   filename_seq_list    = ''
+   filename_out         = 'obs_seq.processed'
+   first_obs_days       = -1
+   first_obs_seconds    = -1
+   last_obs_days        = -1
+   last_obs_seconds     = -1
+   obs_types            = 'RADIOSONDE_U_WIND_COMPONENT',
+                          'RADIOSONDE_V_WIND_COMPONENT',
+                          'RADIOSONDE_TEMPERATURE',
+                          'RADIOSONDE_SPECIFIC_HUMIDITY',
+                          'AIRCRAFT_U_WIND_COMPONENT',
+                          'AIRCRAFT_V_WIND_COMPONENT',
+                          'AIRCRAFT_TEMPERATURE',
+                          'ACARS_U_WIND_COMPONENT',
+                          'ACARS_V_WIND_COMPONENT',
+                          'ACARS_TEMPERATURE',
+                          'AIRS_TEMPERATURE',
+                          'AIRS_SPECIFIC_HUMIDITY',
+                          'SAT_U_WIND_COMPONENT',
+                          'SAT_V_WIND_COMPONENT',
+                          'GPSRO_REFRACTIVITY'
+   keep_types           = .true.
+   min_box              = -888888.0
+   max_box              = -888888.0
+   min_lat              =  -90.0
+   max_lat              =   90.0
+   min_lon              =    0.0
+   max_lon              =  360.0
+   copy_metadata        = ''
+   min_copy             = -888888.0
+   max_copy             = -888888.0
+   copy_type            = ''
+   edit_copy_metadata   = .false.
+   new_copy_metadata    = ''
+   edit_copies          = .false.
+   new_copy_index       = -1
+   new_copy_data        = -888888.0
+   qc_metadata          = ''
+   min_qc               = -888888.0
+   max_qc               = -888888.0
+   edit_qc_metadata     = .false.
+   new_qc_metadata      = ''
+   edit_qcs             = .false.
+   new_qc_index         = -1
+   new_qc_data          = -888888.0
+   synonymous_copy_list = ''
+   synonymous_qc_list   = ''
+   print_only           = .false.
+   gregorian_cal        = .true.
+   min_gps_height       = -888888.0
+   /
+
+&mpi_utilities_nml
+   /
+
+&obs_def_gps_nml
+   max_gpsro_obs = 1500000000
+   /
+
+&quad_interpolate_nml
+   debug = 0
+   /
+
