@@ -741,7 +741,7 @@ class TccWindowMapPlotter:
                     extend=extend,
                     extendfrac="auto",
                 )
-            cbar.set_label(f"{diag_var} {mu} ({unit})", fontsize=fontz * 0.90)
+            cbar.set_label(f"{var} {mu} ({unit})", fontsize=fontz * 0.90)
 
         if out_png is not None:
             out_png = Path(out_png)

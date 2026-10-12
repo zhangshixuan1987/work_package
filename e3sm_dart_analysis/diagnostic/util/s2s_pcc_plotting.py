@@ -649,9 +649,9 @@ class S2SSkillPlotter:
             raise ValueError("No variables to plot after applying vars_include.")
 
         ds0 = (
-            self.open_skill_two_groups(vars_[0], region=None)
+            self.open_skill_two_groups(vars_[0], region=region)
             if self.cfg.two_groups else
-            self.open_skill(vars_[0], region=None)
+            self.open_skill(vars_[0], region=region)
         )
 
         exps_ = [str(e) for e in ds0["exp"].values.tolist()]
@@ -661,9 +661,9 @@ class S2SSkillPlotter:
         V = np.full((nvar, nexp, 4), np.nan, dtype=float)
         for i, vname in enumerate(vars_):
             ds = (
-                self.open_skill_two_groups(vname, region=None)
+                self.open_skill_two_groups(vname, region=region)
                 if self.cfg.two_groups else
-                self.open_skill(vname, region=None)
+                self.open_skill(vname, region=region)
             )
             lead = self._get_lead_days(ds)
             try:

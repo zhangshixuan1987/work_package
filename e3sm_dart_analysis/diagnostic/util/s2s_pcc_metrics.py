@@ -1095,6 +1095,7 @@ class S2SSkillAssessor:
         ds.to_netcdf(path)
         return path
 
+@dataclass(frozen=True)
 class BiweeklyAccMapConfig:
     lat_range: Optional[Tuple[float, float]] = (-20.0, 20.0)
     lon_range: Optional[Tuple[float, float]] = None

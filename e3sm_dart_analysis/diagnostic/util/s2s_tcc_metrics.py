@@ -1122,6 +1122,7 @@ class S2SWindowedTCCAggregator:
             print(f"[SAVED] {out_nc}")
         return out_nc
 
+@dataclass(frozen=True)
 class RegionSpec:
     name: str
     lat: tuple[float, float]
@@ -1129,6 +1130,7 @@ class RegionSpec:
     mask: str = "none"   # "none" | "land" | "ocean"
 
 
+@dataclass(frozen=True)
 class RegionalReduceConfig:
     out_dir: Path
     overwrite: bool = False

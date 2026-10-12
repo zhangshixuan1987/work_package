@@ -31,6 +31,10 @@ def nanquantile(data: xr.DataArray, q, dim: str) -> xr.DataArray:
     """Drop-in for ``data.quantile(q, dim, skipna=True)`` with the same output layout."""
     scalar = np.ndim(q) == 0
     q_values = float(q) if scalar else [float(value) for value in q]
+    if data.chunks is not None:
+        # The reduced dimension must be one chunk (e.g. members concatenated
+        # from separate files arrive one chunk each).
+        data = data.chunk({dim: -1})
 
     def reduce(values):
         result = nanquantile_numpy(values, q_values, axis=-1)
