@@ -54,9 +54,13 @@ _REFERENCE_PATTERNS = {
 }
 
 # S0 is the boreal-winter cycle; S1 is the boreal-summer cycle.
+# CTRF10 is a continuous no-DA free run over the DA window, started from
+# perturbed ICs at the DA start date. Only its ELM daily series is
+# post-processed (7_run_post_lnd_free.sh); it has no "clim" or EAM products.
 _EXPERIMENTS = {
     "S0": {
         "CTRL10-S0": {"nens": 10, "label": "CTRL (ENS=10)", "da": ("CTRLEN10", "201112-201112"), "fc": ("CTRLEN10_15day", "201201-201202")},
+        "CTRF10-S0": {"nens": 10, "label": "Free run (ENS=10)", "da": ("CTRFEN10", "201112-201112"), "fc": None},
         "CAPT10-S0": {"nens": 10, "label": "CAPT (ENS=10)", "da": None, "fc": ("CAPTEN10_15day", "201201-201202")},
         "DART10-S0": {"nens": 10, "label": "EAM-DART (ENS=10)", "da": ("DARTEN10", "201112-201112"), "fc": None},
         "DART20-S0": {"nens": 20, "label": "EAM-DART (ENS=20)", "da": ("DARTEN20", "201112-201112"), "fc": ("DARTEN20_15day", "201201-201202")},
@@ -65,6 +69,7 @@ _EXPERIMENTS = {
     "S1": {
         "CTRL10-S1": {"nens": 10, "label": "CTRL (ENS=10)", "da": None, "fc": ("CTRLEN10s1_15day", "201206-201207")},
         "CAPT10-S1": {"nens": 10, "label": "CAPT (ENS=10)", "da": None, "fc": ("CAPTEN10S1_15day", "201206-201207")},
+        "CTRF10-S1": {"nens": 10, "label": "Free run (ENS=10)", "da": ("CTRFEN10S1", "201205-201205"), "fc": None},
         "DART40-S1": {"nens": 40, "label": "EAM-DART (ENS=40)", "da": ("DARTEN40S1", "201205-201205"), "fc": ("DARTEN40S1_15day", "201206-201207")},
     },
 }
