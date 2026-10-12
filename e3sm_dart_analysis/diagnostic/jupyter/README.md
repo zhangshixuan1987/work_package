@@ -99,7 +99,7 @@ Analysis-period verification:
 
 1. `analysis_atm_eval/01_compute_and_plot_ensemble_metrics.ipynb` - atmospheric maps, scalar verification metrics, rank histograms, and optional bootstrap confidence intervals.
 2. `analysis_atm_eval/02_compute_and_plot_surface_energy_budget.ipynb` - atmospheric surface-energy-budget terms and regional ensemble time series.
-3. `analysis_lnd_eval/01_land_forcing_scorecard.ipynb` - land-only DA scorecard on the 64 scorecard cycles: % RMSE change of DART10/20/40 vs CTRL10 for TS, TREFHT, surface fluxes (LHFLX, SHFLX, FSNS), and atmospheric forcing (PRECT, FSDS, FLDS) (`util/da_scorecard.py`).
+3. `analysis_lnd_eval/01_land_forcing_scorecard.ipynb` - land-only DA scorecard on the 64 scorecard cycles: % RMSE change of DART10/20/40 vs CTRL10 for TS, TREFHT, net surface shortwave (FSNS), and atmospheric forcing (PRECT, FSDS, FLDS) (`util/da_scorecard.py`).
 4. `analysis_lnd_eval/02_soil_moisture_daily_skill.ipynb` - daily top-5 cm soil-moisture anomaly correlation and ubRMSE of DART40-S0/S1 against ESA CCI over the scorecard windows (`util/lnd_sm_daily_skill.py`).
 5. `analysis_lnd_eval/03_plot_atm_da_land_impact.ipynb` - spread ratio, mean shift, and error change of DART vs CTRL10 top-5 cm soil moisture at the end of the S0 window; reads the snapshot from `analysis_lnd_init/02` (`util/initial_lnd_da_impact.py`).
 6. `analysis_lnd_eval/04_surface_variable_distribution.ipynb` - PRECT/TREFHT ensemble bias, spread, and significance vs GPCP/ERA5 on selected January forecast dates (`util/initial_lnd_surface_variables.py`).

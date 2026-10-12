@@ -83,21 +83,20 @@ def default_rows():
 
 
 def land_rows():
-    """Land-surface state and land-atmosphere exchange, scored over land only.
+    """Atmospheric forcing of the land and the land surface state, scored over land only.
 
-    No soil-moisture or snow series exist for every experiment (CTRL10/DART10
-    ELM history output lacks them), so the land state is verified through
-    what ERA5 6-hourly provides: skin and 2 m temperature (analysis) and the
-    surface energy and water fluxes (daily means of the 6-h forecasts). FLNS
-    is omitted: the ERA5 6-hourly FLNS/FLNSC files are mostly zeros.
+    Skin and 2 m temperature are verified as analyses; net surface shortwave
+    and the forcing (precipitation, downwelling radiation) as daily means of
+    the 6-h forecasts, against ERA5 6-hourly, GPCP, and IMERG. Turbulent
+    fluxes (LHFLX, SHFLX) are the land's response, not forcing, and are left
+    out; FLNS is omitted because the ERA5 6-hourly FLNS/FLNSC files are mostly
+    zeros.
     """
     era5 = dict(reference="era5_daily4", units="W m-2")
     return [
         Row("A Land surface state", "TS", "TS", "ts_6h", "era5_6h", reference_variable="TS", units="K"),
         Row("A Land surface state", "TREFHT", "TREFHT", "ts_6h", "era5_6h", reference_variable="TREFHT", units="K"),
-        Row("B Surface fluxes", "LHFLX", "LHFLX", "ts_daily", reference_variable="LHFLX", **era5),
-        Row("B Surface fluxes", "SHFLX", "SHFLX", "ts_daily", reference_variable="SHFLX", **era5),
-        Row("B Surface fluxes", "FSNS", "FSNS", "ts_daily", reference_variable="FSNS", **era5),
+        Row("B Surface radiation", "FSNS", "FSNS", "ts_daily", reference_variable="FSNS", **era5),
         Row("C Forcing", "PRECT (GPCP)", "PRECT", "ts_daily", "gpcp", units="mm day-1"),
         Row("C Forcing", "PRECT (IMERG)", "PRECT", "ts_daily", "imerg", units="mm day-1"),
         Row("C Forcing", "PRECT (ERA5)", "PRECT", "ts_daily", "era5_daily4", reference_variable="PRECT", units="mm day-1"),
