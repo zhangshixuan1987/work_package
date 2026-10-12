@@ -73,7 +73,7 @@ Each notebook is independently runnable and lists its available variables and me
 
 1. `01_compute_and_plot_bias_metrics.ipynb` - compute cached atmospheric bias, RMSE, spread, and CRPS maps for DA analysis periods (`util/bias_metrics.py`).
 
-The bias workflows are separated by period and component: `analysis_atm_bias/01` and `analysis_lnd_init/01` (DA analysis periods), `fcst_atm_eval/01_compute_and_plot_bias_metrics` and `fcst_lnd_eval/01_compute_and_plot_bias_metrics` (forecast periods). Each reads, processes, caches, and plots independently; cached products are reused unless `force_compute = True`.
+The bias workflows are separated by period and component: `analysis_atm_bias/01` and `analysis_lnd_init/01` (DA analysis periods), `fcst_atm_eval/04_compute_and_plot_bias_metrics` and `fcst_lnd_eval/01_compute_and_plot_bias_metrics` (forecast periods). Each reads, processes, caches, and plots independently; cached products are reused unless `force_compute = True`.
 
 ## `analysis_atm_eval/`
 
@@ -104,14 +104,15 @@ Land verification over the DA windows.
 
 ## `fcst_atm_eval/`
 
-Atmospheric verification of the hindcasts. Each notebook is a separate workflow with its own output directory.
+Atmospheric verification of the hindcasts. Every notebook loops over `cases` (S0: Jan-Feb 2012, S1: Jun-Jul 2012 by default) and can run on its own; 02 and 03 share caches.
 
-1. `01_compute_and_plot_bias_metrics.ipynb` - forecast-period atmospheric bias, RMSE, spread, and CRPS maps (`fcst_atm_bias`; `util/bias_metrics.py`).
-2. `01_compute_and_plot_decay_timescales.ipynb` - experiment-minus-baseline initial-shock anomalies and exponential decay timescales (`fcst_atm_initial_shock`; `util/forecast_initial_shock.py`).
-3. `01_compute_and_plot_ensemble_metrics.ipynb` - extended forecast ensemble verification metrics and maps (`fcst_atm_model_evaluation`; `util/model_evaluation.py`).
-4. `02_compute_and_plot_regional_timeseries.ipynb` - regional daily PRECT and FLUT forecast ensemble time series against observations (`fcst_atm_timeseries`; `util/forecast_regional_timeseries.py`).
-5. `02_compute_and_plot_surface_energy_budget.ipynb` - forecast surface-energy-budget terms and regional ensemble time series (`fcst_atm_model_evaluation`; `util/atm_surface_energy_budget.py`).
-6. `03_compute_and_plot_ens_ranges.ipynb` - CTRL/DART hindcast ensemble member spatial minima, means, maxima, envelopes, and ensemble means (`util/ensemble_summary.py`).
+1. `01_compute_and_plot_ens_ts.ipynb` - member time series from the initial state, with initial-shock diagnostics (tendency vs settled level and ERA5, bias drift, RMSE/spread growth, spatial extremes) and a per-experiment shock summary (`fcst_atm_ensemble_ts`; `util/forecast_ensemble_ts.py`).
+2. `02_compute_and_plot_scalar_metrics.ipynb` - global ensemble verification metrics, summary table, and rank histograms (`fcst_atm_model_evaluation`; `util/model_evaluation.py`).
+3. `03_compute_and_plot_map_metrics.ipynb` - bias, RMSE, spread, CRPS, and coverage maps from the same verification step (`fcst_atm_model_evaluation`; `util/model_evaluation.py`).
+4. `04_compute_and_plot_bias_metrics.ipynb` - bias, RMSE, spread, and CRPS maps with bootstrap significance hatching (`fcst_atm_bias`; `util/bias_metrics.py`).
+5. `05_compute_and_plot_regional_timeseries.ipynb` - regional daily PRECT and FLUT ensemble time series against observations (`fcst_atm_timeseries`; `util/forecast_regional_timeseries.py`).
+6. `06_compute_and_plot_surface_energy_budget.ipynb` - member-level surface-energy-budget terms and regional ensemble time series (`fcst_atm_model_evaluation/surface_energy_budget`; `util/atm_surface_energy_budget.py`).
+7. `07_compute_and_plot_decay_timescales.ipynb` - shock-minus-baseline anomalies and exponential decay timescales (`fcst_atm_initial_shock`; `util/forecast_initial_shock.py`).
 
 ## `fcst_lnd_eval/`
 
