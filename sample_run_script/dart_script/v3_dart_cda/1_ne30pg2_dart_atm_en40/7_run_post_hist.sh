@@ -1,4 +1,4 @@
-#!/bin/bash -l 
+#!/bin/bash -l
 #SBATCH --account=esmd
 #SBATCH --time=24:00:00
 #SBATCH --partition=slurm
@@ -11,20 +11,32 @@
 
 set -o pipefail
 
-# User settings: base, monthly, or all.
-POST_MODE="all"
+# Step 7: regridded history products for every member, per component.
+#
+# DA-cycled runs (eam_cycled, elm_cycled; workflow_lib/post/cycled_split.py)
+# write, under ENxx/archive/post/<atm|lnd>/180x360_aave/:
+#   ts/6hourly           forecast: 6-h means/max/min (window middle, with
+#                        bounds) and background states (window end)
+#   ts/6hourly_analysis  analysis state at every cycle start
+#   ts/daily_mean        calendar-day mean: four 6-h forecast means, or the
+#                        mean of the 00/06/12/18Z analysis states
+#   ts/daily_max, ts/daily_min, ts/daily_00z
+#   monthly/             mean of ts/daily_mean per month
+# Products of the earlier version (ts/6hourly_da, ts/daily, clim, ...) are
+# moved to 180x360_aave/legacy/ on the first run.
+# Free runs (my_free_layout set; eam_hfreq, elm_hfreq; free_run_hfreq.py) write
+# the same layout without ts/6hourly_analysis (a free run has no analysis):
+# ts/6hourly, ts/daily_mean, ts/daily_max, ts/daily_min, ts/daily_00z, monthly/.
+
+# User settings
 POST_START="2011-12-01-00000"
-POST_END="2011-12-31-00000"
+POST_END="2011-12-31-00000"     # last day processed (inclusive), midnight stamp
 MAX_CONCURRENT_WORKERS=4
 OVERWRITE_EXISTING="FALSE"
-
-RUN_EAM_6HOURLY="TRUE"
-RUN_EAM_DAILY="TRUE"
-RUN_EAM_CLIM="TRUE"
-RUN_ELM_DAILY="TRUE"
-RUN_ELM_CLIM="TRUE"
-RUN_EAM_MONTHLY="TRUE"
-RUN_ELM_MONTHLY="TRUE"
+RUN_EAM="TRUE"
+RUN_ELM="TRUE"
+# Cycled runs: tapes allowed to have no 6-h records (analysis states only).
+ANALYSIS_ONLY_TAPES="eam.h1 elm.h1"  # run set up with nhtfrq=-24 on these tapes: they hold only nstep-0 records
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 normalize_bool() {
@@ -52,9 +64,8 @@ mkdir -p "${my_log_dir}" "${my_status_dir}" "${my_lock_dir}"
 for cmd in awk bash date find flock mkdir mv ncdump readlink sort; do
   command -v "${cmd}" >/dev/null 2>&1 || fail "required command not found: ${cmd}"
 done
-[[ "${POST_MODE}" =~ ^(base|monthly|all)$ ]] || fail "POST_MODE must be base, monthly, or all"
 [[ "${MAX_CONCURRENT_WORKERS}" =~ ^[1-9][0-9]*$ ]] || fail "MAX_CONCURRENT_WORKERS must be positive"
-for setting in OVERWRITE_EXISTING RUN_EAM_6HOURLY RUN_EAM_DAILY RUN_EAM_CLIM RUN_ELM_DAILY RUN_ELM_CLIM RUN_EAM_MONTHLY RUN_ELM_MONTHLY; do
+for setting in OVERWRITE_EXISTING RUN_EAM RUN_ELM; do
   printf -v "${setting}" '%s' "$(normalize_bool "${setting}" "${!setting}")"
 done
 
@@ -89,35 +100,21 @@ exec 8>"${my_lock_dir}/postprocess.lock"
 flock -n 8 || fail "another post-processing driver is active"
 
 validate_history_inputs() {
-  local member case_name archive epoch stamp component stream file requirement
-  local month_epoch month_end_epoch month missing=0
-  local -a cycle_streams=() monthly_streams=() required_stamps=() required_months=()
+  local member case_name archive epoch stamp component stream file requirement missing=0
+  local -a cycle_streams=() required_stamps=()
 
   # Post-processing depends on archived history, not on DA cycle status files.
-  if [[ "${POST_MODE}" == "base" || "${POST_MODE}" == "all" ]]; then
-    [[ "${RUN_EAM_6HOURLY}" == "TRUE" ]] && cycle_streams+=("atm:eam.h2")
-    [[ "${RUN_EAM_DAILY}" == "TRUE" ]] && cycle_streams+=("atm:eam.h1")
-    [[ "${RUN_ELM_DAILY}" == "TRUE" ]] && cycle_streams+=("lnd:elm.h1")
-    [[ "${RUN_EAM_CLIM}" == "TRUE" ]] && monthly_streams+=("atm:eam.h0")
-    [[ "${RUN_ELM_CLIM}" == "TRUE" ]] && monthly_streams+=("lnd:elm.h0")
-  fi
-
-  month_epoch=$(date -u -d "${POST_START_DATE%-*}-01" +%s)
-  month_end_epoch=$(date -u -d "${POST_END_DATE%-*}-01" +%s)
-  for ((epoch=START_EPOCH; epoch<=END_EPOCH+18*3600; epoch+=STEP_SECONDS)); do
+  # Every cycle of the last day (through 18Z) closes that day's forecast windows.
+  [[ "${RUN_EAM}" == "TRUE" ]] && cycle_streams+=("atm:eam.h1" "atm:eam.h2")
+  [[ "${RUN_ELM}" == "TRUE" ]] && cycle_streams+=("lnd:elm.h1")
+  for ((epoch=START_EPOCH; epoch<=END_EPOCH+24*3600-STEP_SECONDS; epoch+=STEP_SECONDS)); do
     required_stamps+=("$(epoch_to_stamp "${epoch}")")
-  done
-  for ((epoch=month_epoch; epoch<=month_end_epoch; )); do
-    month=$(date -u -d "@${epoch}" +%Y-%m)
-    required_months+=("${month}")
-    epoch=$(date -u -d "${month}-01 +1 month" +%s)
   done
   echo "Checking archived history inputs for ${my_ensnum} members"
   for i in $(seq 1 "${my_ensnum}"); do
     member=$(printf 'EN%02d' "${i}")
     case_name="${my_casename}.${member}"
     archive="${my_modeldir}/${member}/archive"
-
     for requirement in "${cycle_streams[@]}"; do
       component="${requirement%%:*}"
       stream="${requirement#*:}"
@@ -129,68 +126,51 @@ validate_history_inputs() {
         fi
       done
     done
-
-    for requirement in "${monthly_streams[@]}"; do
-      component="${requirement%%:*}"
-      stream="${requirement#*:}"
-      for month in "${required_months[@]}"; do
-        file="${archive}/${component}/hist/${case_name}.${stream}.${month}.nc"
-        if [[ ! -s "${file}" ]]; then
-          echo "ERROR: missing or empty history input: ${file}" >&2
-          missing=$((missing+1))
-        fi
-      done
-    done
   done
   (( missing == 0 )) || fail "history input preflight found ${missing} missing or empty file(s)"
   echo "Archived history input preflight passed"
 }
-validate_history_inputs
+# Free-run cases (Step 4 = 4_run_e3sm_continuous.sh) write every tape 6-hourly,
+# four records per daily file, instead of one file per DA cycle; their
+# products (eam_hfreq, elm_hfreq) cover every history variable.
+FREE_RUN="FALSE"
+[[ -n "${my_free_layout:-}" ]] && FREE_RUN="TRUE"
+if [[ "${FREE_RUN}" == "TRUE" ]]; then
+  # finalize already verified every archived history file of the run.
+  free_marker="${my_status_dir}/free_run_complete.${my_e3sm_start_date}-${my_e3sm_start_tod}-${my_e3sm_end_date}-${my_e3sm_end_tod}"
+  [[ -s "${free_marker}" ]] || fail "free run not finalized (${free_marker}); run ./4_run_e3sm_continuous.sh finalize"
+  [[ ! "${POST_START_DATE}" < "${my_e3sm_start_date}" && "${POST_END_DATE}" < "${my_e3sm_end_date}" ]] ||
+    fail "POST_START..POST_END (${POST_START_DATE}..${POST_END_DATE}) must lie within the run, ${my_e3sm_start_date} to the day before ${my_e3sm_end_date}"
+  echo "Free run: history verified by ${free_marker}"
+else
+  validate_history_inputs
+fi
 
 product_worker() {
   case "$1" in
-    eam_6hourly) echo "${my_workflow_lib}/post/post_process_eam_6hourly.sh" ;;
-    eam_daily) echo "${my_workflow_lib}/post/post_process_eam_daily.sh" ;;
-    eam_clim) echo "${my_workflow_lib}/post/post_process_eam_monthly.sh" ;;
-    elm_daily) echo "${my_workflow_lib}/post/post_process_elm_daily.sh" ;;
-    elm_clim) echo "${my_workflow_lib}/post/post_process_elm_monthly.sh" ;;
-    eam_monthly) echo "${my_workflow_lib}/post/hfreq_to_eam_monthly.sh" ;;
-    elm_monthly) echo "${my_workflow_lib}/post/hfreq_to_elm_monthly.sh" ;;
+    eam_cycled|elm_cycled) echo "${my_workflow_lib}/post/post_process_cycled.sh" ;;
+    eam_hfreq|elm_hfreq) echo "${my_workflow_lib}/post/post_process_free_hfreq.sh" ;;
     *) return 1 ;;
   esac
 }
 
+manifest_path() { echo "${STATUS_DIR}/postprocess_manifest.$1.$2.${POST_START}-${POST_END}"; }
+
 validate_product_outputs() {
-  local product="$1" member="$2" root pattern found=0 found_da=0 file member_archive
-  member_archive="${my_modeldir}/${member}/archive"
+  local product="$1" member="$2" file found=0 manifest
   case "${product}" in
-    eam_6hourly) root="${member_archive}/post/atm/180x360_aave/ts/6hourly"; pattern="*.${member}.*.nc" ;;
-    eam_daily) root="${member_archive}/post/atm/180x360_aave/ts/daily"; pattern="*.${member}.*.nc" ;;
-    eam_clim) root="${member_archive}/post/atm/180x360_aave/clim"; pattern="*.${member}.*.nc" ;;
-    elm_daily) root="${member_archive}/post/lnd/180x360_aave/ts/daily"; pattern="*.${member}.*.nc" ;;
-    elm_clim) root="${member_archive}/post/lnd/180x360_aave/clim"; pattern="*.${member}.*.nc" ;;
-    eam_monthly) root="${member_archive}/post/atm/180x360_aave/monthly"; pattern="*.${member}.*.nc" ;;
-    elm_monthly) root="${member_archive}/post/lnd/180x360_aave/monthly"; pattern="*.${member}.*.nc" ;;
+    eam_cycled|elm_cycled|eam_hfreq|elm_hfreq)
+      # Every file the worker listed must exist and be readable.
+      manifest=$(manifest_path "${product}" "${member}")
+      [[ -s "${manifest}" ]] || return 1
+      while IFS= read -r file; do
+        [[ -s "${file}" ]] || return 1
+        ncdump -h "${file}" >/dev/null 2>&1 || return 1
+        found=$((found+1))
+      done < "${manifest}"
+      (( found > 0 )) ;;
+    *) return 1 ;;
   esac
-  [[ -d "${root}" ]] || return 1
-  while IFS= read -r file; do
-    [[ "${file}" == *"${START_YEAR}"* || "${file}" == *"${END_YEAR}"* ]] || continue
-    [[ -s "${file}" ]] || return 1
-    ncdump -h "${file}" >/dev/null 2>&1 || return 1
-    found=$((found+1))
-  done < <(find "${root}" -type f -name "${pattern}" -print | sort)
-  if [[ "${product}" == "eam_6hourly" ]]; then
-    root="${member_archive}/post/atm/180x360_aave/ts/6hourly_da"
-    [[ -d "${root}" ]] || return 1
-    while IFS= read -r file; do
-      [[ "${file}" == *"${START_YEAR}"* || "${file}" == *"${END_YEAR}"* ]] || continue
-      [[ -s "${file}" ]] || return 1
-      ncdump -h "${file}" >/dev/null 2>&1 || return 1
-      found_da=$((found_da+1))
-    done < <(find "${root}" -type f -name "${pattern}" -print | sort)
-    (( found_da > 0 )) || return 1
-  fi
-  (( found > 0 ))
 }
 
 validate_completion_record() {
@@ -227,8 +207,10 @@ run_product() {
     "${SLURM_JOB_ID:-none}" "$(date '+%Y-%m-%d %H:%M:%S')" > "${progress}"
 
   echo "Running ${product} for ${member}"
-  POSTPROCESS_DRIVER_ACTIVE=TRUE POST_ENSTR="${member}" POST_CASE_NAME="${case_name}" \
-    POST_START_DATE="${POST_START_DATE}" POST_END_DATE="${POST_END_DATE}" "${worker}"
+  POSTPROCESS_DRIVER_ACTIVE=TRUE POST_PRODUCT="${product}" OVERWRITE_EXISTING="${OVERWRITE_EXISTING}" \
+    POST_ENSTR="${member}" POST_CASE_NAME="${case_name}" POST_ANALYSIS_ONLY_TAPES="${ANALYSIS_ONLY_TAPES}" POST_MANIFEST="$(manifest_path "${product}" "${member}")" \
+    POST_START_DATE="${POST_START_DATE}" POST_END_DATE="${POST_END_DATE}" "${worker}" ||
+    fail "${product} worker exited with an error for ${member}"
   validate_product_outputs "${product}" "${member}" || fail "invalid or missing ${product} output for ${member}"
 
   tmp="${record}.tmp.${SLURM_JOB_ID:-$$}"
@@ -240,18 +222,13 @@ run_product() {
 }
 
 run_product_batch() {
-  local product="$1" failed=0 member pid index status worker_limit
+  local product="$1" failed=0 member index status
   local -a pids=() members=()
-  worker_limit="${MAX_CONCURRENT_WORKERS}"
-  if [[ "${product}" == "elm_clim" ]]; then
-    worker_limit=1
-    echo "Serializing elm_clim because ncremap -P elm uses internal SGS scratch files"
-  fi
   for i in $(seq 1 "${my_ensnum}"); do
     member=$(printf 'EN%02d' "${i}")
     run_product "${product}" "${member}" &
     pids+=("$!"); members+=("${member}")
-    if (( ${#pids[@]} >= worker_limit )); then
+    if (( ${#pids[@]} >= MAX_CONCURRENT_WORKERS )); then
       for index in "${!pids[@]}"; do wait "${pids[$index]}" || { status=$?; echo "ERROR: ${product} failed for ${members[$index]} (${status})" >&2; failed=1; }; done
       pids=(); members=()
     fi
@@ -260,32 +237,16 @@ run_product_batch() {
   (( failed == 0 )) || fail "${product} failed for one or more members"
 }
 
-BASE_PRODUCTS=()
-[[ "${RUN_EAM_6HOURLY}" == "TRUE" ]] && BASE_PRODUCTS+=(eam_6hourly)
-[[ "${RUN_EAM_DAILY}" == "TRUE" ]] && BASE_PRODUCTS+=(eam_daily)
-[[ "${RUN_EAM_CLIM}" == "TRUE" ]] && BASE_PRODUCTS+=(eam_clim)
-[[ "${RUN_ELM_DAILY}" == "TRUE" ]] && BASE_PRODUCTS+=(elm_daily)
-[[ "${RUN_ELM_CLIM}" == "TRUE" ]] && BASE_PRODUCTS+=(elm_clim)
-MONTHLY_PRODUCTS=()
-[[ "${RUN_EAM_MONTHLY}" == "TRUE" ]] && MONTHLY_PRODUCTS+=(eam_monthly)
-[[ "${RUN_ELM_MONTHLY}" == "TRUE" ]] && MONTHLY_PRODUCTS+=(elm_monthly)
-
-if [[ "${POST_MODE}" == "base" || "${POST_MODE}" == "all" ]]; then
-  (( ${#BASE_PRODUCTS[@]} > 0 )) || fail "no base products enabled"
-  for product in "${BASE_PRODUCTS[@]}"; do run_product_batch "${product}"; done
+# Every product writes its own daily and monthly series.
+PRODUCTS=()
+if [[ "${FREE_RUN}" == "TRUE" ]]; then
+  [[ "${RUN_EAM}" == "TRUE" ]] && PRODUCTS+=(eam_hfreq)
+  [[ "${RUN_ELM}" == "TRUE" ]] && PRODUCTS+=(elm_hfreq)
+else
+  [[ "${RUN_EAM}" == "TRUE" ]] && PRODUCTS+=(eam_cycled)
+  [[ "${RUN_ELM}" == "TRUE" ]] && PRODUCTS+=(elm_cycled)
 fi
-if [[ "${POST_MODE}" == "monthly" || "${POST_MODE}" == "all" ]]; then
-  [[ "${RUN_EAM_MONTHLY}" != "TRUE" || "${RUN_EAM_DAILY}" == "TRUE" || "${RUN_EAM_6HOURLY}" == "TRUE" || "${POST_MODE}" == "monthly" ]] || fail "EAM monthly processing requires EAM daily or 6-hourly base processing"
-  [[ "${RUN_ELM_MONTHLY}" != "TRUE" || "${RUN_ELM_DAILY}" == "TRUE" || "${POST_MODE}" == "monthly" ]] || fail "ELM monthly processing requires ELM daily base processing"
-  (( ${#MONTHLY_PRODUCTS[@]} > 0 )) || fail "no monthly products enabled"
-  if [[ "${POST_MODE}" == "monthly" ]]; then
-    for i in $(seq 1 "${my_ensnum}"); do
-      member=$(printf 'EN%02d' "${i}")
-      [[ "${RUN_EAM_MONTHLY}" != "TRUE" ]] || validate_completion_record eam_daily "${member}" || validate_completion_record eam_6hourly "${member}" || fail "missing or invalid EAM base completion for ${member}"
-      [[ "${RUN_ELM_MONTHLY}" != "TRUE" ]] || validate_completion_record elm_daily "${member}" || fail "missing or invalid ELM base completion for ${member}"
-    done
-  fi
-  for product in "${MONTHLY_PRODUCTS[@]}"; do run_product_batch "${product}"; done
-fi
+(( ${#PRODUCTS[@]} > 0 )) || fail "no products enabled"
+for product in "${PRODUCTS[@]}"; do run_product_batch "${product}"; done
 
-echo "Post-processing completed: mode=${POST_MODE}, range=${POST_START} through ${POST_END}"
+echo "Post-processing completed: products=${PRODUCTS[*]}, range=${POST_START} through ${POST_END}"

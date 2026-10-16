@@ -325,6 +325,9 @@ validate_on_off "my_eam_dart_da" "${my_eam_dart_da}"
 validate_on_off "my_elm_dart_da" "${my_elm_dart_da}"
 validate_true_false "my_allow_forward_xml_recovery" "${my_allow_forward_xml_recovery:-FALSE}"
 validate_positive_int "my_e3sm_cycle_hours" "${my_e3sm_cycle_hours}"
+# Every history tape must write, and keep, one record per cycle (see the script).
+"${my_workflow_lib}/cycle/check_history_namelists.sh" "${my_modelcase}" "${my_e3sm_cycle_hours}" ||
+  fail "history namelists in ${my_modelcase} would lose or corrupt per-cycle output"
 [[ "${my_e3sm_completed_cycles:-}" =~ ^[0-9]+$ ]] || fail "my_e3sm_completed_cycles must be a non-negative integer"
 validate_positive_int "my_eam_dart_cycle_hours" "${my_eam_dart_cycle_hours}"
 validate_positive_int "my_elm_dart_cycle_hours" "${my_elm_dart_cycle_hours}"

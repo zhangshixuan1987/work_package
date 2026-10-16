@@ -6,29 +6,51 @@ perturbation) and then replaces DA cycling with one continuous forecast:
     sbatch 1_run_e3sm_ensemble_setup.sh
     sbatch 2_run_dart_e3sm_icbc.sh
     sbatch 3_run_dart_eam_pertrub.sh
-    sbatch 4_run_e3sm_continuous.sh
+    ./4_run_e3sm_continuous.sh            # on a login node, not with sbatch
 
 Step 4 starts every member once (hybrid) from its perturbed eam.i at
-my_e3sm_start_date and runs to my_e3sm_end_date in my_free_segment_days
-segments (CONTINUE_RUN). Restarts are written only at segment ends and are
-deleted once all members finish; no eam.i files are written. If a job stops
-early, resubmit Step 4 and it resumes from the last archived restart.
-Completion record: runtmp/status/free_run_complete.<start>-<end>.
+my_e3sm_start_date and runs to my_e3sm_end_date in a single model run; the
+only restart is written at the end time and no eam.i files are written.
 
-Alternative Step 4 (per-member jobs, run on a login node, not with sbatch):
+    ./4_run_e3sm_continuous.sh            # configure and submit pending members
+    ./4_run_e3sm_continuous.sh status     # progress and active jobs per member
+    ./4_run_e3sm_continuous.sh finalize   # after all members reach the end
 
-    ./4_submit_member_jobs.sh            # configure and submit each member
-    ./4_submit_member_jobs.sh status     # progress and active jobs per member
-    ./4_submit_member_jobs.sh finalize   # after all members reach the end
+my_free_layout in create_and_setup_case.sh selects how members run:
 
-Each member runs as its own CIME job chain on my_free_member_nodes nodes in
-my_free_job_queue, split into my_free_member_segments segments that CIME
-resubmits itself. If a member's chain stops (e.g. walltime), fix the cause and
-run submit again; it resumes that member from its last archived restart.
+- member_jobs (default): each member is its own CIME batch job on
+  my_free_member_nodes nodes in my_free_job_queue (~40 min per month on 20
+  nodes). Run finalize once every member is done.
+- single_job: one my_job_nnodes-node allocation in my_free_single_job_queue
+  runs all members together on my_nodes_per_member nodes each, and finalizes
+  itself at the end.
+
+If a member stops early, fix the cause and run submit again; it resumes that
+member from its latest archived restart. finalize verifies history, deletes
+intermediate restart sets, and writes
+runtmp/status/free_run_complete.<start>-<end>.
 
 Steps 4-6 and 8 of the DA workflow (cycling, compression, DART diagnostics,
-eam.i post-processing) do not apply here. Step 7 expects the cycled
-history layout (2 records per 6-h file) and needs a free-run mode before use.
+eam.i post-processing) do not apply here. Step 7 runs after finalize with the
+usual driver, which detects the free run (my_free_layout is set):
+
+    sbatch 7_run_post_hist.sh     # set POST_START/POST_END to the run's days
+
+A free run writes every history tape 6-hourly (four records per daily file), so
+the base products are 6-hourly and daily series of every variable on the
+tapes (eam_hfreq: eam.h2, eam.h1, eam.h0; elm_hfreq: elm.h1, elm.h0), built by
+workflow_lib/post/free_run_hfreq.py:
+
+    ENxx/archive/post/<atm|lnd>/180x360_aave/ts/6hourly/<VAR>.ENxx.<YYYY>.nc
+    ENxx/archive/post/<atm|lnd>/180x360_aave/ts/daily/<VAR>.ENxx.<YYYY>.nc
+
+Records are selected by time, not file name: 6-h means/maxima/minima by their
+bounds (a day's file spans 18Z of the previous day to 18Z; the hybrid-start
+timestep record is dropped) and instantaneous fields by valid time. Daily
+values (labelled 12Z) are the mean of the four 6-h means, the max/min of the
+6-h maxima/minima, or the mean of the 00/06/12/18Z states. Monthly products
+(eam_monthly, elm_monthly) are then derived from the daily series; the CLIM
+products need the monthly h0 tape and are not made for a free run.
 
 The DA workflow documentation follows for reference.
 
@@ -300,20 +322,55 @@ Step 6 validates the entire requested cycle range before starting. Observation m
 Edit the settings at the top of `7_run_post_hist.sh`:
 
 ```bash
-POST_MODE="all"                # base, monthly, or all
 POST_START="2011-12-01-00000"
-POST_END="2011-12-26-00000"
+POST_END="2011-12-31-00000"      # last day processed (inclusive)
 MAX_CONCURRENT_WORKERS=4
 OVERWRITE_EXISTING="FALSE"
+RUN_EAM="TRUE"
+RUN_ELM="TRUE"
+ANALYSIS_ONLY_TAPES="eam.h1 elm.h1"   # tapes this archive holds without 6-h records
 ```
 
-Individual EAM/ELM products can be enabled or disabled using the `RUN_*` switches. Submit with:
+Submit with:
 
 ```bash
 sbatch 7_run_post_hist.sh
 ```
 
-In `all` mode, base products complete before monthly aggregation begins. In `monthly` mode, existing base completion records and outputs must validate. Every member/product uses its own lock and completion record. Outputs must be nonempty, readable NetCDF files before completion is recorded.
+Each DA cycle is a separate 6-h run started from the analysis, so every
+history file holds a nstep-0 record (zero-width bounds) and, on tapes written
+every 6 h, a record spanning the cycle. Point fields in the nstep-0 record are
+the analysis state; mean/max/min fields there are a single-timestep value and
+are never used. A tape without 6-h records stops Step 7 unless it is listed in
+`ANALYSIS_ONLY_TAPES` (runs set up with `nhtfrq=-24`, or with `mfilt=1`, which
+lets the next cycle overwrite them). Step 4 refuses to start cycling unless every
+tape has `nhtfrq=-<cycle hours>` and `mfilt>=2`
+(`workflow_lib/cycle/check_history_namelists.sh`). Tapes with `nhtfrq=-24` hold the nstep-0 record only, and the
+monthly tape covers only the last cycle, so it is not processed.
+`workflow_lib/post/cycled_split.py` (products `eam_cycled`, `elm_cycled`)
+selects records by their time bounds and `cell_methods` and writes, under
+`ENxx/archive/post/<atm|lnd>/180x360_aave/`:
+
+| Output | Contents |
+|---|---|
+| `ts/6hourly` | forecast: 6-h means/max/min labelled at the window middle with bounds; point fields (background) at the window end |
+| `ts/6hourly_analysis` | analysis state at every cycle start (point fields, plus state variables labelled `time: mean`, e.g. `U850`, `TSOI`) |
+| `ts/daily_mean` | calendar day 00Z-24Z: mean of the four 6-h forecast means; fields without one use the mean of the 00/06/12/18Z analysis states (stated in `cell_methods`) |
+| `ts/daily_max`, `ts/daily_min` | from 6-h maxima/minima; only for runs with `nhtfrq=-6` on that tape |
+| `ts/daily_00z` | analysis state at 00Z |
+| `monthly/VAR.ENxx.YYYY-MM.nc` | mean of `ts/daily_mean` over the days of the month in range |
+
+The first run on a member moves the outputs of the earlier version
+(`ts/6hourly`, `ts/6hourly_da`, `ts/daily`, `monthly`, `clim`) to
+`180x360_aave/legacy/` and leaves a `LAYOUT` marker. Each member/product has
+its own lock and completion record; the worker lists every file it wrote in
+`runtmp/status/postprocess_manifest.*`, and each must be a readable NetCDF
+file before completion is recorded.
+
+Free-run cases (`my_free_layout` set; `eam_hfreq`, `elm_hfreq`,
+`free_run_hfreq.py`) write the same layout without `ts/6hourly_analysis` (a
+free run has no analysis; `ts/daily_00z` is the model state at 00Z). Their
+earlier `ts/daily`, `monthly` and `clim` are moved to `legacy/` on the first run.
 
 ### Step 8 — Restart-variable extraction
 

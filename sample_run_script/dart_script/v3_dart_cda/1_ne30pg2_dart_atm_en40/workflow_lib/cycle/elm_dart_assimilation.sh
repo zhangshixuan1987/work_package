@@ -131,39 +131,99 @@ elm_iso_to_stamp() {
   printf '%s-%05d\n' "${ymd}" "${seconds}"
 }
 
-elm_find_history_record() {
-  local enstr="$1" stream="$2" target="$3" stamp filename candidate member_archive
-  member_archive="${my_modeldir}/${enstr}/archive"
-  stamp=$(elm_iso_to_stamp "${target}") || return 1
-  filename="${my_casename}.${enstr}.elm.${stream}.${stamp}.nc"
-  for candidate in \
-    "${member_archive}/lnd/hist/${filename}" \
-    "${my_modeldir}/${enstr}/run/${filename}"; do
-    if [[ -s "${candidate}" ]]; then
-      printf '%s|0\n' "${candidate}"
-      return 0
-    fi
-  done
-  elm_fail "no ${stream} history file for ${enstr} at ${target} (expected ${filename})"
+# elm_history_times <file>: one line per record, "index time lower upper", all
+# in epoch seconds (time:units is "days since <date> <time>").
+elm_history_times() {
+  local file="$1" header units base
+  header=$(ncdump -h "${file}" 2>/dev/null) || return 1
+  units=$(sed -nE 's/^[[:space:]]*time:units = "days since ([0-9]{4}-[0-9]{2}-[0-9]{2})[ T]?([0-9:]*).*/\1 \2/p' <<< "${header}")
+  [[ -n "${units}" ]] || return 1
+  base=$(date -u -d "${units}" +%s) || return 1
+  ncdump -v time,time_bounds "${file}" | awk -v base="${base}" '
+    /^data:/ { data = 1; next }
+    data { buf = buf " " $0 }
+    END {
+      gsub(/[ \t]+/, " ", buf)
+      t = buf; sub(/.* time = /, "", t); sub(/;.*/, "", t)
+      b = buf; sub(/.* time_bounds = /, "", b); sub(/;.*/, "", b)
+      n = split(t, tv, ","); m = split(b, bv, ",")
+      if (n < 1 || m != 2 * n) exit 1
+      for (i = 1; i <= n; i++)
+        printf "%d %.0f %.0f %.0f\n", i - 1, base + tv[i] * 86400, base + bv[2*i-1] * 86400, base + bv[2*i] * 86400
+    }'
 }
 
+# elm_find_history_record <member> <stream> <target ISO time>: print
+# "file|index|records" for the prior, the record that ends at the analysis
+# time and spans one forecast cycle. With hist_mfilt=1 it is the only record of
+# the file named for the analysis time; with hist_mfilt>=2 it is the second
+# record of the previous cycle's file (that layout keeps the record in the
+# archive). The nstep-0 record of the cycle starting at the target time (one
+# timestep wide) is never accepted, so a rerun after that cycle fails instead
+# of reading the wrong state.
+elm_find_history_record() {
+  local enstr="$1" stream="$2" target="$3" target_s cycle_s stamp candidate member_archive
+  local idx t lo hi nrec times
+  local -a tried=()
+  member_archive="${my_modeldir}/${enstr}/archive"
+  target_s=$(date -u -d "${target/T/ }" +%s) || { elm_fail "invalid target time: ${target}"; return 1; }
+  cycle_s=$(( ${my_e3sm_cycle_hours:?} * 3600 ))
+  for stamp in "$(elm_iso_to_stamp "${target}")" \
+               "$(elm_iso_to_stamp "$(date -u -d "@$(( target_s - cycle_s ))" +%Y-%m-%dT%H:%M:%S)")"; do
+    for candidate in \
+      "${member_archive}/lnd/hist/${my_casename}.${enstr}.elm.${stream}.${stamp}.nc" \
+      "${my_modeldir}/${enstr}/run/${my_casename}.${enstr}.elm.${stream}.${stamp}.nc"; do
+      [[ -s "${candidate}" ]] || continue
+      tried+=("${candidate##*/}")
+      times=$(elm_history_times "${candidate}") || { elm_fail "cannot read time bounds of ${candidate}"; return 1; }
+      nrec=$(wc -l <<< "${times}")
+      while read -r idx t lo hi; do
+        if (( t == target_s && hi == target_s && hi - lo == cycle_s )); then
+          printf '%s|%s|%s\n' "${candidate}" "${idx}" "${nrec}"
+          return 0
+        fi
+      done <<< "${times}"
+    done
+  done
+  elm_fail "no ${my_e3sm_cycle_hours}-h ${stream} record of ${enstr} ending at ${target} (checked: ${tried[*]:-no files}); the stream must be written every ${my_e3sm_cycle_hours} h and its prior record must still exist"
+}
+
+# elm_ncks <args>: ncks, loading NCO in a subshell when the DART environment
+# does not provide it (keeps the filter environment unchanged).
+elm_ncks() {
+  if command -v ncks >/dev/null 2>&1; then
+    ncks "$@"
+  else
+    ( source /etc/profile.d/modules.sh && module load "${my_nco_module:-nco/4.7.9}" >/dev/null 2>&1 && ncks "$@" )
+  fi
+}
+
+# elm_link_single_history_record <record> <output> <expected ISO time>: give
+# DART a file holding only the prior record: a link when the source file holds
+# just that record, else a copy of that record (the archive is never changed).
+# With an empty <output> it only checks that this will work.
 elm_link_single_history_record() {
-  local record="$1" output="$2" expected="$3" source index stamp
-  source=${record%|*}
-  index=${record##*|}
-  stamp=$(elm_iso_to_stamp "${expected}") || return 1
-  [[ "${index}" == "0" && -s "${source}" && "${source}" == *".${stamp}.nc" ]] || {
-    elm_fail "history source does not match expected timestamp ${stamp}: ${source}"
+  local record="$1" output="$2" expected="$3" source index nrec rest
+  source=${record%%|*}; rest=${record#*|}; index=${rest%%|*}; nrec=${rest#*|}
+  [[ -s "${source}" && "${index}" =~ ^[0-9]+$ && "${nrec}" =~ ^[1-9][0-9]*$ ]] || {
+    elm_fail "invalid history record for ${expected}: ${record}"
     return 1
   }
-  [[ -z "${output}" ]] || ln -s "${source}" "${output}" || return 1
+  if (( nrec == 1 )); then
+    [[ -z "${output}" ]] || ln -s "${source}" "${output}" || return 1
+  elif [[ -z "${output}" ]]; then
+    elm_ncks --version >/dev/null 2>&1 || { elm_fail "ncks (NCO) is needed to extract the prior record from ${source}"; return 1; }
+  else
+    elm_ncks -O -d "time,${index}" "${source}" "${output}" >/dev/null 2>&1 ||
+      { elm_fail "could not extract record ${index} of ${source}"; return 1; }
+  fi
 }
 
 
 elm_validate_vector_record() {
   local record="$1" source header variable
   local -a required_variables=(NEE H2OSNO TLAI TWS SMP TV RH2M_R PBOT TBOT)
-  source=${record%|*}
+  source=${record%%|*}
   header=$(ncdump -h "${source}" 2>/dev/null) || {
     elm_fail "invalid vector history file: ${source}"
     return 1

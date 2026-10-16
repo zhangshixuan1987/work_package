@@ -178,8 +178,21 @@ cat << EOF >> user_nl_eam
           'SFDMS','SFSO2','TROP_P','SOLIN','PHIS',
           'LANDFRAC','OCNFRAC','ICEFRAC'
 
- ! 6hourly (h1): fields not in DART or h2; 6-h min/max for daily extremes
- fincl2 = 'OMEGA1000:I','OMEGA975:I','OMEGA950:I','OMEGA925:I','OMEGA900:I','OMEGA850:I',
+ ! 6hourly (h1) I: per-member state on 16 pressure levels (record 0 of each
+ ! cycle file = analysis, record 1 = 6-h background), so the per-member DART
+ ! state files are not needed for evaluation; OMEGA, TTQ; 6-h min/max for
+ ! daily extremes.
+ fincl2 = 'U1000:I','U975:I','U950:I','U925:I','U900:I','U850:I','U800:I','U700:I','U600:I',
+          'U500:I','U400:I','U300:I','U200:I','U100:I','U050:I','U010:I',
+          'V1000:I','V975:I','V950:I','V925:I','V900:I','V850:I','V800:I','V700:I','V600:I',
+          'V500:I','V400:I','V300:I','V200:I','V100:I','V050:I','V010:I',
+          'T1000:I','T975:I','T950:I','T925:I','T900:I','T850:I','T800:I','T700:I','T600:I',
+          'T500:I','T400:I','T300:I','T200:I','T100:I','T050:I','T010:I',
+          'Q1000:I','Q975:I','Q950:I','Q925:I','Q900:I','Q850:I','Q800:I','Q700:I','Q600:I',
+          'Q500:I','Q400:I','Q300:I','Q200:I','Q100:I','Q050:I','Q010:I',
+          'Z1000:I','Z975:I','Z950:I','Z925:I','Z900:I','Z850:I','Z800:I','Z700:I','Z600:I',
+          'Z500:I','Z400:I','Z300:I','Z200:I','Z100:I','Z050:I','Z010:I',
+          'OMEGA1000:I','OMEGA975:I','OMEGA950:I','OMEGA925:I','OMEGA900:I','OMEGA850:I',
           'OMEGA800:I','OMEGA700:I','OMEGA600:I','OMEGA500:I','OMEGA400:I',
           'OMEGA300:I','OMEGA200:I','OMEGA100:I',
           'TTQ:I','TREFHTMN:M','TREFHTMX:X','PRECTMX:X'
@@ -194,7 +207,7 @@ cat << EOF >> user_nl_eam
           'SWCF:A','LWCF:A', 
           'FSNS:A','FLNS:A','FSDS:A','FLDS:A',
           'FSNSC:A','FLNSC:A','FSDSC:A','FLDSC:A',  
-          'QFLX','U90M','V90M',
+          'QFLX:A','U90M','V90M',
           'CLDTOT_ISCCP','MEANCLDALB_ISCCP','MEANTAU_ISCCP','MEANPTOP_ISCCP','MEANTB_ISCCP',
           'CLDTOT_CAL','CLDTOT_CAL_LIQ','CLDTOT_CAL_ICE','CLDTOT_CAL_UN','CLDHGH_CAL',
           'CLDHGH_CAL_LIQ','CLDHGH_CAL_ICE','CLDHGH_CAL_UN','CLDMED_CAL','CLDMED_CAL_LIQ',

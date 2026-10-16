@@ -124,23 +124,23 @@ export my_e3sm_end_tod="00000"
 ################################################################################
 # --- Continuous free run (Step 4: 4_run_e3sm_continuous.sh) ------------------
 # This case has no DA cycling. After Steps 1-3, every member runs one continuous
-# forecast from the perturbed IC at my_e3sm_start_date to my_e3sm_end_date.
-# The run is split into segments of my_free_segment_days; restarts are written
-# only at segment ends so an interrupted job can resume. Once all members reach
-# the end time, intermediate restart sets are deleted unless kept below.
-# No eam.i (inithist) files are written.
+# forecast from the perturbed IC at my_e3sm_start_date to my_e3sm_end_date in a
+# single model run (restart written only at the end time). No eam.i (inithist)
+# files are written. my_free_layout selects how members are run:
+#   member_jobs  each member is its own CIME batch job on my_free_member_nodes
+#                nodes in my_free_job_queue (~40 min per month on 20 nodes)
+#   single_job   one my_job_nnodes-node allocation in my_free_single_job_queue
+#                runs all members together, my_nodes_per_member nodes each
+#                (several hours per month on 2 nodes per member)
 ################################################################################
-export my_free_segment_days=8
-export my_free_keep_intermediate_restarts="FALSE"
-# Start another segment only when this much allocation time remains (seconds).
-export my_free_min_segment_time_sec=21600
-# Per-member job chains (4_submit_member_jobs.sh): each member runs on its own
-# my_free_member_nodes nodes in my_free_job_queue, split into
-# my_free_member_segments equal segments that CIME resubmits automatically.
+export my_free_layout="member_jobs"
 export my_free_member_nodes=20
-export my_free_member_segments=2
 export my_free_job_queue="short"
 export my_free_job_walltime="02:00:00"
+export my_free_single_job_queue="slurm"
+export my_free_single_job_walltime="24:00:00"
+# Delete restart sets between start and end at finalize (TRUE keeps them).
+export my_free_keep_intermediate_restarts="FALSE"
 
 ################################################################################
 # --- EAM DART assimilation --------------------------------------------------

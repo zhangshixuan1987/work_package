@@ -258,20 +258,55 @@ Step 6 validates the entire requested cycle range before starting. Observation m
 Edit the settings at the top of `7_run_post_hist.sh`:
 
 ```bash
-POST_MODE="all"                # base, monthly, or all
 POST_START="2011-12-01-00000"
-POST_END="2011-12-26-00000"
+POST_END="2011-12-31-00000"      # last day processed (inclusive)
 MAX_CONCURRENT_WORKERS=4
 OVERWRITE_EXISTING="FALSE"
+RUN_EAM="TRUE"
+RUN_ELM="TRUE"
+ANALYSIS_ONLY_TAPES="eam.h1 elm.h1"   # tapes this archive holds without 6-h records
 ```
 
-Individual EAM/ELM products can be enabled or disabled using the `RUN_*` switches. Submit with:
+Submit with:
 
 ```bash
 sbatch 7_run_post_hist.sh
 ```
 
-In `all` mode, base products complete before monthly aggregation begins. In `monthly` mode, existing base completion records and outputs must validate. Every member/product uses its own lock and completion record. Outputs must be nonempty, readable NetCDF files before completion is recorded.
+Each DA cycle is a separate 6-h run started from the analysis, so every
+history file holds a nstep-0 record (zero-width bounds) and, on tapes written
+every 6 h, a record spanning the cycle. Point fields in the nstep-0 record are
+the analysis state; mean/max/min fields there are a single-timestep value and
+are never used. A tape without 6-h records stops Step 7 unless it is listed in
+`ANALYSIS_ONLY_TAPES` (runs set up with `nhtfrq=-24`, or with `mfilt=1`, which
+lets the next cycle overwrite them). Step 4 refuses to start cycling unless every
+tape has `nhtfrq=-<cycle hours>` and `mfilt>=2`
+(`workflow_lib/cycle/check_history_namelists.sh`). Tapes with `nhtfrq=-24` hold the nstep-0 record only, and the
+monthly tape covers only the last cycle, so it is not processed.
+`workflow_lib/post/cycled_split.py` (products `eam_cycled`, `elm_cycled`)
+selects records by their time bounds and `cell_methods` and writes, under
+`ENxx/archive/post/<atm|lnd>/180x360_aave/`:
+
+| Output | Contents |
+|---|---|
+| `ts/6hourly` | forecast: 6-h means/max/min labelled at the window middle with bounds; point fields (background) at the window end |
+| `ts/6hourly_analysis` | analysis state at every cycle start (point fields, plus state variables labelled `time: mean`, e.g. `U850`, `TSOI`) |
+| `ts/daily_mean` | calendar day 00Z-24Z: mean of the four 6-h forecast means; fields without one use the mean of the 00/06/12/18Z analysis states (stated in `cell_methods`) |
+| `ts/daily_max`, `ts/daily_min` | from 6-h maxima/minima; only for runs with `nhtfrq=-6` on that tape |
+| `ts/daily_00z` | analysis state at 00Z |
+| `monthly/VAR.ENxx.YYYY-MM.nc` | mean of `ts/daily_mean` over the days of the month in range |
+
+The first run on a member moves the outputs of the earlier version
+(`ts/6hourly`, `ts/6hourly_da`, `ts/daily`, `monthly`, `clim`) to
+`180x360_aave/legacy/` and leaves a `LAYOUT` marker. Each member/product has
+its own lock and completion record; the worker lists every file it wrote in
+`runtmp/status/postprocess_manifest.*`, and each must be a readable NetCDF
+file before completion is recorded.
+
+Free-run cases (`my_free_layout` set; `eam_hfreq`, `elm_hfreq`,
+`free_run_hfreq.py`) write the same layout without `ts/6hourly_analysis` (a
+free run has no analysis; `ts/daily_00z` is the model state at 00Z). Their
+earlier `ts/daily`, `monthly` and `clim` are moved to `legacy/` on the first run.
 
 ### Step 8 — Restart-variable extraction
 
