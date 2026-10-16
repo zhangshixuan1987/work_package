@@ -63,6 +63,12 @@ diagnostic/**/*.pdf
 diagnostic/**/*.png
 diagnostic/**/*.eps
 
+# Generated v3_dart_paper outputs
+v3_dart_paper/**/*_figs/
+v3_dart_paper/**/*.nc
+v3_dart_paper/**/*.pdf
+v3_dart_paper/**/*.png
+
 # Keep lightweight documentation placeholders if they are added later.
 !diagnostic/**/figures/README*
 !diagnostic/**/data/README*
