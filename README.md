@@ -11,6 +11,7 @@ run scripts from their own directory unless their documentation says otherwise.
 | `CMIP_PGW_forcing/` | Generate and diagnose CMIP6 pseudo-global-warming SST and sea-ice forcing. |
 | `Gen_Nudge_Data/` | Generate reanalysis-based nudging and initial-condition data. |
 | `Tempest_Extreme/` | Detect and analyze tropical cyclones, extratropical cyclones, and atmospheric rivers. |
+| `e3sm_s2d_proc/` | E3SM v3 S2D ensemble hindcast workflow: initial conditions, ensemble generation, bundled hindcast runs, and post-processing. |
 | `coupled_spinup_eval/` | E3SM v3 coupled spin-up evaluation notebooks (Full-CPL vs alternating FC / FOSI spin-ups); outputs on LCRC public_html, see its README. |
 | `polar_analysis/` | E3SM v3 polar workflows (v3 LE paper and v3 polar regional analysis): time series, mean bias, TS budget, regional-mean budget, Arctic amplification; region- and directory-parameterized notebooks. |
 | `analysis_script_ncl/` | Shared NCL analysis, plotting, animation, and regridding scripts. |
