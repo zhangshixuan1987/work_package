@@ -102,8 +102,14 @@ _has_var() {
 }
 
 #-------------------------------------------------------------------------------
-# daily_member <m>: average 6-hourly regridded series to daily. Files already
-# present in ts/daily (e.g. written from eam.h1 by eam_daily) are kept.
+# daily_member <m>: average 6-hourly regridded series to daily means. Files
+# already present in ts/daily (e.g. written from eam.h1 by eam_daily) are kept.
+# Days are 00Z-00Z calendar days taken from time_bnds, not record counts: the
+# 6-hourly series begins with a zero-width lead-0 record, so fixed groups of 4
+# records would span 18Z-18Z. Interval means (time: mean) are width-weighted;
+# instantaneous values (time: point) take the trapezoid of the 00Z..24Z
+# samples. Only complete days are written, stamped at the day end with
+# time_bnds [day, day + 1] as in the EAM daily (h1) files.
 #-------------------------------------------------------------------------------
 daily_member() {
   local m=$1 tag src dst f out n=0 fail=0
@@ -116,10 +122,66 @@ daily_member() {
     if [[ ! -f $f ]]; then continue; fi
     out=${dst}/$(basename "$f")
     if [[ -s $out ]]; then continue; fi
-    if ncra -O --mro -d time,,,4,4 "$f" "${out}.tmp.nc" && mv -f "${out}.tmp.nc" "$out"; then
+    if python - "$f" "${out}.tmp.nc" <<'PY' && mv -f "${out}.tmp.nc" "$out"; then
+import sys
+import numpy as np
+import xarray as xr
+
+src, dst = sys.argv[1:]
+ds = xr.open_dataset(src, decode_times=True)
+name = ds.time.attrs.get("bounds", "time_bnds")
+var = next(v for v in ds.data_vars if "time" in ds[v].dims and v != name)
+field = ds[var]
+bounds = ds[name].values
+start = bounds[:, 0].astype("datetime64[s]")
+end = bounds[:, 1].astype("datetime64[s]")
+times = ds.time.values.astype("datetime64[s]")
+point = "time: point" in field.attrs.get("cell_methods", "")
+hour = np.timedelta64(3600, "s")
+day = np.timedelta64(86400, "s")
+first = start[end > start].min().astype("datetime64[D]")
+last = end.max().astype("datetime64[D]")
+days, rows = [], []
+for d in np.arange(first, last, np.timedelta64(1, "D")).astype("datetime64[s]"):
+    w = np.zeros(len(times))
+    if point:
+        inside = np.where((times >= d) & (times <= d + day))[0]
+        t = times[inside]
+        if len(t) < 2 or t[0] != d or t[-1] != d + day:
+            continue
+        gap = np.diff(t) / hour
+        w[inside] = np.concatenate([[0.0], gap / 2]) + np.concatenate([gap / 2, [0.0]])
+    else:
+        inside = (end > start) & (start >= d) & (end <= d + day)
+        w[inside] = (end - start)[inside] / hour
+        if abs(w.sum() - 24.0) > 1e-6:
+            continue
+    days.append(d)
+    rows.append(w / w.sum())
+if not days:
+    sys.exit(f"no complete day in {src}")
+weights = xr.DataArray(np.array(rows), dims=("time_out", "time"))
+daily = xr.dot(weights, field.fillna(0), dim="time").where(
+    xr.dot(weights, field.notnull().astype(float), dim="time") > 0.999)
+daily = daily.rename(time_out="time").astype(field.dtype)
+daily.attrs = field.attrs
+days = np.array(days)
+out = xr.Dataset({var: daily}, coords={"time": ("time", days + day)})
+for coord in ("lat", "lon"):
+    out = out.assign_coords({coord: ds[coord]})
+for extra in ("lat_bnds", "lon_bnds", "area", "gw"):
+    if extra in ds and "time" not in ds[extra].dims:
+        out[extra] = ds[extra]
+out[name] = xr.DataArray(np.stack([days, days + day], axis=1), dims=("time", ds[name].dims[-1]))
+out.time.attrs = {k: v for k, v in ds.time.attrs.items()}
+out.time.encoding.update(units=ds.time.encoding.get("units"), calendar=ds.time.encoding.get("calendar"))
+out[name].encoding.update(units=ds.time.encoding.get("units"), calendar=ds.time.encoding.get("calendar"))
+out.attrs = dict(ds.attrs, history=ds.attrs.get("history", "") + "\ndaily_member: 00Z-00Z daily means from 6-hourly")
+out.to_netcdf(dst, unlimited_dims=["time"])
+PY
       n=$((n+1))
     else
-      rm -f "${out}.tmp.nc"; warn "${tag}: ncra failed for $f"; fail=$((fail+1))
+      rm -f "${out}.tmp.nc"; warn "${tag}: daily averaging failed for $f"; fail=$((fail+1))
     fi
   done
   log "${tag}: ${n} daily file(s) written, ${fail} failed"

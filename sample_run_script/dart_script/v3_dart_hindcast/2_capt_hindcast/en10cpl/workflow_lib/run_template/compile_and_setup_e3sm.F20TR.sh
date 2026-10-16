@@ -130,23 +130,23 @@ cat << EOF >> user_nl_eam
           'CLDLOW_CAL_LIQ','CLDLOW_CAL_ICE','CLDLOW_CAL_UN',
           'CLWMODIS','CLIMODIS'
 
- !daily (h1) I
+ !daily (h1) A: daily means; TREFHTMN/TREFHTMX/PRECTMX are daily min/max
  fincl2 = 'TCO:A','SCO:A','FLUT:A','PRECT:A',
-          'PS:I','PSL:I','TS:I','TBOT:I','TUQ:I','TVQ:I','UBOT:I','VBOT:I','ZBOT:I','U10:I',
-          'TAUX:I','TAUY:I','TREFHT:I','QREFHT:I','TMQ:I','CAPE:I','CIN:I','TTQ:I',
-          'U1000:I','U975:I','U950:I','U925:I','U900:I','U850:I','U800:I','U700:I','U600:I',
-          'U500:I','U400:I','U300:I','U200:I','U100:I','U050:I','U010:I',
-          'V1000:I','V975:I','V950:I','V925:I','V900:I','V850:I','V800:I','V700:I','V600:I',
-          'V500:I','V400:I','V300:I','V200:I','V100:I','V050:I','V010:I',
-          'Z1000:I','Z975:I','Z950:I','Z925:I','Z900:I','Z850:I','Z800:I','Z700:I','Z600:I',
-          'Z500:I','Z400:I','Z300:I','Z200:I','Z100:I','Z050:I','Z010:I'
-          'T1000:I','T975:I','T950:I','T925:I','T900:I','T850:I','T800:I','T700:I','T600:I',
-          'T500:I','T400:I','T300:I','T200:I','T100:I','T050:I','T010:I',
-          'Q1000:I','Q975:I','Q950:I','Q925:I','Q900:I','Q850:I','Q800:I','Q700:I','Q600:I',
-          'Q500:I','Q400:I','Q300:I','Q200:I','Q100:I','Q050:I','Q010:I',
-          'OMEGA1000:I','OMEGA975:I','OMEGA950:I','OMEGA925:I','OMEGA900:I','OMEGA850:I',
-          'OMEGA800:I','OMEGA700:I','OMEGA600:I','OMEGA500:I','OMEGA400:I',
-          'OMEGA300:I','OMEGA200:I','OMEGA100:I',
+          'PS:A','PSL:A','TS:A','TBOT:A','TUQ:A','TVQ:A','UBOT:A','VBOT:A','ZBOT:A','U10:A',
+          'TAUX:A','TAUY:A','TREFHT:A','QREFHT:A','TMQ:A','CAPE:A','CIN:A','TTQ:A',
+          'U1000:A','U975:A','U950:A','U925:A','U900:A','U850:A','U800:A','U700:A','U600:A',
+          'U500:A','U400:A','U300:A','U200:A','U100:A','U050:A','U010:A',
+          'V1000:A','V975:A','V950:A','V925:A','V900:A','V850:A','V800:A','V700:A','V600:A',
+          'V500:A','V400:A','V300:A','V200:A','V100:A','V050:A','V010:A',
+          'Z1000:A','Z975:A','Z950:A','Z925:A','Z900:A','Z850:A','Z800:A','Z700:A','Z600:A',
+          'Z500:A','Z400:A','Z300:A','Z200:A','Z100:A','Z050:A','Z010:A',
+          'T1000:A','T975:A','T950:A','T925:A','T900:A','T850:A','T800:A','T700:A','T600:A',
+          'T500:A','T400:A','T300:A','T200:A','T100:A','T050:A','T010:A',
+          'Q1000:A','Q975:A','Q950:A','Q925:A','Q900:A','Q850:A','Q800:A','Q700:A','Q600:A',
+          'Q500:A','Q400:A','Q300:A','Q200:A','Q100:A','Q050:A','Q010:A',
+          'OMEGA1000:A','OMEGA975:A','OMEGA950:A','OMEGA925:A','OMEGA900:A','OMEGA850:A',
+          'OMEGA800:A','OMEGA700:A','OMEGA600:A','OMEGA500:A','OMEGA400:A',
+          'OMEGA300:A','OMEGA200:A','OMEGA100:A',
           'TREFHTMN:M','TREFHTMX:X','PRECTMX:X',
 
  ! 6hourly (h2) A
