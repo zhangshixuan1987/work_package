@@ -8,7 +8,9 @@ EXPERIMENT_GROUPS = {
 
 OBS_VARIABLES = {
     "ERA5": {
-        "UBOT":"U10", "VBOT":"V10", "PRECT":"PRECT", "PSL":"PSL", "T925":"T925", "Q925":"Q925",
+        # U10: model 10-m wind speed vs ERA5 daily-mean speed of the 6-hourly u10/v10
+        # (WSPD10). UBOT/VBOT (lowest model level, ~60 m) have no ERA5 counterpart.
+        "U10":"WSPD10", "PRECT":"PRECT", "PSL":"PSL", "T925":"T925", "Q925":"Q925",
         "U850":"U850", "V850":"V850", "T850":"T850", "Q850":"Q850", "U500":"U500", "V500":"V500", "T500":"T500", "Q500":"Q500", "U200":"U200", "V200":"V200", "T200":"T200", "Q200":"Q200", "Z200":"Z200", "Z500":"Z500", "Z850":"Z850",
         "OMEGA850":"OMEGA850", "OMEGA500":"OMEGA500", "OMEGA200":"OMEGA200",
         "FLDS":"FLDS", "FLDSC":"FLDSC", "FLNS":"FLNS", "FLNSC":"FLNSC",

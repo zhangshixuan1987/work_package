@@ -18,6 +18,12 @@ import os
 import numpy as np
 import pandas as pd
 import xarray as xr
+
+from pathlib import Path
+
+from configs.experiment_labels import experiment_label
+from util.model_daily import open_model_daily
+from util.time_labels import label_by_interval_start
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.colors as mcolors
@@ -180,7 +186,8 @@ class HovmollerPrecipAnalyzer:
             raise KeyError(f"Variable '{self.varname}' not found in {full_path}. Available: {list(ds.data_vars)}")
         if "lon" in ds.coords and ds.lon.min() >= 0:
             ds = ds.assign_coords(lon=((ds.lon + 180) % 360 - 180)).sortby("lon")
-        return ds[self.varname]
+        # Model daily means are stamped at the end of the day they cover.
+        return label_by_interval_start(ds, ds[self.varname])
 
     def _ensure_datetime64(self, da: xr.DataArray, freq: str) -> xr.DataArray:
         """Ensure 'time' coordinate is datetime64[ns] and normalize if daily or coarser."""
@@ -235,10 +242,21 @@ class HovmollerPrecipAnalyzer:
         for seg_key in sorted(seg_dict.keys()):
             meta = seg_dict[seg_key]
 
-            # Load the dataset
-            da = self._open_dataset(meta['path'], meta['template'], ensemble)
-
             freq = self.frequency or meta.get('frequency')
+
+            # Load the dataset. ``model_member_dirs``: ``path`` is a run directory with
+            # per-member archives; daily values follow util.model_daily (daily means
+            # from ts/daily_mean or the 6-hourly output, else 00Z states).
+            if meta.get('model_member_dirs'):
+                if ensemble is None:
+                    raise ValueError("Ensemble ID must be provided for model segments.")
+                _, years = self.parse_time_range(meta['period'], freq)
+                ts_root = Path(meta['path']) / ensemble / "archive/post/atm/180x360_aave/ts"
+                da = open_model_daily(ts_root, self.varname, ensemble, years)
+                if "lon" in da.coords and da.lon.min() >= 0:
+                    da = da.assign_coords(lon=((da.lon + 180) % 360 - 180)).sortby("lon")
+            else:
+                da = self._open_dataset(meta['path'], meta['template'], ensemble)
 
             # Apply time slicing using 'period'
             if 'period' in meta:
@@ -330,7 +348,7 @@ class HovmollerPrecipAnalyzer:
         else:
             mag_scale = 1.0
 
-        title = f'{exp_key} Hovmoller ({self.varname} x {mag_scale})'
+        title = f'{experiment_label(exp_key)} Hovmoller ({self.varname} x {mag_scale})'
 
         norm = mcolors.BoundaryNorm(clevs, ncolors=cmap.N)
 

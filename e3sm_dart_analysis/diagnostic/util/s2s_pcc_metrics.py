@@ -19,7 +19,7 @@ from xskillscore import rmse, pearson_r
 from dataclasses import dataclass
 
 from util.array_stats import nanquantile
-from util.time_labels import label_by_interval_start
+from util.model_daily import mask_below_ground, model_daily_files, model_sampling, open_model_daily_files, reference_files, select_00z
 from util.s2s_experiments import (
     build_experiments,
     DEFAULT_EXPERIMENTS
@@ -173,6 +173,13 @@ class S2SFileCollector:
     ) -> List[str]:
         ts_dir = self.model_ts_dir(run_meta, cfg.freq, ens)
         years = cfg.years()
+        if cfg.freq == "daily":
+            # Daily model values follow util.model_daily (ts/daily_mean, else 6-hourly
+            # averaged to days, else daily_00z 00Z states; older ts/daily layouts too).
+            try:
+                return [str(f) for f in model_daily_files(os.path.dirname(ts_dir), var, ens, years)]
+            except FileNotFoundError:
+                pass  # report the expected ts/daily paths as missing below
         return [
             os.path.join(
                 ts_dir,
@@ -341,10 +348,14 @@ class S2SSkillAssessor:
     @staticmethod
     def _open_var(files: List[str], var: str, *, interval_start: bool = False) -> xr.DataArray:
         """Open ``var``; ``interval_start`` relabels model interval means (see util.time_labels)."""
+        if interval_start:
+            # Model member: 00Z-00Z daily means from ts/6hourly where it exists,
+            # otherwise the once-daily 00Z states (util.model_daily).
+            return open_model_daily_files(files, var)
         ds = xr.open_mfdataset(files, combine="by_coords")
         name = var if var in ds else next((k for k in ds.data_vars if k.lower() == var.lower()), None)
         if name is not None:
-            return label_by_interval_start(ds, ds[name]) if interval_start else ds[name]
+            return ds[name]
         raise KeyError(f"Variable '{var}' not found. Available={list(ds.data_vars)}")
 
     def _open_member(self, files: List[str], *, var: str, period: str) -> xr.DataArray:
@@ -858,16 +869,21 @@ class S2SSkillAssessor:
                 continue
 
             any_exp = next(iter(all_files[var].keys()))
-            obs_files = all_files[var][any_exp]["obs"]
             obs_var = (obs_var_override or {}).get(var, var)
+            # Reference sampled like the model: daily means, or 00Z for 00Z model states.
+            sampling = model_sampling(next(f for f in all_files[var][any_exp]["model"].values() if f), var)
+            obs_files = reference_files(all_files[var][any_exp]["obs"], obs_var, sampling)
 
             # ---- open obs once per var ----
             obs_da0 = self._open_var(obs_files, obs_var)
+            if sampling == "00z":
+                obs_da0 = select_00z(obs_da0)
             obs_da0 = self._maybe_convert_geopotential_to_height(obs_da0, var_key=var, verbose=self.cfg.verbose)
             obs_da0 = self._maybe_convert_precip_to_mmday(obs_da0, var_key=var, verbose=self.cfg.verbose)
 
             obs_da0 = self._select_period_time(obs_da0, period)
             obs_da0 = self._to_daily_date_time(obs_da0)
+            obs_da0 = mask_below_ground(obs_da0, var, obs_files, **dict(zip(("lat", "lon"), self._guess_lat_lon_names(obs_da0))))
 
             lat_obs0, lon_obs0 = self._guess_lat_lon_names(obs_da0)
             obs_da0 = self._wrap_lon_0_360(obs_da0, lon_obs0)
@@ -1178,10 +1194,14 @@ class BiweeklyAccMapAssessor:
     @staticmethod
     def _open_var(files: List[str], var: str, *, interval_start: bool = False) -> xr.DataArray:
         """Open ``var``; ``interval_start`` relabels model interval means (see util.time_labels)."""
+        if interval_start:
+            # Model member: 00Z-00Z daily means from ts/6hourly where it exists,
+            # otherwise the once-daily 00Z states (util.model_daily).
+            return open_model_daily_files(files, var)
         ds = xr.open_mfdataset(files, combine="by_coords")
         name = var if var in ds else next((k for k in ds.data_vars if k.lower() == var.lower()), None)
         if name is not None:
-            return label_by_interval_start(ds, ds[name]) if interval_start else ds[name]
+            return ds[name]
         raise KeyError(f"Variable '{var}' not found. Available={list(ds.data_vars)}")
 
     @staticmethod
@@ -1707,10 +1727,14 @@ class BiweeklyAccMapAssessor:
                 continue
 
             any_exp = next(iter(all_files[var].keys()))
-            obs_files = all_files[var][any_exp]["obs"]
             obs_var = (obs_var_override or {}).get(var, var)
+            # Reference sampled like the model: daily means, or 00Z for 00Z model states.
+            sampling = model_sampling(next(f for f in all_files[var][any_exp]["model"].values() if f), var)
+            obs_files = reference_files(all_files[var][any_exp]["obs"], obs_var, sampling)
 
             obs_da = self._open_var(obs_files, obs_var)
+            if sampling == "00z":
+                obs_da = select_00z(obs_da)
             # ---- unit fix for Z500: geopotential (m2/s2) -> geopotential height (m)
             obs_da = self._maybe_convert_geopotential_to_height(
                 obs_da, var_key=var, verbose=self.cfg.verbose
@@ -1721,6 +1745,7 @@ class BiweeklyAccMapAssessor:
 
             obs_da = self._select_period_time(obs_da, period)
             obs_da = self._to_daily_date_time(obs_da)
+            obs_da = mask_below_ground(obs_da, var, obs_files, **dict(zip(("lat", "lon"), self._guess_lat_lon_names(obs_da))))
 
             lat_obs, lon_obs = self._guess_lat_lon_names(obs_da)
             obs_da = self._subset_region(obs_da, lat_obs, lon_obs, self.cfg.lat_range, self.cfg.lon_range)

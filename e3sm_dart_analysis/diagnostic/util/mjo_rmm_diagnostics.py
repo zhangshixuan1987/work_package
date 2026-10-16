@@ -16,12 +16,13 @@ class MJODiagnosticAnalyzer:
                  time, frequency, output_dir, figure_dir=None, rmm_cache_dir=None,
                  region_bounds=(-15, 15), months=None, years=None,
                  reload_mjo=False, overwrite_eofs=False):
-        self.olr = olr_data
-        self.u850 = u850_data
-        self.v850 = v850_data
-        self.u200 = u200_data
-        self.v200 = v200_data
-        self.time = time
+        # Combine the fields only on the days they all cover (e.g. daily-mean OLR
+        # and wind estimates from 00Z states may end on different days).
+        fields = xr.align(olr_data, u850_data, v850_data, u200_data, v200_data, join="inner")
+        if fields[0].sizes["time"] == 0:
+            raise ValueError("OLR and wind fields share no times; check their daily sampling")
+        self.olr, self.u850, self.v850, self.u200, self.v200 = fields
+        self.time = pd.DatetimeIndex(self.olr.time.values) if time is not None else None
         self.output_dir = output_dir
         self.figure_dir = figure_dir or output_dir
         os.makedirs(self.output_dir, exist_ok=True)
@@ -182,8 +183,12 @@ class MJODiagnosticAnalyzer:
             all_amp.append(np.sqrt(rmm1 ** 2 + rmm2 ** 2))
 
             if self.obs_rmm is not None:
-                acc1 = xr.corr(rmm1, self.obs_rmm["RMM1"], dim="time")
-                acc2 = xr.corr(rmm2, self.obs_rmm["RMM2"], dim="time")
+                # BoM RMM values are stamped 12Z, model days 00Z: match by calendar day.
+                obs = self.obs_rmm.assign_coords(time=self.obs_rmm.time.dt.floor("D"))
+                day1 = rmm1.assign_coords(time=rmm1.time.dt.floor("D"))
+                day2 = rmm2.assign_coords(time=rmm2.time.dt.floor("D"))
+                acc1 = xr.corr(day1, obs["RMM1"], dim="time")
+                acc2 = xr.corr(day2, obs["RMM2"], dim="time")
                 acc_scores.append({"member": m, "ACC_RMM1": float(acc1), "ACC_RMM2": float(acc2)})
                 print(f"[INFO] Member {m:02d} ACC: RMM1={float(acc1):.3f}, RMM2={float(acc2):.3f}")
 

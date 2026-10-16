@@ -8,6 +8,9 @@ import pandas as pd
 from typing import Dict, Tuple
 from datetime import datetime
 
+from util.model_daily import open_model_daily_estimate
+from util.time_labels import label_by_interval_start
+
 class ModelDataReader:
     def __init__(self, base_path, exp_base, regnam, frequency, period=None, component="atm"):
         self.base_path = base_path
@@ -203,7 +206,27 @@ class ModelDataReader:
 
         for i in range(1, nens + 1):
             member = f"EN{i:02d}"
-            search_dir = os.path.join(self.base_path, run, component_path, prefix)
+            # Hindcasts keep each member under <run>/ENxx/archive; the DA runs also
+            # have a shared <run>/archive.
+            member_root = os.path.join(self.base_path, run, member, component_path)
+            if not os.path.isdir(member_root):
+                member_root = os.path.join(self.base_path, run, component_path)
+            if freq == 'daily':
+                # Daily means where they can be had; fields held only as 00Z states
+                # (U850, U200, ...) as the mean of the 00Z states bracketing each day,
+                # so all fields cover the same 00Z-24Z days (util.model_daily).
+                data = open_model_daily_estimate(os.path.join(member_root, 'ts'), var, member, years)
+                data = self._ensure_datetime64(self._convert_model_units(var, data), freq)
+                if "lon" in data.coords and data.lon.min() >= 0:
+                    data = data.assign_coords(lon=((data.lon + 180) % 360 - 180)).sortby("lon")
+                data = data.sel(lat=slice(lat1, lat2), lon=slice(lon1, lon2), time=time_range)
+                if regional_mean:
+                    weights = np.cos(np.deg2rad(data.lat))
+                    weights /= weights.mean()
+                    data = (data * weights).mean(dim=["lat", "lon"])
+                ensemble_data.append(data.expand_dims(member=[i]))
+                continue
+            search_dir = os.path.join(member_root, prefix)
             file_pattern = self._get_search_pattern(var, member, run, freq)
             search_path = os.path.join(search_dir, file_pattern)
             rpath = sorted(glob.glob(search_path))
@@ -220,8 +243,6 @@ class ModelDataReader:
                 parallel=True
             )
 
-            # Normalize the time to ignore the hour, minute, and second part
-            ds = self._ensure_datetime64(ds,freq)
 
             if "lon" in ds and ds.lon.min() >= 0:
                 ds = ds.assign_coords(lon=((ds.lon + 180) % 360 - 180)).sortby("lon")
@@ -236,7 +257,10 @@ class ModelDataReader:
                 else:
                     raise KeyError(f"Variable '{var}' missing in {rpath[0]}")
 
-            data = self._convert_model_units(var, ds[var])
+            # Daily means are stamped at the end of the day they cover; label
+            # them by that day before normalizing the time to midnight.
+            data = self._convert_model_units(var, label_by_interval_start(ds, ds[var]))
+            data = self._ensure_datetime64(data, freq)
             data = data.sel(lat=slice(lat1, lat2), lon=slice(lon1, lon2), time=time_range)
 
             if regional_mean:

@@ -6,7 +6,7 @@ state; later records are interval means (``time: mean``) or end-of-interval
 values (``time: point``). Every record is placed at its lead time (interval
 midpoint for means, interval end for point values) and, where available,
 verified against a reference averaged over the same interval: ERA5 6-hourly
-samples, or daily means (GPM IMERG precipitation, NOAA interpolated OLR).
+samples, or daily means (GPCP or GPM IMERG precipitation, NOAA interpolated OLR).
 """
 from __future__ import annotations
 
@@ -21,14 +21,16 @@ import xarray as xr
 from util.bias_metrics import _period_years, experiment_registry
 from util.forecast_regional_timeseries import REGIONS as BOX_REGIONS
 from util.model_evaluation import experiment_colors
+from configs.experiment_labels import experiment_label
 
-FREQUENCIES = ("6hourly", "daily")
+FREQUENCIES = ("6hourly", "daily", "daily_mean", "daily_00z", "h1")  # ts/<subdirectory>
 REGIONS = ("global", "land", "ocean") + tuple(r for r in BOX_REGIONS if r != "global")
 # Reference products on the model's 180x360 grid. "samples": 6-hourly values at
 # 00/06/12/18Z; "daily": calendar-day means (any stamp within the day).
 REFERENCE_PRODUCTS = {
     "ERA5": {"kind": "samples", "file": "ERA5/6hourly/ERA5.6hourly.en00.{variable}.{year}01-{year}12.nc"},
     "GPM": {"kind": "daily", "file": "IMERG/daily/{variable}.daily.{year}.nc"},
+    "GPCP": {"kind": "daily", "file": "GPCP/daily/{variable}.daily.{year}.nc"},
     "NOAA OLR": {"kind": "daily", "file": "NOAA_IOLR/daily/{variable}.daily.{year}.nc"},
 }
 # Products available per variable; the first is the default.
@@ -36,17 +38,17 @@ REFERENCES = {
     "PSL": ("ERA5",),
     "TS": ("ERA5",),
     "TREFHT": ("ERA5",),
-    "PRECT": ("ERA5", "GPM"),
+    "PRECT": ("ERA5", "GPM", "GPCP"),
     "FLUT": ("NOAA OLR",),
 }
 REFERENCE_VARIABLES = tuple(REFERENCES)
 MEMBER_DISPLAYS = ("members", "quartiles", "none")
-PLOT_KINDS = ("timeseries", "shock")
-_FIGURE_SUFFIX = {"timeseries": "ensemble_ts", "shock": "shock_diagnostics"}
-MODE_DEFAULTS = {"references": {}, "member_display": "members", "zoom_days": 10, "plots": PLOT_KINDS}
+PLOT_KINDS = ("tendency", "timeseries")
+MODE_DEFAULTS = {"references": {}, "member_display": "members", "zoom_days": 10, "plots": ("tendency",),
+                 "core": (), "kind": "shock"}
 MODE_OPTIONS = ("frequency", "variables", *MODE_DEFAULTS)
 # Bump when cached content changes meaning; older caches are rebuilt.
-CACHE_VERSION = 2
+CACHE_VERSION = 4
 _RESOLUTION_HOURS = {"samples": 6.0, "daily": 24.0}
 _HPA = {"PS", "PSL"}
 _PRECIPITATION = {"PRECT", "PRECC", "PRECL"}
@@ -58,7 +60,9 @@ DIAGNOSTICS = {
     "member_tendency": "regional mean of |dX/dt| per member (units per day)",
     "ensemble_spread": "regional mean of the gridpoint ensemble standard deviation",
     "reference_mean": "reference regional mean over the same intervals",
-    "reference_tendency": "reference regional mean of |dX/dt| (units per day); missing when the reference is coarser than the model output",
+    "reference_tendency": ("reference regional mean of |dX/dt| (units per day); missing when the reference "
+                           "is coarser than the model output; from raw sample differences when model means "
+                           "are no longer than the sample spacing"),
     "ensemble_mean_rmse": "gridpoint RMSE of the ensemble mean against the reference",
 }
 SUMMARY_METRICS = {
@@ -67,7 +71,7 @@ SUMMARY_METRICS = {
     "adjustment_days": "last lead before the settled window where the 1-day running |dX/dt| exceeds (1 + tolerance) x the settled level",
     "initial_bias": "ensemble-mean minus reference regional mean at the first lead with a reference (lead 0 for ERA5)",
     "drift": "bias change from that lead to the last day of the shock window",
-    "spread_ratio": "ensemble spread at the end of the shock window / at lead 0",
+    "spread_growth_ratio": "ensemble spread at the end of the shock window / at lead 0 (not spread/RMSE)",
 }
 
 
@@ -80,6 +84,8 @@ def _units(field, variable):
         field, units = field * 86400 * 1000, "mm day-1"
     elif variable in _PRECIPITATION and units in {"kg m**-2 s**-1", "kg m-2 s-1", "mm/s"}:
         field, units = field * 86400, "mm day-1"
+    elif variable in _PRECIPITATION and units in {"mm/day", "mm d-1"}:
+        units = "mm day-1"
     field.attrs = {**attrs, "units": units}
     return field
 
@@ -143,8 +149,17 @@ def read_member_ensemble(config, variable, period, *, frequency="6hourly", max_m
             keep, lead, start, end = _lead_coordinates(ds, variable, period)
             if reference_lead is None:
                 reference_lead, interval = lead, (start, end)
-            elif not np.array_equal(lead, reference_lead):
-                raise ValueError(f"{member} lead times differ from EN01")
+            else:
+                # Members may differ only by trailing records (e.g. one member
+                # post-processed with the final 6-h interval kept); keep the
+                # leads all members share.
+                n = min(len(lead), len(reference_lead))
+                if not np.array_equal(lead[:n], reference_lead[:n]):
+                    raise ValueError(f"{member} lead times differ from EN01")
+                if n < len(reference_lead):
+                    print(f"[WARN] {member}: {len(reference_lead) - n} trailing record(s) missing; "
+                          f"using the {n} leads every member shares")
+                reference_lead, interval = reference_lead[:n], (interval[0][:n], interval[1][:n])
             field = _normalize(ds[variable].isel(time=keep)).astype("float32")
             field = field.drop_vars("time").rename(time="lead").assign_coords(lead=lead)
             fields.append(field.expand_dims(member=[member]))
@@ -152,6 +167,7 @@ def read_member_ensemble(config, variable, period, *, frequency="6hourly", max_m
         for ds in opened:
             ds.close()
         raise
+    fields = [f.isel(lead=slice(0, len(reference_lead))) for f in fields]
     field = _units(xr.concat(fields, dim="member"), variable)
     field = field.assign_coords(interval_start=("lead", interval[0]), interval_end=("lead", interval[1]))
     field.attrs.update(variable=variable, frequency=frequency)
@@ -168,20 +184,8 @@ def reference_product(variable, product=None):
     return product
 
 
-def read_reference(reference_root, variable, field, product=None):
-    """Reference averaged over each model interval, on the model grid.
-
-    ``samples`` (ERA5 6-hourly): trapezoid mean of the samples in the interval;
-    zero-width and instantaneous records take the sample at their time. For
-    6-hourly model means this is the mean of the two bounding samples, an
-    approximation of the interval mean. ``daily`` (GPM, NOAA OLR): overlap-weighted
-    mean of the calendar days the interval covers; zero-width records have no
-    reference. Gridpoints the product does not cover stay missing.
-    """
-    name = reference_product(variable, product)
+def _load_reference(reference_root, name, variable, start, end):
     spec = REFERENCE_PRODUCTS[name]
-    start = pd.DatetimeIndex(field.interval_start.values)
-    end = pd.DatetimeIndex(field.interval_end.values)
     files = [Path(reference_root) / spec["file"].format(variable=variable, year=year)
              for year in range(start.min().year, end.max().year + 1)]
     missing = [str(p) for p in files if not p.is_file()]
@@ -189,7 +193,52 @@ def read_reference(reference_root, variable, field, product=None):
         raise FileNotFoundError(f"Missing {name} files: " + ", ".join(missing))
     with xr.open_mfdataset(files, combine="by_coords") as ds:
         data = _normalize(ds[variable]).sel(time=slice(start.min().floor("D"), end.max())).load()
-    data = _units(data, variable)
+    return _units(data, variable)
+
+
+def read_reference_sample_tendency(reference_root, variable, field, product=None):
+    """|dX/dt| per day between the samples bounding each model interval, on the model grid.
+
+    For model means no longer than the sample spacing, where ``read_reference``
+    cannot give a matching tendency. The value at a lead spans that record's
+    interval (centred on its midpoint); the model tendency at the same lead
+    spans the previous and current midpoints, i.e. it is centred half an
+    interval earlier. Zero-width records and products that are not sampled
+    return None.
+    """
+    name = reference_product(variable, product)
+    if REFERENCE_PRODUCTS[name]["kind"] != "samples":
+        return None
+    start = pd.DatetimeIndex(field.interval_start.values)
+    end = pd.DatetimeIndex(field.interval_end.values)
+    data = _load_reference(reference_root, name, variable, start, end)
+    width = np.asarray((end - start) / pd.Timedelta(days=1), dtype=float)
+    valid = width > 0
+    at_start = data.sel(time=start[valid].values).values
+    at_end = data.sel(time=end[valid].values).values
+    values = np.full((len(start),) + data.shape[1:], np.nan, dtype="float32")
+    values[valid] = np.abs(at_end - at_start) / width[valid][:, None, None]
+    tendency = xr.DataArray(values, dims=("lead", "lat", "lon"),
+                            coords={"lead": field.lead, "lat": field.lat, "lon": field.lon})
+    tendency.attrs.update(units=data.attrs["units"], name=name)
+    return tendency
+
+
+def read_reference(reference_root, variable, field, product=None):
+    """Reference averaged over each model interval, on the model grid.
+
+    ``samples`` (ERA5 6-hourly): trapezoid mean of the samples in the interval;
+    zero-width and instantaneous records take the sample at their time. For
+    6-hourly model means this is the mean of the two bounding samples, an
+    approximation of the interval mean. ``daily`` (GPM, GPCP, NOAA OLR): overlap-weighted
+    mean of the calendar days the interval covers; zero-width records have no
+    reference. Gridpoints the product does not cover stay missing.
+    """
+    name = reference_product(variable, product)
+    spec = REFERENCE_PRODUCTS[name]
+    start = pd.DatetimeIndex(field.interval_start.values)
+    end = pd.DatetimeIndex(field.interval_end.values)
+    data = _load_reference(reference_root, name, variable, start, end)
     times = pd.DatetimeIndex(data.time.values)
     day_start = times.floor("D").values
     day_end = day_start + np.timedelta64(1, "D")
@@ -215,7 +264,7 @@ def read_reference(reference_root, variable, field, product=None):
     reference = xr.dot(weights, data.fillna(0), dim="time").where(data.notnull().all("time"))
     reference = reference.assign_coords(lat=field.lat, lon=field.lon)
     reference.attrs.update(units=data.attrs["units"], name=name,
-                           resolution_hours=_RESOLUTION_HOURS[spec["kind"]])
+                           resolution_hours=_RESOLUTION_HOURS[spec["kind"]], kind=spec["kind"])
     return reference
 
 
@@ -236,8 +285,12 @@ def _abs_tendency(values, point=True):
     return change.reindex(lead=values.lead)
 
 
-def derive_ensemble_ts(field, masks, reference=None):
-    """Regional member, spread, tendency, and (optional) reference diagnostics."""
+def derive_ensemble_ts(field, masks, reference=None, sample_tendency=None):
+    """Regional member, spread, tendency, and (optional) reference diagnostics.
+
+    ``sample_tendency`` (``read_reference_sample_tendency``) replaces the
+    reference tendency where interval means of the samples cannot match the model.
+    """
     intervals = {name: field[name] for name in ("interval_start", "interval_end")}
     point = "time: point" in str(field.attrs.get("cell_methods", ""))
     field = field.drop_vars(list(intervals))
@@ -261,14 +314,25 @@ def derive_ensemble_ts(field, masks, reference=None):
         step = float(np.median(np.diff(field.lead.values[1:])))
         tendency = _area_mean(_abs_tendency(reference, point), weights)
         # A reference coarser than the model output has no within-interval change.
-        resolved = reference.attrs["resolution_hours"] <= step * 1.01
-        out["reference_tendency"] = tendency if resolved else xr.full_like(tendency, np.nan)
+        # Sampled references cannot match model means no longer than the sample
+        # spacing: the mean of two bounding samples turns consecutive differences
+        # into halved 2-step differences, damping the diurnal cycle in |dX/dt|.
+        resolution = reference.attrs["resolution_hours"]
+        resolved = resolution <= step * 1.01
+        if reference.attrs["kind"] == "samples" and not point:
+            resolved &= step > resolution * 1.01
+        instantaneous = not resolved and sample_tendency is not None and reference.attrs["kind"] == "samples"
+        if instantaneous:
+            tendency = _area_mean(sample_tendency, weights)
+        out["reference_tendency"] = tendency if resolved or instantaneous else xr.full_like(tendency, np.nan)
         out["ensemble_mean_rmse"] = np.sqrt(_area_mean(error ** 2, weights))
     out = out.compute().assign_coords(intervals)
     for name in out.data_vars:
         units = field.attrs["units"]
         out[name].attrs["units"] = f"{units} day-1" if name.endswith("tendency") else units
         out[name].attrs["long_name"] = DIAGNOSTICS[name]
+    if reference is not None and instantaneous:
+        out["reference_tendency"].attrs["method"] = "instantaneous"
     return out
 
 
@@ -317,7 +381,10 @@ def cache_ensemble_ts(path, *, config, experiment, variable, period, frequency, 
         masks = region_masks(field.lat, field.lon, regions, landmask_file)
         reference_field = (read_reference(reference_root, variable, field, reference)
                            if reference else None)
-        ds = derive_ensemble_ts(field, masks, reference_field)
+        point = "time: point" in str(field.attrs.get("cell_methods", ""))
+        sample_tendency = (read_reference_sample_tendency(reference_root, variable, field, reference)
+                           if reference and not point else None)
+        ds = derive_ensemble_ts(field, masks, reference_field, sample_tendency)
     finally:
         for opened_ds in opened:
             opened_ds.close()
@@ -352,7 +419,7 @@ def shock_summary(datasets, *, shock_days=2.0, settled_days=(10.0, 30.0), tolera
             sel = ds.sel(region=region)
             tendency = sel.member_tendency.mean("member")
             settled_level = float(tendency.where(settled).mean())
-            row = {"experiment": experiment, "label": ds.attrs.get("label", experiment),
+            row = {"experiment": experiment, "label": experiment_label(experiment),
                    "variable": ds.attrs["variable"], "region": str(region),
                    "units": sel.member_mean.attrs.get("units", ""),
                    "tendency_ratio": float(tendency.where(shock).mean()) / settled_level}
@@ -361,7 +428,7 @@ def shock_summary(datasets, *, shock_days=2.0, settled_days=(10.0, 30.0), tolera
             exceed = days.values[above.values]
             row["adjustment_days"] = float(exceed.max()) if exceed.size else 0.0
             spread = sel.ensemble_spread
-            row["spread_ratio"] = float(spread.where(shock_end).mean()) / float(spread.isel(lead=0))
+            row["spread_growth_ratio"] = float(spread.where(shock_end).mean()) / float(spread.isel(lead=0))
             if "reference_mean" in sel:
                 row["tendency_ratio_ref"] = (float(tendency.where(shock).mean())
                                              / float(sel.reference_tendency.where(shock).mean()))
@@ -505,80 +572,100 @@ def plot_ensemble_timeseries(datasets, region, *, labels, colors, zoom_days=10,
     return fig
 
 
-def plot_shock_diagnostics(datasets, region, *, labels, colors, zoom_days=10, title=""):
-    """Tendency, drift, RMSE/spread, and spatial range over the first ``zoom_days``."""
-    fig, axes = plt.subplots(2, 2, figsize=(13, 8), sharex=True)
-    (ax_tend, ax_bias), (ax_err, ax_range) = axes
-    reference_name = None
-    for experiment, ds in datasets.items():
-        sel = ds.sel(region=region)
-        days = sel.lead / 24.0
-        color, label = colors[experiment], labels[experiment]
-        ax_tend.plot(days, sel.member_tendency.mean("member"), color=color, lw=1.5, label=label)
-        mean = sel.member_mean.mean("member")
-        if "reference_mean" in sel:
-            ax_bias.plot(days, mean - sel.reference_mean, color=color, lw=1.5)
-            ax_err.plot(days, sel.ensemble_mean_rmse, color=color, lw=1.5)
-            if reference_name is None:
-                reference_name = ds.attrs.get("reference") or "reference"
-                if bool(sel.reference_tendency.notnull().any()):
-                    ax_tend.plot(days, sel.reference_tendency, color="black", ls="--", lw=1.2,
-                                 label=reference_name)
-        else:
-            ax_bias.plot(days, mean - mean.isel(lead=0), color=color, lw=1.5)
-        ax_err.plot(days, sel.ensemble_spread, color=color, lw=1.5, ls=":")
-        ax_range.plot(days, sel.member_max.max("member"), color=color, lw=1.2)
-        ax_range.plot(days, sel.member_min.min("member"), color=color, lw=1.2, ls="--")
-    first = next(iter(datasets.values()))
-    units = first.member_mean.attrs.get("units", "")
-    ax_tend.set_ylabel(f"|d{first.attrs['variable']}/dt| ({units} day-1)")
-    ax_tend.set_title("Regional mean absolute tendency")
-    has_reference = reference_name is not None
-    ax_bias.set_title(f"Ensemble-mean bias vs {reference_name}" if has_reference
-                      else "Ensemble-mean change since lead 0")
-    ax_bias.axhline(0, color="gray", lw=0.7)
-    ax_bias.set_ylabel(units)
-    ax_err.set_title("Ensemble-mean RMSE (solid) and spread (dotted)" if has_reference
-                     else "Ensemble spread")
-    ax_err.set_ylabel(units)
-    ax_range.set_title("Ensemble max of spatial max (solid), min of spatial min (dashed)")
-    ax_range.set_ylabel(units)
-    for ax in axes.flat:
-        ax.set_xlim(0, zoom_days)
-        ax.grid(alpha=0.3)
-    for ax in axes[1]:
-        ax.set_xlabel("Lead (days)")
-    ax_tend.legend(fontsize=8)
-    fig.suptitle(title)
-    fig.tight_layout()
+def _is_core(experiment, core):
+    return not core or experiment.startswith(tuple(core))
+
+
+_UNIT_LABELS = {"mm day-1": r"mm day$^{-1}$", "W m-2": r"W m$^{-2}$"}
+
+
+def plot_shock_tendency(datasets_by_variable, region, *, labels, colors, core=(), settled_days=(10.0, 30.0),
+                        zoom_days=10, title="", fontz=16):
+    """Rows = variables; |dX/dt| with the reference (left) and |dX/dt| / settled level (right).
+
+    Panels are labelled "(a) |dX/dt| (PSL)", "(b) Normalized |dX/dt| (PSL)", ...;
+    ``core`` experiment-name prefixes are drawn solid, other experiments are
+    dashed sensitivity curves. ``fontz`` is the base font size.
+    """
+    variables = list(datasets_by_variable)
+    fig, axes = plt.subplots(len(variables), 2, figsize=(15, 3.6 * len(variables)), sharex=True, squeeze=False)
+    handles, references = {}, set()
+    for row, variable in enumerate(variables):
+        ax_abs, ax_norm = axes[row]
+        reference_drawn = False
+        for experiment, ds in datasets_by_variable[variable].items():
+            sel = ds.sel(region=region)
+            days = sel.lead / 24.0
+            tendency = sel.member_tendency.mean("member")
+            settled = float(tendency.where((days >= settled_days[0]) & (days <= settled_days[1])).mean())
+            style = dict(color=colors[experiment], lw=2.2, ls="-") if _is_core(experiment, core) \
+                else dict(color=colors[experiment], lw=1.5, ls="--")
+            line, = ax_abs.plot(days, tendency, **style)
+            ax_norm.plot(days, tendency / settled, **style)
+            handles[labels[experiment]] = line
+            if not reference_drawn and "reference_tendency" in sel and bool(sel.reference_tendency.notnull().any()):
+                name = ds.attrs.get("reference") or "reference"
+                reference = sel.reference_tendency
+                ls = ":"
+                if reference.attrs.get("method") == "instantaneous":
+                    name, ls = f"{name} (instantaneous)", "-."
+                ref_line, = ax_abs.plot(days, reference, color="black", lw=1.5, ls=ls)
+                ref_settled = float(reference.where((days >= settled_days[0]) & (days <= settled_days[1])).mean())
+                ax_norm.plot(days, reference / ref_settled, color="black", lw=1.5, ls=ls)
+                handles[name] = ref_line
+                references.add(name)
+                reference_drawn = True
+        units = next(iter(datasets_by_variable[variable].values())).member_mean.attrs.get("units", "")
+        ax_abs.set_title(f"({chr(97 + 2 * row)}) |dX/dt| ({variable})", loc="left", fontsize=fontz * 0.9, color="#2b2b29")
+        ax_norm.set_title(f"({chr(98 + 2 * row)}) Normalized |dX/dt| ({variable})", loc="left",
+                          fontsize=fontz * 0.9, color="#2b2b29")
+        ax_abs.set_ylabel(f"{_UNIT_LABELS.get(units, units)} day$^{{-1}}$", fontsize=fontz * 0.8)
+        ax_norm.axhline(1.0, color="#6f6e69", lw=1.0)
+        for ax in (ax_abs, ax_norm):
+            ax.set_xlim(0, zoom_days)
+            ax.grid(alpha=0.3)
+            ax.tick_params(labelsize=fontz * 0.75)
+    for ax in axes[-1]:
+        ax.set_xlabel("Lead (days)", fontsize=fontz * 0.8)
+    order = [k for k in handles if k not in references] + [k for k in handles if k in references]
+    fig.legend([handles[k] for k in order], order, loc="lower center", ncol=int(np.ceil(len(order) / 2)),
+               frameon=False, fontsize=fontz * 0.85, handlelength=2.5, columnspacing=1.8)
+    if title:
+        fig.suptitle(title, fontsize=fontz)
+    fig.tight_layout(rect=(0, 0.075, 1, 0.98 if title else 1))
     return fig
 
 
-def plot_shock_summary(summary, metrics, *, colors, title=""):
+def plot_shock_summary(summary, metrics, *, colors, title="", fontz=16):
     """Grouped bars: one panel per metric, variables on the x axis, one bar per experiment."""
     metrics = [m for m in metrics if m in summary and summary[m].notna().any()]
     variables = list(dict.fromkeys(summary["variable"]))
     experiments = list(dict.fromkeys(summary["experiment"]))
     width = 0.8 / len(experiments)
-    fig, axes = plt.subplots(1, len(metrics), figsize=(3.6 * len(metrics), 3.8), squeeze=False)
+    fig, axes = plt.subplots(1, len(metrics), figsize=(4.4 * len(metrics), 4.8), squeeze=False)
     x = np.arange(len(variables))
-    for ax, metric in zip(axes[0], metrics):
+    handles = {}
+    for index_m, (ax, metric) in enumerate(zip(axes[0], metrics)):
         for index, experiment in enumerate(experiments):
             rows = summary[summary["experiment"] == experiment].set_index("variable")
             values = [rows[metric].get(v, np.nan) for v in variables]
             label = rows["label"].iloc[0] if len(rows) else experiment
-            ax.bar(x + (index - (len(experiments) - 1) / 2) * width, values, width,
-                   color=colors[experiment], label=label)
-        if metric in {"tendency_ratio", "tendency_ratio_ref", "spread_ratio"}:
+            bars = ax.bar(x + (index - (len(experiments) - 1) / 2) * width, values, width,
+                          color=colors[experiment], label=label)
+            handles[label] = bars
+        if metric in {"tendency_ratio", "tendency_ratio_ref", "spread_growth_ratio"}:
             ax.axhline(1, color="gray", lw=0.8, ls="--")
         else:
             ax.axhline(0, color="gray", lw=0.8)
         ax.set_xticks(x, variables)
-        ax.set_title(metric, fontsize=10)
+        ax.set_title(f"({chr(97 + index_m)}) {metric}", loc="left", fontsize=fontz * 0.9, color="#2b2b29")
+        ax.tick_params(labelsize=fontz * 0.75)
         ax.grid(axis="y", alpha=0.3)
-    axes[0][0].legend(fontsize=8)
-    fig.suptitle(title)
-    fig.tight_layout()
+    fig.legend(list(handles.values()), list(handles), loc="lower center", ncol=int(np.ceil(len(handles) / 2)),
+               frameon=False, fontsize=fontz * 0.85)
+    if title:
+        fig.suptitle(title, fontsize=fontz)
+    fig.tight_layout(rect=(0, 0.14, 1, 0.95 if title else 1))
     return fig
 
 
@@ -588,48 +675,55 @@ def results_colors(results):
                              for datasets in by_variable.values() for e in datasets)
 
 
-def plot_ensemble_ts_figures(results, registries, *, regions, figure_dir, tag, plots=PLOT_KINDS,
-                             colors=None, zoom_days=10, member_display="members", dpi=200,
-                             show=True, log=print):
-    """Draw and save the requested figure kinds per season/variable/region; return the paths."""
+def plot_ensemble_ts_figures(results, registries, *, regions, figure_dir, tag, plots=("tendency",),
+                             colors=None, core=(), settled_days=(10.0, 30.0), zoom_days=10,
+                             member_display="members", dpi=200, show=True, log=print, fontz=16, title=True):
+    """Draw and save the requested figure kinds; return the paths.
+
+    ``tendency``: one figure per season/region with every variable;
+    ``timeseries``: one figure per season/variable/region.
+    """
     colors = colors or results_colors(results)
     figure_dir = Path(figure_dir)
     figure_dir.mkdir(parents=True, exist_ok=True)
     written = []
+
+    def save(fig, name):
+        output = figure_dir / name
+        fig.savefig(output, dpi=dpi, bbox_inches="tight")
+        written.append(output)
+        log(f"[FIGURE] {output}")
+        if not show:
+            plt.close(fig)
+
     for season, by_variable in results.items():
         registry = registries[season]
-        for variable, datasets in by_variable.items():
-            labels = {name: registry[name]["label"] for name in datasets}
-            for region in regions:
-                for kind in plots:
-                    if kind == "timeseries":
-                        fig = plot_ensemble_timeseries(
-                            datasets, region, labels=labels, colors=colors, zoom_days=zoom_days,
-                            member_display=member_display,
-                            title=f"{variable} {region} ({season} fc, {tag})")
-                    else:
-                        fig = plot_shock_diagnostics(
-                            datasets, region, labels=labels, colors=colors, zoom_days=zoom_days,
-                            title=f"{variable} {region}: initial shock ({season} fc, {tag})")
-                    output = figure_dir / f"{variable}_{region}_{season}_fc_{tag}_{_FIGURE_SUFFIX[kind]}.png"
-                    fig.savefig(output, dpi=dpi, bbox_inches="tight")
-                    written.append(output)
-                    log(f"[FIGURE] {output}")
-                    if not show:
-                        plt.close(fig)
+        labels = {name: registry[name]["label"] for datasets in by_variable.values() for name in datasets}
+        for region in regions:
+            if "tendency" in plots:
+                save(plot_shock_tendency(by_variable, region, labels=labels, colors=colors, core=core,
+                                         settled_days=settled_days, zoom_days=zoom_days, fontz=fontz,
+                                         title=f"Initial-shock tendency: {region} ({season} fc)" if title else ""),
+                     f"shock_tendency_{region}_{season}_fc_{tag}.png")
+            if "timeseries" in plots:
+                for variable, datasets in by_variable.items():
+                    save(plot_ensemble_timeseries(datasets, region, labels=labels, colors=colors,
+                                                  zoom_days=zoom_days, member_display=member_display,
+                                                  title=f"{variable} {region} ({season} fc, {tag})"),
+                         f"{variable}_{region}_{season}_fc_{tag}_ensemble_ts.png")
     return written
 
 
 def plot_shock_summary_figures(summary, *, figure_dir, tag, colors, metrics=None, dpi=200,
-                               show=True, log=print):
+                               show=True, log=print, fontz=16, title=True):
     """One grouped-bar summary figure per season and region; return the paths."""
     metrics = list(metrics or SUMMARY_METRICS)
     figure_dir = Path(figure_dir)
     figure_dir.mkdir(parents=True, exist_ok=True)
     written = []
     for (season, region), table in summary.groupby(["season", "region"], sort=False):
-        fig = plot_shock_summary(table, metrics, colors=colors,
-                                 title=f"Initial-shock summary: {region} ({season} fc, {tag})")
+        fig = plot_shock_summary(table, metrics, colors=colors, fontz=fontz,
+                                 title=f"Initial-shock summary: {region} ({season} fc)" if title else "")
         output = figure_dir / f"shock_summary_{region}_{season}_fc_{tag}.png"
         fig.savefig(output, dpi=dpi, bbox_inches="tight")
         written.append(output)

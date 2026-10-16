@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xarray as xr
+
+from util.model_daily import open_model_daily
 from scipy.stats import ttest_1samp
 
 
@@ -124,8 +126,14 @@ class SurfaceVarDiffProcessor:
         ens_list: List[xr.DataArray] = []
         for n in range(1, nens + 1):
             en = f"EN{n:02d}"
-            ds = self._load_dataset(model_info, target_date.year, ensemble=en)
-            da = ds[self.variable].sel(time=target_date, method="nearest", tolerance="12h") * self.fscale
+            if "template" in model_info:
+                ds = self._load_dataset(model_info, target_date.year, ensemble=en)
+                da = ds[self.variable].sel(time=target_date, method="nearest", tolerance="12h") * self.fscale
+            else:
+                # Case root: daily values per util.model_daily, labelled by the day they cover.
+                ts_root = os.path.join(model_info["path"], en, "archive/post/atm/180x360_aave/ts")
+                daily = open_model_daily(ts_root, self.variable, en, [target_date.year])
+                da = daily.sel(time=target_date.floor("D")) * self.fscale
             ens_list.append(da.squeeze())
         ens = xr.concat(ens_list, dim="ensemble").assign_coords(ensemble=np.arange(1, nens + 1))
         # NOTE: no auto-chunk here; leave chunking choice to caller or to_disk

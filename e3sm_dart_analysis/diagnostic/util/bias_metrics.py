@@ -89,7 +89,8 @@ def experiment_registry(data_root, season, run_segment, *, resolution="ne30pg2_r
         run_name, period = run
         run_id = f"{run_name}_F20TR_{resolution}_{machine}"
         registry[name] = {
-            "label": metadata["label"],
+            # Hindcasts are labelled by experiment name, as in analysis_atm_da.
+            "label": name if run_segment == "fc" else metadata["label"],
             "nens": metadata["nens"],
             "period": period,
             "run_id": run_id,
@@ -186,7 +187,9 @@ def _open_files(files):
     return xr.open_mfdataset(files, combine="by_coords", parallel=True, chunks={})
 
 
-MODEL_SOURCES = ("clim", "6hourly", "6hourly_da", "daily")
+# ts subdirectories: hindcasts have daily_mean (00Z-24Z means of the 6-hourly output);
+# the DA runs and ELM keep the older daily (EAM h1 / ELM h1) series.
+MODEL_SOURCES = ("clim", "6hourly", "6hourly_da", "daily_mean", "daily")
 
 
 def default_model_source(component, run_segment, variable=None):
@@ -208,7 +211,7 @@ def read_model_ensemble(data_root, experiment, season, run_segment, component, v
 
     ``source`` selects the post-processed input: ``"clim"`` (monthly ``h0``
     files) or a time-series directory (``"6hourly"``, ``"6hourly_da"``,
-    ``"daily"``) that is averaged to calendar months. ``None`` uses
+    ``"daily_mean"``, ``"daily"``) that is averaged to calendar months. ``None`` uses
     :func:`default_model_source`.
     """
     registry = experiment_registry(data_root, season, run_segment)

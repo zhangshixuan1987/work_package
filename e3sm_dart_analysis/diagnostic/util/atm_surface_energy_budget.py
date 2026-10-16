@@ -27,8 +27,8 @@ def _open_member_field(root,member,variable,period,run_segment,opened,window=Non
     # 6-hourly means are stamped at interval end after a zero-width initial
     # record, and their daily flux files average by that stamp (the initial
     # record plus a 6-h offset), so forecasts also use 6hourly, relabelled by
-    # interval start; daily files are only a fallback.
-    choices=("6hourly",) if run_segment=="da" else ("6hourly","daily")
+    # interval start; daily files (daily_mean, else the older daily) are only a fallback.
+    choices=("6hourly",) if run_segment=="da" else ("6hourly","daily_mean","daily")
     candidates=("LHFLX","QFLX") if variable=="LHFLX" else (variable,)
     for freq in choices:
         for candidate in candidates:

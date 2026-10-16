@@ -4,10 +4,11 @@ import re
 import numpy as np
 import xarray as xr
 from util.bias_metrics import experiment_registry
-from util.time_labels import label_by_interval_start
+from util.model_daily import open_model_daily
 
 REGIONS={
  "global":((-90.,90.),(-180.,180.)),
+ "60S-60N":((-60.,60.),(-180.,180.)),
  "CONUS":((25.,50.),(-125.,-95.)),
  "NHMidLat":((25.,50.),(-60.,150.)),
  "Tropics":((-10.,10.),(-90.,60.)),
@@ -55,18 +56,17 @@ def _convert(field,variable):
  if variable=="PSL" and "pa" in units and "hpa" not in units: field=field*.01
  field.attrs["units"]=VARIABLES[variable]["units"]; return field
 
-def read_model_regional_series(data_root,experiment,season,run_segment,variable,region,period=None,max_members=None,frequency="daily"):
+def read_model_regional_series(data_root,experiment,season,run_segment,variable,region,period=None,max_members=None):
+ """Daily regional-mean member series: ts/daily_mean, else ts/6hourly averaged to days (util.model_daily)."""
  registry=experiment_registry(data_root,season,run_segment)
  if experiment not in registry: raise ValueError(f"{experiment} unavailable; choose {list(registry)}")
  meta=registry[experiment]; period=period or meta["period"]; *_,years=_period(period)
  count=meta["nens"] if max_members is None else min(max_members,meta["nens"]); members=[]; opened=[]
  try:
   for number in range(1,count+1):
-   member=f"EN{number:02d}"; folder=meta["path"]/member/"archive/post/atm/180x360_aave/ts"/frequency
-   files=[folder/f"{variable}.{member}.{year}.nc" for year in years]; missing=[p for p in files if not p.is_file()]
-   if missing: raise FileNotFoundError("Missing model files: "+", ".join(map(str,missing)))
-   ds=xr.open_mfdataset(files,combine="by_coords",parallel=True,chunks={}); opened.append(ds)
-   field=_convert(_select_period(label_by_interval_start(ds,ds[variable]),period),variable).assign_coords(time=lambda x:x.time.dt.floor("D"))
+   member=f"EN{number:02d}"
+   daily=open_model_daily(meta["path"]/member/"archive/post/atm/180x360_aave/ts",variable,member,years)
+   field=_convert(_select_period(daily,period),variable).assign_coords(time=lambda x:x.time.dt.floor("D"))
    series=_regional_mean(field,region); series.attrs["units"]=VARIABLES[variable]["units"]
    members.append(series.expand_dims(ens=[member]))
   # One dask graph over all members so files are read in parallel.

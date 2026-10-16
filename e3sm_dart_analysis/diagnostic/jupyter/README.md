@@ -106,12 +106,13 @@ Land verification over the DA windows.
 
 Atmospheric verification of the hindcasts. Every notebook loops over `cases` (S0: Jan-Feb 2012, S1: Jun-Jul 2012 by default) and can run on its own; 02 and 03 share caches.
 
-1. `01_compute_and_plot_ens_ts.ipynb` - regional member time series from the initial state at 6-hourly or daily resolution against ERA5, GPM IMERG, or NOAA OLR, with initial-shock diagnostics (tendency vs settled level and reference, bias drift, RMSE/spread growth, spatial extremes) and a per-experiment shock summary (`fcst_atm_ensemble_ts`; `util/forecast_ensemble_ts.py`).
+1. `01_compute_and_plot_ens_ts.ipynb` - two modes: `daily_performance` (6-hourly member fields aggregated to 24-h lead bins, then daily ensemble-mean RMSE, finite-ensemble-corrected spread/RMSE, bias, and fair CRPS of PSL, TREFHT, PRECT, FLUT against ERA5, GPM IMERG, and NOAA OLR, with a 10-member-subset fairness test; `util/forecast_daily_skill.py`) and `shock` (6-hourly initial-shock tendency of PSL, TREFHT, TS; `util/forecast_ensemble_ts.py`) (`fcst_atm_ensemble_ts`).
 2. `02_compute_and_plot_scalar_metrics.ipynb` - global ensemble verification metrics, summary table, and rank histograms (`fcst_atm_model_evaluation`; `util/model_evaluation.py`).
 3. `03_compute_and_plot_map_metrics.ipynb` - bias, RMSE, spread, CRPS, and coverage maps from the same verification step (`fcst_atm_model_evaluation`; `util/model_evaluation.py`).
 4. `04_compute_and_plot_bias_metrics.ipynb` - bias, RMSE, spread, and CRPS maps with bootstrap significance hatching (`fcst_atm_bias`; `util/bias_metrics.py`).
 5. `05_compute_and_plot_surface_energy_budget.ipynb` - member-level surface-energy-budget terms and regional ensemble time series (`fcst_atm_model_evaluation/surface_energy_budget`; `util/atm_surface_energy_budget.py`).
 6. `06_compute_and_plot_decay_timescales.ipynb` - shock-minus-baseline anomalies and exponential decay timescales (`fcst_atm_initial_shock`; `util/forecast_initial_shock.py`).
+7. `07_compute_and_plot_window_scorecard.ipynb` - heat maps of anomaly PCC, MSSS vs the climatology forecast (optionally with the mean bias removed), and fair-CRPS skill vs the climatological ensemble per biweekly lead window (four triangles per cell) for atmosphere (PSL; U, V, T, Q, Z at 200/500/850 hPa; TREFHT, PRECT, FLUT) and land variables, CTRL/CAPT/DART40 in S0 and S1, against ERA5, GPM IMERG, NOAA OLR, and ESA CCI with a shared 2001-2017 climatology (`fcst_window_scorecard`; `util/forecast_window_scorecard.py`).
 
 ## `fcst_lnd_eval/`
 
@@ -127,7 +128,7 @@ Land verification of the hindcasts.
 
 Land-atmosphere coupling in the hindcasts.
 
-1. `01_prepare_metrics.ipynb` - lag-correlation and spatial-feedback metrics.
+1. `01_compute_and_plot_lag_coupling.ipynb` - lagged correlation of land and atmosphere ensemble departures (SM5-LHFLX, SM5-PRECT, TS-LHFLX): significance maps and regional lag curves for S0/S1 hindcasts (`fcst_lac_feedback`; `util/lnd_atm_feedback.py`).
 2. `02_compute_correlation_coupling.ipynb` - LHFLX-TREFHT squared-correlation coupling.
 3. `03_compute_dirmeyer_tci.ipynb` - model and observational Dirmeyer TCI.
 4. `04_plot_tci_differences.ipynb` - original model TCI comparison plots.
