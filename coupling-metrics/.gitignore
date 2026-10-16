@@ -1,0 +1,5 @@
+# Build products from compile_and_run.sh, WRAPIT, or f2py
+*.o
+*.mod
+*.so
+*.exe
