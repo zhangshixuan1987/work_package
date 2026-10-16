@@ -135,6 +135,54 @@ def daily_series(fields, kinds, per_day, days):
     return with_bounds(daily, days + pd.Timedelta("12h"), np.stack([days, days + pd.Timedelta("1D")], axis=1))
 
 
+def varying_mask(subset, names):
+    """Variables whose missing values change between records. ncremap -P elm
+    applies the first record's mask to every record, so the fill value leaks
+    into cells that become missing later (seen with SNORDSL); such variables
+    are regridded one record at a time."""
+    out = []
+    for name in names:
+        var = subset[name]
+        if "time" in var.dims and var.sizes["time"] > 1:
+            mask = np.isnan(var.values)
+            if (mask != mask[:1]).any():
+                out.append(name)
+    return out
+
+
+def regrid(subset, names, encoding, component, map_file, workdir, native, regridded):
+    """Regrid ``names`` of ``subset``; returns {name: regridded file}."""
+    others = [v for v in subset.variables if v not in names and v != "time"]   # bounds, landfrac
+    varying = varying_mask(subset, names) if component == "lnd" else []
+    steady = [name for name in names if name not in varying]
+
+    def remap(ds, src, dst):
+        # time must be the record dimension: NCO tools average only along it
+        ds.to_netcdf(src, encoding={k: v for k, v in encoding.items() if k in ds.variables}, unlimited_dims=["time"])
+        command = ["ncremap", "-m", str(map_file), "-i", str(src), "-o", str(dst)]
+        if component == "lnd":
+            command[1:1] = ["-P", "elm"]
+        subprocess.run(command, check=True, cwd=workdir)
+        src.unlink()
+
+    out = {}
+    if steady:
+        remap(subset[steady + others], native, regridded)
+        out.update(dict.fromkeys(steady, regridded))
+    if varying:
+        parts = []
+        for i in range(subset.sizes["time"]):
+            part = regridded.with_name(f"{regridded.stem}_r{i:04d}.nc")
+            remap(subset[varying + others].isel(time=[i]), native.with_name(f"{native.stem}_r{i:04d}.nc"), part)
+            parts.append(part)
+        joined = regridded.with_name(f"{regridded.stem}_varying.nc")
+        subprocess.run(["ncrcat", "-O"] + [str(p) for p in parts] + [str(joined)], check=True)
+        for part in parts:
+            part.unlink()
+        out.update(dict.fromkeys(varying, joined))
+    return out
+
+
 def regrid_period(dataset, names, period, select, member, component, map_file, ts_dest, workdir, tag, extras, overwrite):
     """Regrid the records ``select`` of ``names`` and split them into per-variable
     files <ts_dest>/<VAR>.<member>.<period>.nc; returns the target paths."""
@@ -154,19 +202,13 @@ def regrid_period(dataset, names, period, select, member, component, map_file, t
         encoding["time_bnds"] = {"units": units, "calendar": "gregorian", "dtype": "float64", "_FillValue": None}
     for name in names + list(extras):
         encoding[name] = {"_FillValue": FILL_VALUE, "dtype": "float32"}
-    # time must be the record dimension: NCO (ncra in the monthly products)
-    # averages only along it.
-    subset.to_netcdf(native, encoding=encoding, unlimited_dims=["time"])
-    command = ["ncremap", "-m", str(map_file), "-i", str(native), "-o", str(regridded)]
-    if component == "lnd":
-        command[1:1] = ["-P", "elm"]
-    subprocess.run(command, check=True, cwd=workdir)
+    sources = regrid(subset, names, encoding, component, map_file, workdir, native, regridded)
     for name, target in targets.items():
         partial = target.with_name(target.name + ".tmp")
-        subprocess.run(["ncks", "-O", "-4", "-L", "1", "-v", name, str(regridded), str(partial)], check=True)
+        subprocess.run(["ncks", "-O", "-4", "-L", "1", "-v", name, str(sources[name]), str(partial)], check=True)
         partial.replace(target)
-    native.unlink()
-    regridded.unlink()
+    for path in set(sources.values()):
+        path.unlink()
     print(f"Wrote {len(targets)} {ts_dest.name} series ({tag}) for {member} {period}")
     return list(targets.values())
 

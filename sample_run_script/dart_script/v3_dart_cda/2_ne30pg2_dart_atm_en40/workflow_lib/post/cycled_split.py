@@ -20,9 +20,13 @@ Products, under <archive>/post/<atm|lnd>/180x360_aave/:
   ts/6hourly_analysis  analysis state at every cycle start: record-0 point
                        fields, plus the state variables in STATE that a tape
                        labels "time: mean" (their nstep-0 value is the state)
-  ts/daily_mean        day D, 00Z-24Z: mean of the four 6-h forecast means;
-                       fields without a forecast mean use the mean of the
-                       00/06/12/18Z analysis states (stated in cell_methods)
+  ts/daily_mean        day D, 00Z-24Z, from the four 6-h forecasts started
+                       on D: mean of their 6-h means; for point fields the
+                       mean of their background states (valid 06, 12, 18 and
+                       24Z), which avoids the insertion shock in diagnosed
+                       fields (e.g. QFLX) at nstep 0; only fields with no
+                       forecast record (nhtfrq=-24 tapes) use the mean of the
+                       00/06/12/18Z analysis states. cell_methods says which.
   ts/daily_max/min     max/min of the four 6-h forecast maxima/minima
   ts/daily_00z         analysis state at 00Z of D
   monthly/             mean of ts/daily_mean over the days of each month in
@@ -30,7 +34,9 @@ Products, under <archive>/post/<atm|lnd>/180x360_aave/:
 ts files are VAR.ENxx.YYYY.nc. Daily and monthly values are labelled at their
 middle with bounds [D, D+1) (daily_00z: 00Z, bounds [D, D]). Record-0 values
 of mean/max/min fields are never used. Every cycle in [start, end) must be
-present, and every per-cycle tape must hold the 6-h records unless it is
+present. A field written for only part of the run (field list changed) is
+processed over the complete days it covers, and its files carry a global
+"coverage" attribute; every per-cycle tape must hold the 6-h records unless it is
 listed in --analysis-only (archives of runs set up with nhtfrq=-24 or with
 mfilt=1, where the 6-h records were never kept). The first run on a member moves the outputs of the earlier cycled
 post-processing (ts/6hourly, ts/6hourly_da, ts/daily, monthly, clim) to
@@ -91,6 +97,23 @@ def cycle_files(hist, case_name, tape, stamps):
         missing = [path.name for path, ok in zip(paths, present) if not ok]
         fail(f"{tape}: {len(missing)} of {len(paths)} cycle files missing (first: {missing[0]})")
     return paths
+
+
+def presence(files):
+    """Time-dimensioned variables of each cycle file (header only)."""
+    import netCDF4
+    present = []
+    for path in files:
+        with netCDF4.Dataset(path) as nc:
+            present.append({name for name, var in nc.variables.items() if var.dimensions[:1] == ("time",)})
+    return present
+
+
+def whole_days(have, interval):
+    """[first, end) of the complete days inside a contiguous run of cycle starts."""
+    first = have[0].ceil("1D")
+    end = (have[-1] + interval).floor("1D")
+    return (first, end) if end > first else None
 
 
 def bounds_name(dataset):
@@ -196,6 +219,61 @@ def monthly_means(daily, names, days):
     return relabel(out, labels, bounds, {}), np.array([m.strftime("%Y-%m") for m in months.unique()])
 
 
+def varying_mask(subset, names):
+    """Variables whose missing values change between records. ncremap -P elm
+    applies the first record's mask to every record, so the fill value leaks
+    into cells that become missing later (seen with SNORDSL); such variables
+    are regridded one record at a time."""
+    out = []
+    for name in names:
+        var = subset[name]
+        if "time" in var.dims and var.sizes["time"] > 1:
+            mask = np.isnan(var.values)
+            if (mask != mask[:1]).any():
+                out.append(name)
+    return out
+
+
+def ncremap(native, regridded, ctx):
+    command = ["ncremap", "-m", str(ctx.map_file), "-i", str(native), "-o", str(regridded)]
+    if ctx.component == "lnd":
+        command[1:1] = ["-P", "elm"]
+    subprocess.run(command, check=True, cwd=ctx.workdir, stdout=subprocess.DEVNULL)
+
+
+def regrid(subset, names, encoding, ctx, tag):
+    """Regrid ``names`` of ``subset``; returns {name: regridded file}."""
+    others = [v for v in subset.variables if v not in names and v != "time"]   # bounds, landfrac
+    varying = varying_mask(subset, names) if ctx.component == "lnd" else []
+    steady = [name for name in names if name not in varying]
+    out = {}
+
+    def native_file(ds, path):
+        # time must be the record dimension for NCO tools downstream
+        ds.to_netcdf(path, encoding={k: v for k, v in encoding.items() if k in ds.variables}, unlimited_dims=["time"])
+
+    if steady:
+        native, regridded = ctx.workdir / f"native_{tag}.nc", ctx.workdir / f"regridded_{tag}.nc"
+        native_file(subset[steady + others], native)
+        ncremap(native, regridded, ctx)
+        native.unlink()
+        out.update(dict.fromkeys(steady, regridded))
+    if varying:
+        parts = []
+        for i in range(subset.sizes["time"]):
+            native, part = ctx.workdir / f"native_{tag}_r{i:04d}.nc", ctx.workdir / f"regridded_{tag}_r{i:04d}.nc"
+            native_file(subset[varying + others].isel(time=[i]), native)
+            ncremap(native, part, ctx)
+            native.unlink()
+            parts.append(part)
+        joined = ctx.workdir / f"regridded_{tag}_varying.nc"
+        subprocess.run(["ncrcat", "-O"] + [str(p) for p in parts] + [str(joined)], check=True)
+        for part in parts:
+            part.unlink()
+        out.update(dict.fromkeys(varying, joined))
+    return out
+
+
 def write_periods(fields, names, dest, periods, ctx, tag):
     """Regrid fields and write one file per variable and period
     (dest/VAR.ENxx.<period>.nc); returns the target paths."""
@@ -213,26 +291,21 @@ def write_periods(fields, names, dest, periods, ctx, tag):
         for name in subset.variables:
             subset[name].encoding = {}
         subset.attrs = {"source_case": ctx.case_name, "product": f"cycled_split.py {dest.relative_to(ctx.root)}"}
+        if ctx.coverage:
+            subset.attrs["coverage"] = ctx.coverage
         units = f"days since {period[:4]}-01-01 00:00:00"
         encoding = {"time": {"units": units, "calendar": ctx.calendar, "dtype": "float64", "_FillValue": None}}
         if "time_bnds" in subset:
             encoding["time_bnds"] = {"units": units, "calendar": ctx.calendar, "dtype": "float64", "_FillValue": None}
         for name in names + list(ctx.extras):
             encoding[name] = {"_FillValue": FILL_VALUE, "dtype": "float32"}
-        native = ctx.workdir / f"native_{tag}.nc"
-        regridded = ctx.workdir / f"regridded_{tag}.nc"
-        # time must be the record dimension for NCO tools downstream
-        subset.to_netcdf(native, encoding=encoding, unlimited_dims=["time"])
-        command = ["ncremap", "-m", str(ctx.map_file), "-i", str(native), "-o", str(regridded)]
-        if ctx.component == "lnd":
-            command[1:1] = ["-P", "elm"]
-        subprocess.run(command, check=True, cwd=ctx.workdir, stdout=subprocess.DEVNULL)
+        regridded = regrid(subset, names, encoding, ctx, tag)
         for name, target in targets.items():
             partial = target.with_name(target.name + ".tmp")
-            subprocess.run(["ncks", "-O", "-4", "-L", "1", "-v", name, str(regridded), str(partial)], check=True)
+            subprocess.run(["ncks", "-O", "-4", "-L", "1", "-v", name, str(regridded[name]), str(partial)], check=True)
             partial.replace(target)
-        native.unlink()
-        regridded.unlink()
+        for path in set(regridded.values()):
+            path.unlink()
     return written
 
 
@@ -281,10 +354,7 @@ def main():
     if not args.map_file.is_file():
         fail(f"map file not found: {args.map_file}")
     per_day = pd.Timedelta("1D") // interval
-    stamps = pd.date_range(start, end, freq=interval, inclusive="left")
-    days = pd.date_range(start, end, freq="1D", inclusive="left")
-    years = np.array([f"{t.year:04d}" for t in stamps])
-    day_years = np.array([f"{t.year:04d}" for t in days])
+    full_stamps = pd.date_range(start, end, freq=interval, inclusive="left")
 
     analysis_only = {tape for tape in args.analysis_only.replace(" ", ",").split(",") if tape}
     hist_dir, tapes, horizontal = COMPONENTS[args.component]
@@ -298,48 +368,66 @@ def main():
     workdir = Path(tempfile.mkdtemp(prefix=f"tmp_cycled_{args.component}_{args.member}_", dir=args.archive / "post"))
     ctx = SimpleNamespace(member=args.member, case_name=args.case_name, component=args.component,
                           map_file=args.map_file, workdir=workdir, root=root, overwrite=args.overwrite,
-                          calendar="gregorian", extras={})
+                          calendar="gregorian", extras={}, coverage="")
 
-    # Pass 1: open every per-cycle tape and decide where each field comes from.
-    plans, analysis_of, forecast_of = [], {}, {}
-    for tape in tapes:
-        files = cycle_files(hist, args.case_name, tape, stamps)
-        if files is None:
-            print(f"{tape}: no per-cycle files; skipped")
-            continue
-        dataset = xr.open_mfdataset(files, combine="nested", concat_dim="time", data_vars="minimal",
-                                    coords="minimal", compat="override", chunks={"time": 1})
-        ctx.calendar = dataset["time"].encoding.get("calendar", ctx.calendar)
-        kinds = classify(dataset, horizontal)
-        an_idx, fc_idx = select(dataset, stamps, interval, tape)
-        unused = []
-        for name, kind in kinds.items():
-            if kind == "point" or state.match(name):
-                analysis_of.setdefault(name, (len(plans), kind))
-            if fc_idx is not None:
-                forecast_of.setdefault(name, (len(plans), kind))
-            elif kind != "point" and not state.match(name):
-                unused.append(name)
-        if fc_idx is None:
-            if tape not in analysis_only:
-                fail(f"{tape}: no record spans a {args.interval_hours}-h cycle, so its means, maxima and minima "
-                     f"are lost (tape written with nhtfrq other than -{args.interval_hours}, or mfilt=1 and "
-                     f"overwritten). If this archive is known to lack them, list {tape} in ANALYSIS_ONLY_TAPES "
-                     f"of 7_run_post_hist.sh")
-            print(f"{tape}: no 6-h forecast records (record 0 only; allowed by --analysis-only); analysis states only")
-        if unused:
-            print(f"{tape}: {len(unused)} single-timestep field(s) not used: {' '.join(sorted(unused))}")
-        if args.component == "lnd" and not ctx.extras:
-            # ncremap -P elm weights by the land fraction, so it travels with every file
-            ctx.extras = {"landfrac": dataset["landfrac"].load()}
-        plans.append(SimpleNamespace(tape=tape, dataset=dataset, an_idx=an_idx, fc_idx=fc_idx))
-    if not plans:
-        fail(f"no per-cycle history files for {args.case_name} from {args.start} in {hist}")
-    has_forecast_mean = {name for name, (_, kind) in forecast_of.items() if kind == "mean"}
+    def run_range(stamps, tapes, keep=None, skip=frozenset()):
+        """Passes 1 and 2 over the cycles ``stamps``: with ``keep`` ({tape: names})
+        only those variables, otherwise every variable present in all cycle files
+        except ``skip``. Returns the files written, the names processed and the
+        partial variables found ({tape: {name: [cycle starts present]}})."""
+        days = pd.date_range(stamps[0], stamps[-1] + interval, freq="1D", inclusive="left")
+        years = np.array([f"{t.year:04d}" for t in stamps])
+        day_years = np.array([f"{t.year:04d}" for t in days])
+        written, partials = [], {}
+        # Pass 1: open every per-cycle tape and decide where each field comes from.
+        plans, analysis_of, forecast_of = [], {}, {}
+        for tape in tapes:
+            files = cycle_files(hist, args.case_name, tape, stamps)
+            if files is None:
+                print(f"{tape}: no per-cycle files; skipped")
+                continue
+            present = presence(files)
+            common = set.intersection(*present)
+            partial = sorted(set.union(*present) - common)
+            if keep is None:
+                partials[tape] = {v: [t for t, names in zip(stamps, present) if v in names] for v in partial}
+            drop = set(partial) | (set(common) - set(keep[tape]) if keep is not None else set(skip) & common)
+            drop -= {"time_bnds", "time_bounds"}                 # the record bounds are always needed
+            dataset = xr.open_mfdataset(files, combine="nested", concat_dim="time", data_vars="minimal",
+                                        coords="minimal", compat="override", chunks={"time": 1},
+                                        preprocess=lambda ds, drop=drop: ds.drop_vars([v for v in drop if v in ds]))
+            ctx.calendar = dataset["time"].encoding.get("calendar", ctx.calendar)
+            kinds = classify(dataset, horizontal)
+            an_idx, fc_idx = select(dataset, stamps, interval, tape)
+            unused = []
+            for name, kind in kinds.items():
+                if kind == "point" or state.match(name):
+                    analysis_of.setdefault(name, (len(plans), kind))
+                if fc_idx is not None:
+                    forecast_of.setdefault(name, (len(plans), kind))
+                elif kind != "point" and not state.match(name):
+                    unused.append(name)
+            if fc_idx is None:
+                if tape not in analysis_only:
+                    fail(f"{tape}: no record spans a {args.interval_hours}-h cycle, so its means, maxima and minima "
+                         f"are lost (tape written with nhtfrq other than -{args.interval_hours}, or mfilt=1 and "
+                         f"overwritten). If this archive is known to lack them, list {tape} in ANALYSIS_ONLY_TAPES "
+                         f"of 7_run_post_hist.sh")
+                print(f"{tape}: no 6-h forecast records (record 0 only; allowed by --analysis-only); analysis states only")
+            if unused:
+                print(f"{tape}: {len(unused)} single-timestep field(s) not used: {' '.join(sorted(unused))}")
+            if args.component == "lnd" and not ctx.extras:
+                # ncremap -P elm weights by the land fraction, so it travels with every file
+                ctx.extras = {"landfrac": dataset["landfrac"].load()}
+            plans.append(SimpleNamespace(tape=tape, dataset=dataset, an_idx=an_idx, fc_idx=fc_idx))
+        if not plans:
+            if keep is not None:
+                return written, set(), partials
+            fail(f"no per-cycle history files for {args.case_name} from {args.start} in {hist}")
+        has_forecast_mean = {name for name, (_, kind) in forecast_of.items() if kind == "mean"}
+        has_background = {name for name, (_, kind) in forecast_of.items() if kind == "point"}
 
-    # Pass 2: build and write the products, tape by tape, in memory-sized batches.
-    written = []
-    try:
+        # Pass 2: build and write the products, tape by tape, in memory-sized batches.
         for number, plan in enumerate(plans):
             ds, n = plan.dataset, len(stamps)
             interval_names = sorted(k for k, (p, kind) in forecast_of.items() if p == number and kind != "point")
@@ -368,9 +456,20 @@ def main():
                     written += write_periods(monthly, means, dest["monthly"], months, ctx, tag)
 
             for b, chunk in enumerate(batches(ds, point_names, n)):
+                tag = f"{plan.tape}_bg{b}"
                 fields = relabel(ds[chunk].isel(time=plan.fc_idx).load(), stamps + interval, None,
                                  {name: "time: point (background: end of the 6-h forecast)" for name in chunk})
-                written += write_periods(fields, chunk, dest["6hourly"], years, ctx, f"{plan.tape}_bg{b}")
+                written += write_periods(fields, chunk, dest["6hourly"], years, ctx, tag)
+                means = [name for name in chunk if name not in has_forecast_mean]
+                if means:
+                    # the four forecasts started on day D end at 06, 12, 18 and 24Z
+                    daily = reduce_days(fields, means, dict.fromkeys(means, "mean"), per_day)
+                    daily = relabel(daily, days + pd.Timedelta("12h"), np.stack([days, days + pd.Timedelta("1D")], axis=1),
+                                    {name: "time: mean (average of the background states at 06, 12, 18 and 24Z "
+                                           "ending the four 6-h forecasts of the day)" for name in means})
+                    written += write_periods(daily, means, dest["daily_mean"], day_years, ctx, tag)
+                    monthly, months = monthly_means(daily, means, days)
+                    written += write_periods(monthly, means, dest["monthly"], months, ctx, tag)
 
             for b, chunk in enumerate(batches(ds, analysis_names, n)):
                 tag = f"{plan.tape}_an{b}"
@@ -380,16 +479,46 @@ def main():
                 at00 = relabel(fields.isel(time=slice(0, None, per_day)), days, np.stack([days, days], axis=1),
                                {name: "time: point (analysis at 00Z of the day)" for name in chunk})
                 written += write_periods(at00, chunk, dest["daily_00z"], day_years, ctx, tag)
-                means = [name for name in chunk if name not in has_forecast_mean]
+                means = [name for name in chunk if name not in has_forecast_mean and name not in has_background]
                 if means:
                     daily = reduce_days(fields, means, dict.fromkeys(means, "mean"), per_day)
                     daily = relabel(daily, days + pd.Timedelta("12h"), np.stack([days, days + pd.Timedelta("1D")], axis=1),
-                                    {name: "time: mean (average of the analysis states at 00, 06, 12 and 18Z)"
+                                    {name: "time: mean (average of the analysis states at 00, 06, 12 and 18Z; "
+                                           "no forecast record on this tape)"
                                      for name in means})
                     written += write_periods(daily, means, dest["daily_mean"], day_years, ctx, tag)
                     monthly, months = monthly_means(daily, means, days)
                     written += write_periods(monthly, means, dest["monthly"], months, ctx, tag)
             ds.close()
+
+        return written, set(analysis_of) | set(forecast_of), partials
+
+    written = []
+    try:
+        files_written, done, partials = run_range(full_stamps, tapes)
+        written += files_written
+        # Fields added or removed during the run: process each over the complete
+        # days it covers, as its own sub-range (files carry a coverage attribute).
+        for tape, cover in partials.items():
+            groups = {}
+            for name, have in cover.items():
+                span = whole_days(pd.DatetimeIndex(have), interval)
+                contiguous = len(have) == len(pd.date_range(have[0], have[-1], freq=interval))
+                if name in done or span is None or not contiguous:
+                    why = "also on another tape" if name in done else "no complete day" if span is None else "gaps"
+                    print(f"WARNING: {tape}: {name} is in {len(have)} of {len(full_stamps)} cycle files; "
+                          f"not processed ({why})", file=sys.stderr)
+                    continue
+                groups.setdefault(span, []).append(name)
+            for (first, end), names in sorted(groups.items()):
+                ctx.coverage = (f"{first:%Y-%m-%d} to {end - pd.Timedelta('1D'):%Y-%m-%d} only: {tape} wrote "
+                                f"this field for part of the run")
+                print(f"{tape}: {len(names)} field(s) present only {first:%Y-%m-%d} to "
+                      f"{end - pd.Timedelta('1D'):%Y-%m-%d}; processed for those days")
+                sub = pd.date_range(first, end, freq=interval, inclusive="left")
+                files_written, _, _ = run_range(sub, (tape,), keep={tape: names})
+                written += files_written
+                ctx.coverage = ""
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
