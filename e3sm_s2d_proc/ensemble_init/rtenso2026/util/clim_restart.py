@@ -132,11 +132,12 @@ ERA5_CODES = {
 ERA5_SWVL_THICKNESS = {"swvl1": 0.07, "swvl2": 0.21, "swvl3": 0.72, "swvl4": 1.89}   # m
 
 
-def metric_table() -> pd.DataFrame:
+def metric_table(obs_fields: Any | None = None) -> pd.DataFrame:
     """Key fields, their weights, and ERA5 counterparts as a table."""
+    fmap = _resolve_obs_fields(obs_fields)
     return pd.DataFrame(
         [{"component": c, "field": f, "model definition": d, "domain, weight": w,
-          "ERA5 (obs branch)": OBS_FIELDS.get(c, {}).get(f, "--")}
+          "ERA5 (obs branch)": fmap.get(c, {}).get(f, "--")}
          for c, fields in KEY_FIELDS.items() for f, (d, w) in fields.items()]
     )
 
@@ -188,15 +189,24 @@ def _resolve_obs_roots(
 
 
 def _resolve_obs_fields(
-    obs_fields: Mapping[str, Mapping[str, str] | None] | None = None,
+    obs_fields: Any | None = None,
 ) -> dict[str, dict[str, str]]:
     """Resolve observable field mappings per component, defaulting to ``OBS_FIELDS``."""
     if obs_fields is None:
         return {c: dict(v) for c, v in OBS_FIELDS.items()}
     out = {}
     for c, default_map in OBS_FIELDS.items():
-        custom = obs_fields.get(c)
-        out[c] = dict(default_map if custom is None else custom)
+        custom = obs_fields.get(c) if isinstance(obs_fields, Mapping) else None
+        if custom is None:
+            out[c] = dict(default_map)
+        elif isinstance(custom, Mapping):
+            out[c] = dict(custom)
+        elif isinstance(custom, (list, tuple, set)):
+            # If user provided a list of ERA5 variable names (e.g. ["sd", "swvl1", ...]),
+            # match them back to the corresponding model key field names
+            out[c] = {f: v for f, v in default_map.items() if v in custom}
+        else:
+            out[c] = dict(default_map)
     return out
 
 
