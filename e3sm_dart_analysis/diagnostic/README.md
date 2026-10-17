@@ -80,8 +80,10 @@ Initial-land diagnostics follow the same notebook-driver layout:
 
 The former `7_mjo_analysis/` workflow is consolidated under `jupyter/fcst_atm_mjo/`:
 `01_hovmoller_phase_composites.ipynb` handles configurable PRECT/FLUT
-Hovmöller and phase composites, while `02_rmm_diagnostics.ipynb` handles
-ensemble RMM/EOF diagnostics. Reusable implementations live in `util/`, and
+Hovmöller and phase composites, while `02_rmm_diagnostics.ipynb` verifies the
+hindcast ensembles' RMM on the observed EOFs shared with
+`hind_atm_mjo/03_compute_and_plot_rmm_skill.ipynb` (`util/mjo_rmm_projection.py`; it replaces the per-member
+EOFs of the former `util/mjo_rmm_diagnostics.py`). Reusable implementations live in `util/`, and
 all generated MJO data and figures use the shared diagnostic output roots. See
 `jupyter/README.md` for the complete notebook index and workflow order.
 
@@ -100,6 +102,17 @@ The legacy `cross_correlation/` workflow is consolidated into `jupyter/fcst_lac_
 Atmospheric restart stability checking is maintained in `jupyter/analysis_atm_init/04_check_restart_stability.ipynb` with reusable processing in `util/atm_restart_stability.py`. It supersedes the broken one-off `sanity_check/` notebook and caches request-specific range, non-finite, spatial, and transition diagnostics.
 
 Model evaluation is split by period and component under `jupyter/analysis_*_eval/` and `jupyter/fcst_*_eval/`. Atmospheric workflows include the separate surface-energy-budget diagnostic. Extended reusable metrics live in `util/model_evaluation.py`; cached energy-budget processing lives in `util/atm_surface_energy_budget.py`. These workflows supersede the duplicated `3_model_evaluation/` and `model_evaluation/` trees and reuse cached products unless `force_compute = True`.
+
+The 2012-2013 AMIP hindcast diagnostics of the former `v3_dart_paper/` tree
+live in `jupyter/hind_atm_mjo/` (MJO Hovmöller, coupling, RMM) and
+`jupyter/hind_atm_eval/` (QBO, SSW, NAO, tropical winds). The experiment
+registry is `configs/hind_experiment_config.py`; readers and analyses are
+`util/hind_model_data.py`, `util/hind_observation_data.py`,
+`util/mjo_hovmoller_coupling.py`, `util/mjo_rmm_projection.py`,
+`util/qbo_diagnostics.py`, `util/qbo_plotting.py`, `util/ssw_diagnostics.py`,
+`util/ssw_plotting.py`, `util/nao_index.py`, and `util/tropical_wind_skill.py`.
+They run on Perlmutter and write under
+`/global/cfs/cdirs/e3sm/www/zhan391/e3sm_dart/diag_dart_2026`.
 
 ## Configs
 

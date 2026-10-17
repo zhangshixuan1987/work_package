@@ -28,8 +28,14 @@ def configure_dask(
     n_workers: int = 4,
     threads_per_worker: int = 1,
     memory_limit: str = "4GB",
+    n_threads: Optional[int] = None,
 ) -> Optional[Any]:
-    """Configure Dask for notebook workflows and optionally start a local client."""
+    """Configure Dask for notebook workflows and optionally start a local client.
+
+    ``n_threads`` caps the threaded scheduler (``use_distributed=False``). Its
+    default is one thread per core: on a many-core login node that keeps
+    hundreds of read chunks in memory at once.
+    """
     try:
         import dask
     except ImportError:
@@ -44,6 +50,8 @@ def configure_dask(
             "distributed.worker.memory.pause": 0.95,
         }
     )
+    if n_threads:
+        dask.config.set(num_workers=n_threads)
 
     if not use_distributed:
         return None
@@ -81,7 +89,31 @@ def _chunk_existing_dims(obj, chunks: Optional[Mapping[str, int]] = None):
         for dim, size in merge_chunks(chunks).items()
         if dim in obj.dims
     }
-    return obj.chunk(selected) if selected else obj
+    if not selected:
+        return obj
+    if not hasattr(obj, "data_vars"):
+        return obj.chunk({d: s for d, s in selected.items() if d in obj.dims})
+    # Numeric data variables only: rechunking lazily decoded time bounds (cftime or
+    # datetime64 ``time_bnds``) fails in recent xarray, and bounds are small anyway.
+    numeric = {
+        name: var.chunk({d: s for d, s in selected.items() if d in var.dims})
+        for name, var in obj.data_vars.items()
+        if var.dtype.kind not in "OmM" and set(var.dims) & set(selected)
+    }
+    return obj.assign(numeric)
+
+
+def compute_all(objects: Mapping[Any, Any]) -> dict:
+    """Compute a mapping of lazy xarray objects in one Dask call.
+
+    Every source's reduction runs in a single graph, so file reads and
+    reductions of different sources proceed in parallel instead of one
+    ``.compute()`` after another. Values that are not Dask-backed pass through.
+    """
+    import dask
+
+    keys = list(objects)
+    return dict(zip(keys, dask.compute(*(objects[k] for k in keys))))
 
 
 def open_dataset_lazy(path, *, chunks: Optional[Mapping[str, int]] = None, **kwargs):

@@ -17,6 +17,7 @@ WORKFLOW_NAMES = (
     "analysis_lnd_model_evaluation",
     "analysis_mjo",
     "fcst_atm_bias",
+    "fcst_atm_mjo",
     "fcst_atm_initial_shock",
     "fcst_atm_ensemble_ts",
     "fcst_window_scorecard",
@@ -26,6 +27,8 @@ WORKFLOW_NAMES = (
     "fcst_lnd_model_evaluation",
     "fcst_s2s_pcc",
     "fcst_s2s_tcc",
+    "hind_atm_mjo",
+    "hind_atm_eval",
 )
 
 def workflow_output_dirs(
