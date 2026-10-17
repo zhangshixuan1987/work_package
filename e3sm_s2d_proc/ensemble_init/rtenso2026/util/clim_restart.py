@@ -218,17 +218,31 @@ def era5_file(var: str, year: int, month: int, era5_root: str | Path | None = No
 
 
 def era5_available(
-    year: int,
-    mmdd: str,
-    components: Sequence[str],
+    target_date_or_year: int | str,
+    mmdd_or_components: str | Sequence[str] | None = None,
+    components: Sequence[str] | None = None,
+    *,
     era5_root: str | Path | Mapping[str, str | Path | None] | None = None,
     obs_root: str | Path | Mapping[str, str | Path | None] | None = None,
-    obs_fields: Mapping[str, Mapping[str, str] | None] | None = None,
+    obs_fields: Any | None = None,
 ) -> bool:
+    if isinstance(target_date_or_year, str):
+        # target_date like "2015-02-01"
+        year = int(target_date_or_year[:4])
+        mmdd = target_date_or_year[5:]
+        if isinstance(mmdd_or_components, (list, tuple)):
+            actual_components = mmdd_or_components
+        else:
+            actual_components = components or ALL_COMPONENTS
+    else:
+        year = int(target_date_or_year)
+        mmdd = str(mmdd_or_components)
+        actual_components = components or ALL_COMPONENTS
+
     month = int(mmdd[:2])
     roots = _resolve_obs_roots(obs_root=obs_root, era5_root=era5_root)
     fmap = _resolve_obs_fields(obs_fields)
-    for c in components:
+    for c in actual_components:
         if c not in fmap:
             continue
         c_root = roots.get(c, ERA5_ROOT)
@@ -280,12 +294,12 @@ class SelectionPlan:
 
 def make_plan(
     target_date: str,
-    src_root,
-    out_root,
-    *,
+    *args,
+    src_root: str | Path | None = None,
+    out_root: str | Path | None = None,
     era5_root: str | Path | Mapping[str, str | Path | None] | None = None,
     obs_root: str | Path | Mapping[str, str | Path | None] | None = None,
-    obs_fields: Mapping[str, Mapping[str, str] | None] | None = None,
+    obs_fields: Any | None = None,
     branch: str = "clim",
     components: Sequence[str] = ALL_COMPONENTS,
     src_prefix: str = "20251024_s2d_spinup",
@@ -301,6 +315,33 @@ def make_plan(
     If ``obs_root`` / ``era5_root`` or ``obs_fields`` are ``None`` (or omitted
     for a component), the default ERA5 setup is used automatically.
     """
+    if len(args) == 1:
+        if args[0] in BRANCHES:
+            branch = args[0]
+        else:
+            src_root = args[0]
+    elif len(args) == 2:
+        if args[0] in BRANCHES:
+            branch = args[0]
+            src_root = args[1]
+        else:
+            src_root = args[0]
+            out_root = args[1]
+    elif len(args) >= 3:
+        if args[0] in BRANCHES:
+            branch = args[0]
+            src_root = args[1]
+            out_root = args[2]
+        else:
+            src_root = args[0]
+            out_root = args[1]
+            branch = args[2]
+
+    if src_root is None or out_root is None:
+        raise ValueError(
+            f"make_plan requires both src_root and out_root, got src_root={src_root!r}, out_root={out_root!r}"
+        )
+
     if branch not in BRANCHES:
         raise ValueError(f"branch must be one of {BRANCHES}, got {branch!r}")
     unknown = set(components) - set(COMPONENTS)
