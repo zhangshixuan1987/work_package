@@ -14,7 +14,20 @@ Daily U850/U200 (model vs ERA5) over ``lat_range`` are reduced to anomalies:
  Per day: cos-lat weighted spatial anomaly correlation
 (ACC) and RMSE; a ``smooth_days`` running mean for display; window means of
 ACC with a moving-block bootstrap CI (within-window sampling uncertainty of
-the single realization).
+the single realization). Windows start at lead 0, where the initial state
+matters most.
+
+Time scales (``skill_timescales``): day-0 ACC and the e-folding lead, the
+first (interpolated) lead at which the ACC falls below ACC(0)/e.
+``crossover_lead``: first lead from which the mean ACC of one atmosphere
+initial-state group stays above another's (e.g. DART above ERA5), a measure of
+initial shock: a state closer to the reference at day 0 that loses skill faster
+is overtaken. ``plot_wind_skill_groups`` draws the ACC grouped by atmosphere
+initial state and the DART - ERA5 difference with its factorial 95% interval
+(``util.hind_factorial``).
+
+The verifying analysis (ERA5) is also the ERA5-initialized runs' initial
+state, so their day-0 ACC is favoured; read the first days with that in mind.
 """
 from __future__ import annotations
 
@@ -26,6 +39,7 @@ import pandas as pd
 import xarray as xr
 
 from configs.hind_experiment_config import STYLE_MAP
+from util.hind_factorial import GROUP_COLORS, additive_fit, groups_by, plot_group_curves
 from util.mjo_hovmoller_coupling import remove_seasonal_cycle
 
 
@@ -41,7 +55,7 @@ class WindSkillConfig:
     bp_high: float = 100.0
     bp_numtaps: int = 201
     rm_window: int = 60
-    lead_windows: tuple[tuple[int, int], ...] = ((5, 14), (15, 28), (29, 42))
+    lead_windows: tuple[tuple[int, int], ...] = ((0, 4), (5, 14), (15, 28), (29, 42))
     block_len: int = 7
     n_boot: int = 2000
     seed: int = 12345
@@ -126,6 +140,76 @@ def window_table(skill: xr.Dataset, cfg: WindSkillConfig) -> pd.DataFrame:
         rows.append(dict(window=f"{a:02d}-{b:02d}", ACC=float(np.nanmean(seg)), ci_low=lo, ci_high=hi,
                          n_days=int(np.isfinite(seg).sum())))
     return pd.DataFrame(rows)
+
+
+def efold_lead(acc: np.ndarray) -> float:
+    """First lead (linearly interpolated, in days) at which ``acc`` falls below acc[0] / e."""
+    acc = np.asarray(acc, dtype=float)
+    if not np.isfinite(acc[0]) or acc[0] <= 0:
+        return np.nan
+    thr = acc[0] / np.e
+    below = np.flatnonzero(acc < thr)
+    if below.size == 0:
+        return np.nan
+    k = int(below[0])
+    return float(k - 1 + (acc[k - 1] - thr) / (acc[k - 1] - acc[k]))
+
+
+def skill_timescales(skills: dict[str, xr.Dataset]) -> pd.DataFrame:
+    """Day-0 ACC and e-folding lead of every experiment (index experiment)."""
+    return pd.DataFrame({e: dict(ACC_day0=float(s.ACC.sel(lead=0)), efold_days=efold_lead(s.ACC.values))
+                         for e, s in skills.items()}).T
+
+
+def crossover_lead(skills: dict[str, xr.Dataset], a: str = "DART", b: str = "ERA5", persist: int = 3) -> float:
+    """First lead from which the mean ACC of atm group ``a`` exceeds group ``b`` for ``persist`` days."""
+    g = groups_by(skills, "atm")
+    if not g[a] or not g[b]:
+        return np.nan
+    d = np.mean([skills[e].ACC.values for e in g[a]], 0) - np.mean([skills[e].ACC.values for e in g[b]], 0)
+    lead = next(iter(skills.values())).lead.values
+    for k in range(len(d) - persist + 1):
+        if np.all(d[k:k + persist] > 0):
+            return float(lead[k])
+    return np.nan
+
+
+def plot_wind_skill_groups(skills: dict[str, xr.Dataset], variable: str, *, max_lead: int = 30,
+                           a: str = "DART", b: str = "ERA5") -> plt.Figure:
+    """(a) daily ACC by atmosphere initial state (mean, member range); (b) group ``a`` - ``b``
+    as the factorial effect with its 95% interval (noise from the interaction residual)."""
+    sk = {e: s.sel(lead=slice(0, max_lead)) for e, s in skills.items()}
+    lead = next(iter(sk.values())).lead.values
+    curves = {e: s.ACC.values for e, s in sk.items()}
+    fit = additive_fit(curves)
+    k = fit["contrasts"].index(f"atm {a}−{b}")
+    est, half = fit["effect"][k], fit["t_crit"] * fit["se"][k]
+    cross = crossover_lead(skills, a, b)
+    fig, axes = plt.subplots(1, 2, figsize=(15, 4.6))
+    plot_group_curves(axes[0], lead, curves)
+    axes[0].axhline(0, color="k", linewidth=0.5)
+    axes[0].set_ylabel("ACC")
+    axes[0].set_title(f"(a) {variable} daily ACC by atmosphere initial state", loc="left")
+    axes[0].legend(fontsize=9, frameon=False)
+    axes[1].plot(lead, est, color="k", linewidth=2, label=f"atm {a} − {b} (additive fit)")
+    axes[1].fill_between(lead, est - half, est + half, color="0.6", alpha=0.4, linewidth=0, label="95% CI")
+    axes[1].axhline(0, color="k", linewidth=0.5)
+    if np.isfinite(cross):
+        for ax in axes:
+            ax.axvline(cross, color=GROUP_COLORS[a], linestyle="--", linewidth=1)
+        axes[1].text(cross + 0.3, 0.95, f"{a} ahead from day {cross:g}", transform=axes[1].get_xaxis_transform(),
+                     va="top", fontsize=9, color=GROUP_COLORS[a])
+    axes[1].set_ylabel(r"$\Delta$ACC")
+    axes[1].set_title(f"(b) Effect of the atmosphere initial state, {a} − {b}", loc="left")
+    axes[1].legend(fontsize=9, frameon=False, loc="lower right")
+    for ax in axes:
+        ax.set_xlabel("Lead day")
+        ax.set_xlim(0, max_lead)
+        ax.grid(True, alpha=0.3)
+    fig.text(0.01, 0.005, "Verified against ERA5, which is also the ERA5 runs' initial state (day-0 ACC favours them).",
+             fontsize=8)
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
+    return fig
 
 
 def plot_wind_skill(skills: dict[str, xr.Dataset], tables: pd.DataFrame, variable: str, *, style_map=None) -> plt.Figure:

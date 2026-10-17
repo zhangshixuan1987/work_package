@@ -19,10 +19,23 @@
 #   DRY_RUN=true bash submit_clim_restarts.bash
 
 # ---------------------------- USER SETTINGS ----------------------------------
+src_root="/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/BruteForce"
+out_root="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions"
+
+# Observation data for land (ELM) and sea ice (MPAS-Seaice).
+# Leave empty ("") to use the default ERA5 setup (/global/cfs/projectdirs/m3522/cmip6/ERA5/e5.oper.an.sfc).
+obs_root_elm=""
+obs_root_mpassi=""
+
 dates=(2015-02-01 2015-05-01 2015-08-01 2015-11-01
        2026-02-01 2026-05-01 2026-08-01 2026-11-01)
 branches=(clim obs)      # obs stops with a message if ERA5 for the date is missing
 extra_args=()            # e.g. (--first-year 1991 --mode per_component --overwrite)
+#extra_args=(--overwrite)
+#extra_args=(--box 30 60 --overwrite)
+#extra_args=(--mode per_component --overwrite)
+#extra_args=(--component-weights mpassi=2 elm=1 --first-year 1991 --overwrite)
+
 # -----------------------------------------------------------------------------
 
 source /global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh
@@ -31,8 +44,13 @@ cd "${work_dir}"
 
 run_date() {
   local date=$1
+  local obs_args=()
+  [[ -n "${obs_root_elm}" ]] && obs_args+=(--obs-root-elm "${obs_root_elm}")
+  [[ -n "${obs_root_mpassi}" ]] && obs_args+=(--obs-root-mpassi "${obs_root_mpassi}")
   for branch in "${branches[@]}"; do
-    python make_clim_restart.py --date "${date}" --branch "${branch}" "${extra_args[@]}" \
+    python util/make_clim_restart.py --date "${date}" --branch "${branch}" \
+      --src-root "${src_root}" --out-root "${out_root}" \
+      "${obs_args[@]}" "${extra_args[@]}" \
       $([[ ${DRY_RUN:-false} == true ]] && echo --dry-run)
   done
 }

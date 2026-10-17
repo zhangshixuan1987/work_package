@@ -10,9 +10,14 @@
    source data, which must reproduce the saved PC1.
 3. ``project_daily``: daily SLP anomalies from the base monthly climatology,
    projected on the EOF and standardized with the base NDJFM PC1 mean/std.
-4. ``window_means`` / ``window_correlation``: consecutive lead windows from
-   the initial date (day 1 = init + 1); the correlation is across days
-   within each window, for the single initialization.
+4. ``window_means``: consecutive lead windows from the initial date
+   (day 1 = init + 1).
+5. ``slp_acc``: daily cos-lat weighted, centred spatial anomaly correlation of
+   the SLP anomalies over the NAO domain with the reference (lead 0 = initial
+   day), with ``acc_window_table`` and the e-folding lead. A spatial ACC has many
+   more degrees of freedom than a correlation of the one-dimensional index
+   across the ~14 strongly autocorrelated days of a window (effective sample
+   size ~2-3), which is no longer computed.
 """
 from __future__ import annotations
 
@@ -23,6 +28,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from util.hind_factorial import plot_group_curves
 from util.hind_model_data import to_datetime64
 
 
@@ -148,7 +154,8 @@ class NaoProjector:
         self.ref_mean, self.ref_std = float(pc.mean()), float(pc.std())
 
     def project_daily(self, psl_daily: xr.DataArray, name: str, compute: bool = True) -> xr.Dataset:
-        """Daily ``nao_raw`` (Pa) and ``nao_std`` from daily SLP (time on datetime64 days).
+        """Daily ``nao_raw`` (Pa), ``nao_std`` and the SLP anomaly field ``slp_anom`` (Pa, float32,
+        NAO domain on the base grid) from daily SLP (time on datetime64 days).
 
         ``compute=False`` returns the lazy index, e.g. to compute many sources in one ``compute_all``.
         """
@@ -156,10 +163,12 @@ class NaoProjector:
         anom = da.groupby("time.month") - self.base.base_climatology
         raw = (anom * _weights(anom.lat) * self.base.nao_eof1.fillna(0)).sum(("lat", "lon"))
         raw = raw.drop_vars("month", errors="ignore")
+        anom = anom.drop_vars("month", errors="ignore").astype("float32")
         if compute:
-            raw = raw.compute()
+            raw, anom = raw.compute(), anom.compute()
         return xr.Dataset({"nao_raw": raw.assign_attrs(units="Pa"),
-                           "nao_std": ((raw - self.ref_mean) / self.ref_std).assign_attrs(units="1")},
+                           "nao_std": ((raw - self.ref_mean) / self.ref_std).assign_attrs(units="1"),
+                           "slp_anom": anom.assign_attrs(units="Pa", long_name="SLP minus base monthly climatology")},
                           attrs=dict(name=name, ref_mean=self.ref_mean, ref_std=self.ref_std,
                                      anomaly="daily SLP minus base monthly climatology",
                                      standardization="(raw - mean) / std of base NDJFM PC1"))
@@ -189,37 +198,48 @@ class NaoProjector:
             vals.append(float(series.values[m].mean()) if m.sum() >= need else np.nan)
         return xr.DataArray(vals, dims="window", coords={"window": [self._label(w) for w in self.windows()]})
 
-    def window_correlation(self, fcst: xr.DataArray, obs: xr.DataArray, init_date: str,
-                           min_samples: int = 5) -> xr.Dataset:
-        """Correlation across days in each lead window, on the days both series have."""
-        f, o = xr.align(fcst, obs, join="inner")
-        lead = self.lead(f, init_date)
-        r, n = [], []
-        for w in self.windows():
-            m = (lead >= w[0]) & (lead <= w[1]) & np.isfinite(f.values) & np.isfinite(o.values)
-            n.append(int(m.sum()))
-            r.append(float(np.corrcoef(f.values[m], o.values[m])[0, 1]) if m.sum() >= min_samples else np.nan)
-        labels = [self._label(w) for w in self.windows()]
-        return xr.Dataset({"nao_corr": ("window", r), "n_days": ("window", n)}, coords={"window": labels},
-                          attrs=dict(init_date=init_date, definition="corr over days within each lead window "
-                                                                     "(single initialization); day 1 = init + 1"))
+
+def slp_acc(fcst: xr.Dataset, ref: xr.Dataset, init_date: str, max_lead_days: int) -> xr.DataArray:
+    """Daily centred, cos-lat weighted ACC of ``slp_anom`` with ``ref`` over the NAO domain (lead 0 = init)."""
+    t0 = np.datetime64(init_date, "D")
+    sl = slice(t0, t0 + np.timedelta64(max_lead_days, "D"))
+    f, r = xr.align(fcst.slp_anom.sel(time=sl), ref.slp_anom.sel(time=sl), join="inner")
+    w = np.cos(np.deg2rad(f.lat))
+    w = (w / w.mean()).broadcast_like(f.isel(time=0, drop=True)).where(np.isfinite(f.isel(time=0, drop=True)))
+    wm = lambda x: (x * w).sum(("lat", "lon")) / w.sum()
+    a, b = f - wm(f), r - wm(r)
+    acc = wm(a * b) / np.sqrt(wm(a * a) * wm(b * b))
+    lead = ((f.time.values.astype("datetime64[D]") - t0) / np.timedelta64(1, "D")).astype(int)
+    return acc.assign_coords(lead=("time", lead)).swap_dims(time="lead").drop_vars("time").rename("ACC")
 
 
-def nao_tables(daily: dict[str, xr.Dataset], projector: NaoProjector, init_date: str, ref: str = "ERA5"):
-    """Window means of every source and window correlations vs ``ref`` as DataFrames."""
+def acc_window_table(acc: dict[str, xr.DataArray], windows) -> pd.DataFrame:
+    """Window-mean ACC (columns ``ACC dAA-BB``), day-0 ACC and e-folding lead per source."""
+    from util.tropical_wind_skill import efold_lead
+    rows = {}
+    for k, a in acc.items():
+        row = {f"ACC d{w0:02d}-{w1:02d}": float(a.sel(lead=slice(w0, w1)).mean()) for w0, w1 in windows}
+        row.update(ACC_day0=float(a.sel(lead=0)), efold_days=efold_lead(a.values))
+        rows[k] = row
+    return pd.DataFrame(rows).T
+
+
+def nao_tables(daily: dict[str, xr.Dataset], projector: NaoProjector, init_date: str, ref: str = "ERA5", *,
+               acc_windows=((0, 4), (5, 9), (10, 14), (15, 28)), acc_max_lead: int = 42):
+    """Window means of the index of every source, daily SLP ACC vs ``ref`` and its window table."""
     means = pd.DataFrame({k: projector.window_means(v.nao_std, init_date).to_series() for k, v in daily.items()})
-    corr = pd.DataFrame({k: projector.window_correlation(v.nao_std, daily[ref].nao_std, init_date)
-                         .nao_corr.to_series() for k, v in daily.items() if k != ref})
-    return means, corr
+    acc = {k: slp_acc(v, daily[ref], init_date, acc_max_lead) for k, v in daily.items() if k != ref}
+    return means, acc, acc_window_table(acc, acc_windows)
 
 
 def plot_nao_daily(daily: dict[str, xr.Dataset], init_date: str, max_lead_days: int, *, ref: str = "ERA5",
-                   style_map=None, corr: pd.DataFrame | None = None) -> plt.Figure:
+                   style_map=None, acc: dict[str, xr.DataArray] | None = None, acc_max_lead: int = 30) -> plt.Figure:
+    """(a) daily NAO index; (b) daily North-Atlantic SLP ACC vs ``ref`` grouped by atmosphere initial state."""
     from configs.hind_experiment_config import STYLE_MAP
     style_map = style_map or STYLE_MAP
     t0 = np.datetime64(init_date)
-    fig, axes = plt.subplots(1, 2 if corr is not None else 1, figsize=(16, 4.8), squeeze=False,
-                             gridspec_kw=dict(width_ratios=(2, 1)) if corr is not None else None)
+    fig, axes = plt.subplots(1, 2 if acc is not None else 1, figsize=(17, 4.8), squeeze=False,
+                             gridspec_kw=dict(width_ratios=(1.6, 1)) if acc is not None else None)
     ax = axes[0, 0]
     for k, ds in daily.items():
         s = ds.nao_std.sel(time=slice(t0, t0 + np.timedelta64(max_lead_days, "D")))
@@ -229,18 +249,16 @@ def plot_nao_daily(daily: dict[str, xr.Dataset], init_date: str, max_lead_days: 
     ax.set_ylabel("NAO (std)")
     ax.grid(True, alpha=0.3)
     ax.legend(ncol=5, fontsize=8, frameon=False)
-    if corr is not None:
+    if acc is not None:
         ax2 = axes[0, 1]
-        x = np.arange(len(corr.index))
-        width = 0.8 / max(len(corr.columns), 1)
-        for j, k in enumerate(corr.columns):
-            ax2.bar(x - 0.4 + width * (j + 0.5), corr[k], width, label=k,
-                    color=style_map.get(k, {}).get("color"))
-        ax2.set_xticks(x)
-        ax2.set_xticklabels(corr.index, rotation=30, ha="right")
+        sub = {k: a.sel(lead=slice(0, acc_max_lead)) for k, a in acc.items()}
+        plot_group_curves(ax2, next(iter(sub.values())).lead, {k: a.values for k, a in sub.items()})
         ax2.axhline(0, color="k", linewidth=0.5)
-        ax2.set_ylim(-1, 1)
-        ax2.set_title(f"(b) Correlation with {ref} within lead windows", loc="left")
-        ax2.grid(True, axis="y", alpha=0.3)
+        ax2.set_xlim(0, acc_max_lead)
+        ax2.set_xlabel("Lead day")
+        ax2.set_ylabel("ACC")
+        ax2.set_title(f"(b) North-Atlantic SLP ACC vs {ref}", loc="left")
+        ax2.legend(fontsize=8, frameon=False)
+        ax2.grid(True, alpha=0.3)
     fig.tight_layout()
     return fig

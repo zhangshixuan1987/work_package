@@ -30,6 +30,20 @@ EXPERIMENTS = {
 }
 EXPERIMENT_KEYS = tuple(EXPERIMENTS)
 
+# Factorial design: key -> (atmosphere initial state, land initial state). The 8 runs fill
+# 8 of the 3 x 3 cells (piControl atm + ERA5-forced lnd is not run); see util.hind_factorial.
+INIT_LEVELS = ("piC", "DART", "ERA5")
+INITIAL_STATES = {
+    "CTRL": ("piC", "piC"),
+    "DARTBA": ("piC", "DART"),
+    "DARTBL": ("DART", "piC"),
+    "DARTOP": ("DART", "DART"),
+    "DARTAE": ("DART", "ERA5"),
+    "ERA5BL": ("ERA5", "piC"),
+    "ERA5DL": ("ERA5", "DART"),
+    "ERA5OP": ("ERA5", "ERA5"),
+}
+
 # Line styles shared by every hind_* figure (references in black).
 STYLE_MAP = {
     "ERA5": dict(color="k", linestyle="-", linewidth=2.6, zorder=6),

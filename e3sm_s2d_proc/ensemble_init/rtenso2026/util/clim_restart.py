@@ -164,17 +164,72 @@ def available_years(src_root, prefix: str, component: str, mmdd: str) -> list[in
     return years
 
 
-def era5_file(var: str, year: int, month: int) -> Path | None:
-    hits = glob.glob(f"{ERA5_ROOT}/{year:04d}{month:02d}/"
+def _resolve_obs_roots(
+    obs_root: str | Path | Mapping[str, str | Path | None] | None = None,
+    era5_root: str | Path | Mapping[str, str | Path | None] | None = None,
+) -> dict[str, str]:
+    """Resolve observation root directories for ``elm`` and ``mpassi``.
+
+    If ``obs_root`` / ``era5_root`` is ``None`` (or a component entry in a
+    mapping is ``None``), falls back automatically to the default ``ERA5_ROOT``.
+    """
+    spec = obs_root if obs_root is not None else era5_root
+    if spec is None:
+        default_str = str(Path(ERA5_ROOT).resolve())
+        return {c: default_str for c in OBS_FIELDS}
+    if isinstance(spec, Mapping):
+        out = {}
+        for c in OBS_FIELDS:
+            val = spec.get(c)
+            out[c] = str(Path(ERA5_ROOT if val is None else val).resolve())
+        return out
+    resolved = str(Path(spec).resolve())
+    return {c: resolved for c in OBS_FIELDS}
+
+
+def _resolve_obs_fields(
+    obs_fields: Mapping[str, Mapping[str, str] | None] | None = None,
+) -> dict[str, dict[str, str]]:
+    """Resolve observable field mappings per component, defaulting to ``OBS_FIELDS``."""
+    if obs_fields is None:
+        return {c: dict(v) for c, v in OBS_FIELDS.items()}
+    out = {}
+    for c, default_map in OBS_FIELDS.items():
+        custom = obs_fields.get(c)
+        out[c] = dict(default_map if custom is None else custom)
+    return out
+
+
+def era5_file(var: str, year: int, month: int, era5_root: str | Path | None = None) -> Path | None:
+    root = ERA5_ROOT if era5_root is None else era5_root
+    hits = glob.glob(f"{Path(root)}/{year:04d}{month:02d}/"
                      f"e5.oper.an.sfc.{ERA5_CODES[var]}.ll025sc.{year:04d}{month:02d}0100_*.nc")
     return Path(hits[0]) if hits else None
 
 
-def era5_available(year: int, mmdd: str, components: Sequence[str]) -> bool:
+def era5_available(
+    year: int,
+    mmdd: str,
+    components: Sequence[str],
+    era5_root: str | Path | Mapping[str, str | Path | None] | None = None,
+    obs_root: str | Path | Mapping[str, str | Path | None] | None = None,
+    obs_fields: Mapping[str, Mapping[str, str] | None] | None = None,
+) -> bool:
     month = int(mmdd[:2])
-    needed = {v for c in components for f in OBS_FIELDS.get(c, {}).values()
-              for v in (["swvl2", "swvl3", "swvl4"] if f == "swvl2-4" else [f])}
-    return all(era5_file(v, year, month) is not None for v in needed)
+    roots = _resolve_obs_roots(obs_root=obs_root, era5_root=era5_root)
+    fmap = _resolve_obs_fields(obs_fields)
+    for c in components:
+        if c not in fmap:
+            continue
+        c_root = roots.get(c, ERA5_ROOT)
+        needed = {
+            v
+            for f in fmap[c].values()
+            for v in (["swvl2", "swvl3", "swvl4"] if f == "swvl2-4" else [f])
+        }
+        if not all(era5_file(v, year, month, era5_root=c_root) is not None for v in needed):
+            return False
+    return True
 
 
 @dataclass
@@ -188,6 +243,9 @@ class SelectionPlan:
     out_dir: str
     out_prefix: str
     excluded_years: list[int] = field(default_factory=list)
+    era5_root: str = ERA5_ROOT
+    obs_roots: dict[str, str] = field(default_factory=lambda: _resolve_obs_roots())
+    obs_fields: dict[str, dict[str, str]] = field(default_factory=lambda: _resolve_obs_fields())
 
     @property
     def mmdd(self) -> str:
@@ -196,6 +254,12 @@ class SelectionPlan:
     @property
     def target_year(self) -> int:
         return int(self.target_date[:4])
+
+    def obs_root_for(self, component: str) -> str:
+        return self.obs_roots.get(component, self.era5_root or ERA5_ROOT)
+
+    def obs_fields_for(self, component: str) -> dict[str, str]:
+        return self.obs_fields.get(component, OBS_FIELDS.get(component, {}))
 
     def source(self, component: str, year: int) -> Path:
         return source_file(self.src_root, self.src_prefix, component, year, self.mmdd)
@@ -209,6 +273,9 @@ def make_plan(
     src_root,
     out_root,
     *,
+    era5_root: str | Path | Mapping[str, str | Path | None] | None = None,
+    obs_root: str | Path | Mapping[str, str | Path | None] | None = None,
+    obs_fields: Mapping[str, Mapping[str, str] | None] | None = None,
     branch: str = "clim",
     components: Sequence[str] = ALL_COMPONENTS,
     src_prefix: str = "20251024_s2d_spinup",
@@ -219,7 +286,11 @@ def make_plan(
     exclude_target_year: bool = True,
 ) -> SelectionPlan:
     """Candidate years (all components available) and output directory
-    ``<out_root>/YYYYMMDD/<branch>``."""
+    ``<out_root>/YYYYMMDD/<branch>``.
+
+    If ``obs_root`` / ``era5_root`` or ``obs_fields`` are ``None`` (or omitted
+    for a component), the default ERA5 setup is used automatically.
+    """
     if branch not in BRANCHES:
         raise ValueError(f"branch must be one of {BRANCHES}, got {branch!r}")
     unknown = set(components) - set(COMPONENTS)
@@ -227,12 +298,16 @@ def make_plan(
         raise ValueError(f"Unknown components {sorted(unknown)}; use {list(COMPONENTS)}")
     src_root = Path(src_root).resolve()
     out_root = Path(out_root).resolve()
+    resolved_roots = _resolve_obs_roots(obs_root=obs_root, era5_root=era5_root)
+    resolved_fields = _resolve_obs_fields(obs_fields)
     if out_root == src_root or src_root in out_root.parents:
         raise ValueError(f"Output root {out_root} is inside the source archive {src_root}")
 
     target_year, mmdd = int(target_date[:4]), target_date[5:]
-    if branch == "obs" and not era5_available(target_year, mmdd, components):
-        raise FileNotFoundError(f"ERA5 for {target_date} is not available under {ERA5_ROOT}")
+    if branch == "obs" and not era5_available(
+        target_year, mmdd, components, obs_root=resolved_roots, obs_fields=resolved_fields
+    ):
+        raise FileNotFoundError(f"ERA5 for {target_date} is not available under {resolved_roots}")
 
     years = None
     for comp in components:
@@ -260,6 +335,9 @@ def make_plan(
         out_dir=str(out_root / target_date.replace("-", "") / branch),
         out_prefix=out_prefix,
         excluded_years=sorted(excluded),
+        era5_root=resolved_roots.get("elm", ERA5_ROOT),
+        obs_roots=resolved_roots,
+        obs_fields=resolved_fields,
     )
 
 
@@ -386,11 +464,11 @@ def comparison_points(plan: SelectionPlan, component: str, cache_dir: Path | Non
     return pts
 
 
-def _era5_slice(var: str, year: int, mmdd: str) -> np.ndarray:
+def _era5_slice(var: str, year: int, mmdd: str, era5_root: str | Path = ERA5_ROOT) -> np.ndarray:
     """ERA5 field at 00Z on <year>-<mmdd>, shape (721, 1440), NaN where missing."""
-    path = era5_file(var, year, int(mmdd[:2]))
+    path = era5_file(var, year, int(mmdd[:2]), era5_root=era5_root)
     if path is None:
-        raise FileNotFoundError(f"ERA5 {var} for {year}-{mmdd} not found under {ERA5_ROOT}")
+        raise FileNotFoundError(f"ERA5 {var} for {year}-{mmdd} not found under {era5_root}")
     with nc.Dataset(path, "r") as ds:
         name = next(n for n, v in ds.variables.items() if v.ndim == 3)
         data = ds.variables[name][(int(mmdd[3:]) - 1) * 24]
@@ -408,13 +486,14 @@ def read_obs_fields(plan: SelectionPlan, component: str, year: int, points: dict
     i, j = _era5_index(points["lat"], points["lon"])
     out = []
     cache: dict[str, np.ndarray] = {}
+    c_root = plan.obs_root_for(component)
 
     def era5(var):
         if var not in cache:
-            cache[var] = _era5_slice(var, year, plan.mmdd)[i, j]
+            cache[var] = _era5_slice(var, year, plan.mmdd, era5_root=c_root)[i, j]
         return cache[var]
 
-    for var in OBS_FIELDS[component].values():
+    for var in plan.obs_fields_for(component).values():
         if var == "swvl2-4":
             out.append(sum(era5(v) * ERA5_SWVL_THICKNESS[v] for v in ("swvl2", "swvl3", "swvl4")))
         else:
@@ -434,7 +513,7 @@ def load_obs_fields(
     With ``cache_dir``, every year read is kept in
     ``<cache_dir>/obs_<component>_<MM-DD>.npz`` and reused.
     """
-    names = list(OBS_FIELDS[component])
+    names = list(plan.obs_fields_for(component))
     points = comparison_points(plan, component, cache_dir)
     cache = Path(cache_dir) / f"obs_{component}_{plan.mmdd}.npz" if cache_dir else None
     stored: dict[int, list[np.ndarray]] = {}
@@ -600,7 +679,8 @@ def compute_distances(
     table = pd.DataFrame(index=pd.Index(plan.candidate_years, name="year"))
     used = []
     for comp in plan.components:
-        if comp not in KEY_FIELDS or (plan.branch == "obs" and comp not in OBS_FIELDS):
+        obs_comp_fields = plan.obs_fields_for(comp)
+        if comp not in KEY_FIELDS or (plan.branch == "obs" and not obs_comp_fields):
             continue
         model = load_key_fields(plan, comp, cache_dir, log=log)
         cols = []
@@ -613,7 +693,7 @@ def compute_distances(
         else:
             obs = load_obs_fields(plan, comp, plan.candidate_years + [plan.target_year], cache_dir, log)
             points = comparison_points(plan, comp, cache_dir)
-            for name in OBS_FIELDS[comp]:
+            for name in obs_comp_fields:
                 values, weight = model[name]
                 if comp == "elm":
                     values, weight = _columns_to_gridcells(values, weight, points["col_grid"],
@@ -648,13 +728,14 @@ def distance_to_model_year(
     table = pd.DataFrame(index=pd.Index(plan.candidate_years, name="year"))
     used = []
     for comp in plan.components:
-        if comp not in KEY_FIELDS or (observable_only and comp not in OBS_FIELDS):
+        obs_comp_fields = plan.obs_fields_for(comp)
+        if comp not in KEY_FIELDS or (observable_only and not obs_comp_fields):
             continue
         fields = load_key_fields(plan, comp, cache_dir, years=plan.candidate_years + [target_year], log=log)
         lat, lon = _model_points(plan, comp, cache_dir)
         cols = []
         for name, (values, weight) in fields.items():
-            if observable_only and name not in OBS_FIELDS[comp]:
+            if observable_only and name not in obs_comp_fields:
                 continue
             values, weight, _ = _apply_box(values, weight, lat, lon, box)
             table[f"{comp}: {name}"] = field_distance(values[:-1], weight, target=values[-1])

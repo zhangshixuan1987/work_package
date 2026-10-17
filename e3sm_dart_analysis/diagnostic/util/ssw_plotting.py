@@ -7,7 +7,14 @@ so differences smaller than the reanalysis disagreement are visible as such.
 * ``plot_bias_timeseries``: bias of U(55-65N), Z and T (60-90N) at two levels;
 * ``plot_bias_and_running_rmse``: bias and running RMSE of one index;
 * ``plot_rmse_attribution``: RMSE change vs CTRL by initial-state component,
-  per verification window (SSW season or lead months);
+  per verification window (SSW season or lead months), with the noise floor of a
+  difference of two single runs (``util.hind_factorial.pair_noise``: t * sqrt(2) *
+  the interaction residual of the additive atm + lnd fit of the RMSEs);
+* ``winter_table`` / ``plot_pseudo_ensemble``: beyond a few months the runs are
+  effectively independent realizations of the forced (AMIP) model, so the
+  8 runs are a pseudo-ensemble of the 2012-13 vortex; with the QBO wind at
+  ``qbo_level`` in the same winter (Holton-Tan: an easterly lower-stratospheric
+  QBO favours a weak vortex), the plausible pathway from the initial state;
 * ``plot_evolution``: raw index evolution with both references and each
   experiment's correlation with them;
 * ``plot_rmse_profiles``: RMSE profiles over a window.
@@ -22,6 +29,7 @@ import numpy as np
 import xarray as xr
 
 from configs.hind_experiment_config import STYLE_MAP
+from util.hind_factorial import pair_noise
 from util.ssw_diagnostics import lead_key, ssw_path
 
 INDEX_META = {
@@ -165,27 +173,32 @@ class SswPlotter:
     def rmse_attribution_table(self, index="u_55_65N", p_hpa=10.0, windows=((0, 6), "ssw"), as_percent=True):
         """RMSE differences between experiment pairs (``ATTRIBUTION``) per window.
 
-        ``value``: mean over references; ``ref_halfrange``: half-range across them.
+        ``value``: mean over references; ``ref_halfrange``: half-range across them;
+        ``noise95``: 95% noise floor of a difference of two single runs (same units).
         ``as_percent`` divides by CTRL's RMSE.
         """
         import pandas as pd
         rows = []
         for window in windows:
-            vals = []
+            vals, rm = [], []
             for ref in self.refs:
-                r = {e: self.rmse(e, ref, index, p_hpa, window) for e in {x for _, a, b in ATTRIBUTION for x in (a, b)}}
+                r = {e: self.rmse(e, ref, index, p_hpa, window) for e in self.experiments}
                 den = r["CTRL"] if as_percent else 1.0
                 vals.append([(r[a] - r[b]) / den * (100 if as_percent else 1) for _, a, b in ATTRIBUTION])
+                rm.append({e: v / den * (100 if as_percent else 1) for e, v in r.items()})
             vals = np.array(vals)
+            noise = float(pair_noise({e: np.mean([x[e] for x in rm]) for e in self.experiments})[0])
             for (lab, a, b), m, h in zip(ATTRIBUTION, vals.mean(0), 0.5 * np.ptp(vals, axis=0)):
-                rows.append(dict(window=str(window), bar=lab, minuend=a, subtrahend=b, value=m, ref_halfrange=h))
+                rows.append(dict(window=str(window), bar=lab, minuend=a, subtrahend=b, value=m, ref_halfrange=h,
+                                 noise95=noise, exceeds_noise=bool(abs(m) > noise)))
         return pd.DataFrame(rows)
 
     def plot_rmse_attribution(self, index="u_55_65N", p_hpa=10.0, windows=((0, 6), "ssw"), as_percent=True,
                               ylims=None, figsize=(10, 9), fig_id=0, table=None):
         """Bars of ``rmse_attribution_table`` (or ``table``, computed with the same arguments).
 
-        Bars: mean over references; whiskers: half-range across references.
+        Bars: mean over references (dark when beyond the noise floor); whiskers: half-range
+        across references; shading: the 95% noise floor of a two-run difference.
         Returns (figure, table).
         """
         if table is None:
@@ -196,7 +209,9 @@ class SswPlotter:
             sub = table[table.window == str(window)].set_index("bar").loc[[lab for lab, _, _ in ATTRIBUTION]]
             mean, half = sub.value.values, sub.ref_halfrange.values
             x = np.arange(len(ATTRIBUTION))
-            ax.bar(x, mean, color="0.7", edgecolor="0.3", zorder=2)
+            noise = float(sub.noise95.iloc[0])
+            ax.axhspan(-noise, noise, color="tab:orange", alpha=0.18, zorder=1, linewidth=0)
+            ax.bar(x, mean, color=["0.3" if abs(v) > noise else "0.75" for v in mean], edgecolor="0.3", zorder=2)
             ax.errorbar(x, mean, yerr=half, fmt="none", ecolor="k", capsize=4, zorder=3)
             ax.axhline(0, color="k", linewidth=0.5)
             for _, g0, g1 in ATTRIBUTION_GROUPS[:-1]:
@@ -219,7 +234,9 @@ class SswPlotter:
             ax.set_xticklabels([lab for lab, _, _ in ATTRIBUTION] if k == len(windows) - 1 else [],
                                rotation=30, ha="right")
             ax.grid(True, axis="y", alpha=0.3)
-        fig.text(0.01, 0.005, f"Whiskers: half-range across {' and '.join(self.refs)}", fontsize=self.fs * 0.75)
+        fig.text(0.01, 0.005, f"Whiskers: half-range across {' and '.join(self.refs)}. Shading: 95% noise floor of a "
+                 "difference of two single runs (interaction residual of the atm + lnd fit); dark bars exceed it.",
+                 fontsize=self.fs * 0.75)
         fig.tight_layout()
         return fig, table
 
@@ -272,4 +289,84 @@ class SswPlotter:
         np.atleast_1d(axes)[0].set_ylabel("hPa", fontsize=self.fs * 0.95)
         self._legend(fig, np.atleast_1d(axes)[0])
         fig.tight_layout(rect=(0, 0.1, 1, 1))
+        return fig
+
+    # ------------------------------------------------------------------ pseudo-ensemble
+    def winter_table(self, qbo_dir, *, index="u_55_65N", p_hpa=10.0, winter=("2012-12", "2013-02"),
+                     qbo_level=50.0, period=None):
+        """Per source (references and experiments): winter-mean and SSW-window minimum of
+        ``index`` at ``p_hpa`` (with its month), months with easterly mean wind in the SSW window,
+        and the winter-mean equatorial QBO wind at ``qbo_level`` (from the ``ua`` sections of
+        ``util.qbo_diagnostics`` in ``qbo_dir``; NaN when missing)."""
+        import pandas as pd
+        from configs.hind_experiment_config import PERIOD
+        from util.qbo_diagnostics import qbo_section_path
+        key = lambda t: t.year * 100 + t.month
+        ym = lambda s: int(s[:4]) * 100 + int(s[5:7])
+        w0, w1 = ym(winter[0]), ym(winter[1])
+        s0, s1 = ym(self.ssw_window[0]), ym(self.ssw_window[1])
+        rows = {}
+        for src in [*self.refs, *self.experiments]:
+            ds = self._open(src, src if src in self.refs else self.refs[0])
+            k = np.array([key(t) for t in ds.time.values])
+            u = ds[index].sel(plev=p_hpa * 100.0, method="nearest").values * INDEX_META[index]["scale"]
+            ssw = (k >= s0) & (k <= s1)
+            imin = int(np.flatnonzero(ssw)[np.argmin(u[ssw])])
+            row = dict(winter_mean=float(u[(k >= w0) & (k <= w1)].mean()), ssw_min=float(u[imin]),
+                       ssw_min_month=str(ds.time.values[imin])[:7], easterly_months=int((u[ssw] < 0).sum()))
+            path = qbo_section_path(qbo_dir, src, "ua", period or PERIOD)
+            if path.exists():
+                q = xr.load_dataset(path).qbo.sel(plev=qbo_level)
+                kq = np.array([key(t) for t in q.time.values])
+                row[f"qbo{qbo_level:g}_winter"] = float(q.values[(kq >= w0) & (kq <= w1)].mean())
+            else:
+                row[f"qbo{qbo_level:g}_winter"] = np.nan
+            rows[src] = row
+        tab = pd.DataFrame(rows).T.infer_objects()
+        tab.index.name = "source"
+        tab.attrs = dict(index=index, p_hpa=p_hpa, winter=f"{winter[0]}..{winter[1]}", qbo_level=qbo_level)
+        return tab
+
+    def plot_pseudo_ensemble(self, table, *, index="u_55_65N", p_hpa=10.0, qbo_level=50.0, figsize=(16, 5.2),
+                             fig_id=0):
+        """(a) ``index`` of the 8 runs (members thin, range shaded) and the references; (b) winter-mean
+        vortex wind vs winter-mean QBO wind at ``qbo_level`` (Holton-Tan)."""
+        meta = INDEX_META[index]
+        t = self._dates()
+        fig, (ax, ax2) = plt.subplots(1, 2, figsize=figsize, gridspec_kw=dict(width_ratios=(1.8, 1)))
+        Y = []
+        for exp in self.experiments:
+            y = self._open(exp, self.refs[0])[index].sel(plev=p_hpa * 100, method="nearest").values * meta["scale"]
+            Y.append(y)
+            ax.plot(t, y, color=self.style_map.get(exp, {}).get("color", "0.5"), linewidth=0.9, alpha=0.8)
+        Y = np.array(Y)
+        ax.fill_between(t, Y.min(0), Y.max(0), color="0.6", alpha=0.25, linewidth=0, label="range of the 8 runs")
+        ax.plot(t, Y.mean(0), color="0.3", linewidth=2.2, label="mean of the 8 runs")
+        for r, ls in zip(self.refs, ("-", "--")):
+            y = self._open(r, r)[index].sel(plev=p_hpa * 100, method="nearest").values * meta["scale"]
+            ax.plot(t, y, color="k", linestyle=ls, linewidth=2, label=r)
+        ax.axhline(0, color="k", linewidth=0.5)
+        self._shade_ssw(ax, (0.46, 0.02))
+        ax.set_ylabel(f"{meta['label']} ({meta['units']})", fontsize=self.fs * 0.95)
+        ax.set_title(f"({string.ascii_lowercase[fig_id]}) {meta['label']} {p_hpa:g} hPa {meta['region']}: "
+                     "pseudo-ensemble", loc="left", fontsize=self.fs)
+        ax.legend(fontsize=self.fs * 0.75, frameon=False, loc="upper left")
+        ax.tick_params(axis="x", labelrotation=30)
+        qcol = f"qbo{qbo_level:g}_winter"
+        for src in table.index:
+            ref = src in self.refs
+            ax2.scatter(table.loc[src, qcol], table.loc[src, "winter_mean"], s=90 if ref else 60,
+                        marker="*" if ref else "o", color="k" if ref else self.style_map.get(src, {}).get("color", "0.5"),
+                        edgecolor="k", linewidth=0.5, zorder=3)
+            ax2.annotate(src, (table.loc[src, qcol], table.loc[src, "winter_mean"]), fontsize=self.fs * 0.65,
+                         xytext=(4, 3), textcoords="offset points")
+        ax2.axvline(0, color="k", linewidth=0.5)
+        ax2.set_xlabel(f"QBO U {qbo_level:g} hPa, 5°S–5°N, {table.attrs.get('winter', 'winter')} (m s$^{{-1}}$)",
+                       fontsize=self.fs * 0.9)
+        ax2.set_ylabel(f"Winter-mean {meta['label']} {p_hpa:g} hPa ({meta['units']})", fontsize=self.fs * 0.9)
+        ax2.set_title(f"({string.ascii_lowercase[fig_id + 1]}) Holton–Tan: vortex vs QBO phase", loc="left",
+                      fontsize=self.fs)
+        for a in (ax, ax2):
+            a.grid(True, alpha=0.3)
+        fig.tight_layout()
         return fig

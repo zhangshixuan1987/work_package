@@ -10,7 +10,12 @@
   (block-bootstrap 95% CI or reference half-range as error bars);
 * persistence of the initial vertical profile and valid-time pattern
   correlation with the reference vs lead month;
-* vertical coherence: corr_t(X(p), X(p0)).
+* vertical coherence: corr_t(X(p), X(p0));
+* memory and timing (``qbo_timing_table``, ``plot_qbo_timing``): months of
+  memory of the initial QBO phase, onset months of westerly/easterly winds at
+  each level and their error, and the descent rate of the westerly shear zone.
+  These separate the initialized memory from the model's own (too fast) QBO,
+  which a single RMSE/PCC over the record mixes.
 
 Sections can be plotted raw (``field="qbo"``) or as anomalies
 (``field="qbo_anom"``) from each source's own monthly climatology
@@ -28,7 +33,7 @@ import math
 import string
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -180,7 +185,7 @@ class QboPlotter:
         rng = np.random.default_rng(seed)
         rmse0 = float(np.nanmean([cls.rmse_and_pcc(test, r)[0] for r in refs]))
         pcc0 = float(np.nanmean([cls.rmse_and_pcc(test, r)[1] for r in refs]))
-        starts = np.arange(0, nt, block_len)
+        starts = np.arange(max(1, nt - block_len + 1))   # moving (overlapping) blocks
         nblocks = int(np.ceil(nt / block_len))
         boot = np.empty((n_boot, 2))
         for b in range(n_boot):
@@ -470,6 +475,137 @@ class QboPlotter:
         ax.grid(True, which="both", alpha=0.25)
         ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=font_scale * 0.9, frameon=False)
         return fig
+
+
+# ---------------------------------------------------------------------------
+# Memory and phase timing
+# ---------------------------------------------------------------------------
+SCALE_HEIGHT_KM = 7.0
+
+
+def first_crossing(x: np.ndarray, direction: str = "E2W", persist: int = 2, start: float = 0.0) -> float:
+    """First month (linearly interpolated) at or after ``start`` at which ``x`` changes sign in
+    ``direction`` and keeps the new sign for ``persist`` months; ``E2W``: westerly onset."""
+    x = np.asarray(x, dtype=float)
+    sgn = 1.0 if direction == "E2W" else -1.0
+    for k in range(max(1, int(np.floor(start)) + 1), len(x) - persist + 1):
+        a, b = sgn * x[k - 1], sgn * x[k]
+        if a < 0 <= b and np.all(sgn * x[k:k + persist] > 0):
+            t = float(k - 1 + a / (a - b))
+            if t >= start:
+                return t
+    return np.nan
+
+
+def descending_onsets(q: xr.DataArray, levels_hpa, direction: str = "E2W", persist: int = 2) -> dict:
+    """Onset month of a descending shear zone at each level: the first onset at the top level, then
+    at each lower level the first onset after the one above (flickers left by the previous phase
+    near the tropopause are skipped). NaN below a level without an onset."""
+    out, start = {}, 0.0
+    for p in sorted(levels_hpa):
+        t = first_crossing(q.sel(plev=p).values, direction, persist, start) if np.isfinite(start) else np.nan
+        out[p], start = t, t
+    return out
+
+
+def memory_months(test: np.ndarray, ref: np.ndarray, threshold: float = 0.5, persist: int = 2) -> float:
+    """Lead months before the profile correlation with the reference stays below ``threshold``
+    for ``persist`` months (``test``/``ref``: (time, plev)); the record length if it never does."""
+    r = np.array([_pcorr(test[t], ref[t]) for t in range(test.shape[0])])
+    low = r < threshold
+    for t in range(len(r) - persist + 1):
+        if low[t:t + persist].all():
+            return float(t)
+    return float(len(r))
+
+
+def descent_rate(onsets: Mapping[float, float]) -> float:
+    """Descent rate (km month⁻¹, positive downward) of a shear zone from its onset month per level (hPa)."""
+    p = np.array([k for k, v in onsets.items() if np.isfinite(v)], dtype=float)
+    t = np.array([onsets[k] for k in p])
+    if p.size < 2:
+        return np.nan
+    z = SCALE_HEIGHT_KM * np.log(1000.0 / p)
+    return float(-np.polyfit(t, z, 1)[0])
+
+
+def qbo_timing_table(qbo_dir, refs, sources, *, period: str = PERIOD, levels_hpa=(10.0, 20.0, 30.0, 50.0, 70.0),
+                     memory_band_hpa=(10.0, 100.0), descent_band_hpa=(10.0, 50.0), memory_threshold: float = 0.5,
+                     persist: int = 2):
+    """Memory and phase timing of every source (``ua`` sections) against the mean of ``refs``.
+
+    Columns: ``memory_months`` (profile correlation over ``memory_band_hpa``),
+    ``W_onset_<p>`` / ``E_onset_<p>`` (months since the first month, following the
+    descending zone from the top level, ``descending_onsets``) and their
+    errors ``*_err`` (source − reference), ``descent_km_per_month`` of the
+    westerly zone over ``descent_band_hpa`` and its error ``descent_err`` (the model zone stalls near 70 hPa, so a fit
+    through the lowest levels would hide its fast descent above), and ``abs_W_onset_err_<p>``.
+    """
+    import pandas as pd
+    plotter = QboPlotter(QboPlotParameter.for_variable("ua", period=period), qbo_dir)
+    refs = [refs] if isinstance(refs, str) else list(refs)
+    lo, hi = memory_band_hpa
+    ref_q = sum(plotter.load(r).qbo for r in refs) / len(refs)
+    band = ref_q.sel(plev=slice(lo, hi))
+
+    def timing(q):
+        row = {}
+        for kind, direction in (("W", "E2W"), ("E", "W2E")):
+            for p, t in descending_onsets(q, levels_hpa, direction, persist).items():
+                row[f"{kind}_onset_{p:g}"] = t
+        row["descent_km_per_month"] = descent_rate({p: row[f"W_onset_{p:g}"] for p in levels_hpa
+                                                    if descent_band_hpa[0] <= p <= descent_band_hpa[1]})
+        return row
+
+    ref_row = timing(ref_q)
+    rows = {}
+    for s in [*refs, *sources]:
+        q = plotter.load(s).qbo
+        row = dict(memory_months=memory_months(q.sel(plev=slice(lo, hi)).values, band.values,
+                                               memory_threshold, persist), **timing(q))
+        for p in levels_hpa:
+            for kind in ("W", "E"):
+                row[f"{kind}_onset_{p:g}_err"] = row[f"{kind}_onset_{p:g}"] - ref_row[f"{kind}_onset_{p:g}"]
+            row[f"abs_W_onset_err_{p:g}"] = abs(row[f"W_onset_{p:g}_err"])
+        row["descent_err"] = row["descent_km_per_month"] - ref_row["descent_km_per_month"]
+        rows[s] = row
+    tab = pd.DataFrame(rows).T
+    tab.index.name = "source"
+    tab.attrs = dict(reference=" + ".join(refs), memory_threshold=memory_threshold, persist=persist)
+    return tab
+
+
+def plot_qbo_timing(qbo_dir, ref: str, sources, timing, *, period: str = PERIOD, levels_hpa=(30.0, 50.0),
+                    style_map=None, font_scale=12, figsize=(16, 5.2)) -> plt.Figure:
+    """(a) westerly-onset month by level; (b, c) U at ``levels_hpa`` vs lead month."""
+    plotter = QboPlotter(QboPlotParameter.for_variable("ua", period=period), qbo_dir)
+    fig, axes = plt.subplots(1, 1 + len(levels_hpa), figsize=figsize,
+                             gridspec_kw=dict(width_ratios=(1, *[1.4] * len(levels_hpa))))
+    onset_cols = [c for c in timing.columns if c.startswith("W_onset_") and not c.endswith("_err")]
+    p = np.array([float(c.split("_")[-1]) for c in onset_cols])
+    for s in [*sources, ref]:
+        kw = _line_kwargs(s, style_map, ref)
+        axes[0].plot(timing.loc[s, onset_cols].astype(float).values, p, marker="o", label=s, **kw)
+        q = plotter.load(s).qbo
+        for ax, lev in zip(axes[1:], levels_hpa):
+            ax.plot(np.arange(q.sizes["time"]), q.sel(plev=lev).values, **kw)
+    axes[0].set_yscale("log")
+    axes[0].set_ylim(max(p) * 1.1, min(p) / 1.1)
+    axes[0].set_yticks(p, [f"{v:g}" for v in p])
+    axes[0].minorticks_off()
+    axes[0].set_xlabel("Westerly onset (months since start)", fontsize=font_scale)
+    axes[0].set_ylabel("hPa", fontsize=font_scale)
+    axes[0].set_title("(a) Westerly onset by level", loc="left", fontsize=font_scale)
+    for k, (ax, lev) in enumerate(zip(axes[1:], levels_hpa)):
+        ax.axhline(0, color="k", linewidth=0.6)
+        ax.set_xlabel("Lead month", fontsize=font_scale)
+        ax.set_ylabel(r"U (m s$^{-1}$)", fontsize=font_scale)
+        ax.set_title(f"({string.ascii_lowercase[k + 1]}) U {lev:g} hPa (5°S–5°N)", loc="left", fontsize=font_scale)
+    for ax in axes:
+        ax.grid(True, alpha=0.3)
+    axes[0].legend(fontsize=font_scale * 0.7, frameon=False, loc="lower right")
+    fig.tight_layout()
+    return fig
 
 
 # ---------------------------------------------------------------------------

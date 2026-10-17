@@ -145,10 +145,14 @@ measures large-scale agreement only.
 
 | File | Purpose |
 | --- | --- |
-| `build_climatology_ic.ipynb` | Key fields, distance tables and plots for both branches and every date, writing the selected restarts, and the 2015 check of each branch against the actual 2015 state |
-| `make_clim_restart.py` | One date and branch: `python make_clim_restart.py --date YYYY-MM-DD --branch {clim,obs} [--dry-run] [--box DLAT DLON] [--mode per_component] [--component-weights mpassi=2]` |
+| `01_build_climatology_ic.ipynb` | Key fields, distance tables and plots for both branches and every date, and writing the selected restarts |
+| `02_evaluate_ic_metrics.ipynb` | Distance/rank evaluation of `clim` and `obs` against actual 2015, field-level similarity metrics (`d_box`, `r_box`, `d_grid`, `r_grid`, `RMSE`, `bias`), global integrated restart summaries, and $30^\circ\times 60^\circ$ box anomaly maps |
+| `03_plot_mpassi_ic_mosaic.ipynb` | Native unstructured MPAS-Seaice mesh plots via `mosaic`: NH/SH ice concentration, ice thickness, and snow on ice (state, difference vs 2015, standardized anomalies $z$, and 4-season comparison) |
+| `04_plot_elm_ic_mosaic.ipynb` | Native ELM `grid1d` land mesh plots via `mosaic`: snow water equivalent (`H2OSNO`), surface soil water (0–9 cm), subsurface soil water (>9 cm), and surface soil temperature (`T_SOISNO` layer 1) |
 | `submit_clim_restarts.bash` | Slurm array over the eight dates, both branches per task (`sbatch submit_clim_restarts.bash`; `DRY_RUN=true bash submit_clim_restarts.bash` prints distances and selections only) |
+| `util/make_clim_restart.py` | CLI for one date and branch: `python util/make_clim_restart.py --date YYYY-MM-DD --branch {clim,obs} [--dry-run] [--box DLAT DLON] [--mode per_component] [--component-weights mpassi=2]` |
 | `util/clim_restart.py` | Key fields, ERA5 matching, distances, selection, copying, and summaries |
+| `util/ic_eval.py` | Similarity evaluation tables, box anomaly plots, and native-mesh `mosaic` plotting for MPAS-Seaice and ELM |
 
 Each output directory (`initial_conditions/YYYYMMDD/<branch>/`) gets the three
 restarts, `rpointer.lnd`, `rpointer.rof`, and `rpointer.ice`, and a
@@ -176,9 +180,9 @@ date there are three sets of initial conditions:
 
 Comparing hindcasts from the three shows the forecast sensitivity to using a
 selected year instead of the actual sea-ice, land, and river states. Because
-the actual 2015 restarts exist, the notebook also scores every candidate year
-against them, which shows how close each branch's choice is to the true 2015
-state.
+the actual 2015 restarts exist, the evaluation notebooks also score every
+candidate year against them, showing how close each branch's choice is to the
+true 2015 state.
 
 ## Output
 
@@ -191,6 +195,10 @@ directory holds only the source files.
   YYYYMMDD/obs/    the same for the year closest to ERA5
   cache/           model and ERA5 key fields (reused between runs)
   logs/            Slurm logs from submit_clim_restarts.bash
+
+/global/cfs/cdirs/e3sm/www/zhan391/E3SMv3_S2D/rtenso2026_ic/
+  figure/          diagnostic figures (.png) from 02–04 evaluation/plotting notebooks
+  data/            similarity and global summary tables (.csv)
 ```
 
 Date directories exist for all eight dates (`20150201`-`20151101` and
