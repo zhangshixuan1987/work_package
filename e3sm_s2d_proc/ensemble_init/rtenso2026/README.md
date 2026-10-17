@@ -149,6 +149,7 @@ measures large-scale agreement only.
 | `02_evaluate_ic_metrics.ipynb` | Distance/rank evaluation of `clim` and `obs` against actual 2015, field-level similarity metrics (`d_box`, `r_box`, `d_grid`, `r_grid`, `RMSE`, `bias`), global integrated restart summaries, and $30^\circ\times 60^\circ$ box anomaly maps |
 | `03_plot_mpassi_ic_mosaic.ipynb` | Native unstructured MPAS-Seaice mesh plots via `mosaic`: NH/SH ice concentration, ice thickness, and snow on ice (state, difference vs 2015, standardized anomalies $z$, and 4-season comparison) |
 | `04_plot_elm_ic_mosaic.ipynb` | Native ELM `grid1d` land mesh plots via `mosaic`: snow water equivalent (`H2OSNO`), surface soil water (0–9 cm), subsurface soil water (>9 cm), and surface soil temperature (`T_SOISNO` layer 1) |
+| `05_evaluate_box_size_sensitivity.ipynb` | Objective sensitivity sweep across 11 box scales (grid points up to 60°×120°) evaluating closeness ranks, Spearman $\rho$, and model error against actual 2015 restarts |
 | `submit_clim_restarts.bash` | Slurm array over the eight dates, both branches per task (`sbatch submit_clim_restarts.bash`; `DRY_RUN=true bash submit_clim_restarts.bash` prints distances and selections only) |
 | `util/make_clim_restart.py` | CLI for one date and branch: `python util/make_clim_restart.py --date YYYY-MM-DD --branch {clim,obs} [--dry-run] [--box DLAT DLON] [--mode per_component] [--component-weights mpassi=2]` |
 | `util/clim_restart.py` | Key fields, ERA5 matching, distances, selection, copying, and summaries |
