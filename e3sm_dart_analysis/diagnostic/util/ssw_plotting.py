@@ -9,7 +9,9 @@ so differences smaller than the reanalysis disagreement are visible as such.
 * ``plot_rmse_attribution``: RMSE change vs CTRL by initial-state component,
   per verification window (SSW season or lead months), with the noise floor of a
   difference of two single runs (``util.hind_factorial.pair_noise``: t * sqrt(2) *
-  the interaction residual of the additive atm + lnd fit of the RMSEs);
+  the interaction residual of the additive atm + lnd fit of the RMSEs); only the
+  bars whose two runs are among ``experiments`` are drawn, and the noise floor
+  needs the full factorial (NaN otherwise);
 * ``winter_table`` / ``plot_pseudo_ensemble``: beyond a few months the runs are
   effectively independent realizations of the forced (AMIP) model, so the
   8 runs are a pseudo-ensemble of the 2012-13 vortex; with the QBO wind at
@@ -39,19 +41,18 @@ INDEX_META = {
     "t_pcap": dict(label="T", units="K", region="60–90°N", scale=1.0),
 }
 
-# (label, minuend, subtrahend) of the attribution bars; groups split by ``|`` markers
+# (group, label, minuend, subtrahend) of the attribution bars, in drawing order
 ATTRIBUTION = (
-    ("ERA5(atm)", "ERA5BL", "CTRL"),
-    ("ERA5(atm+lnd)", "ERA5OP", "CTRL"),
-    ("DART(atm)", "DARTBL", "CTRL"),
-    ("DART(lnd)", "DARTBA", "CTRL"),
-    ("DART(atm+lnd)", "DARTOP", "CTRL"),
-    ("DART(atm)+ERA5(lnd)", "DARTAE", "CTRL"),
-    ("+LND | ERA5(atm)", "ERA5OP", "ERA5BL"),
-    ("+LND | DART(atm)", "DARTOP", "DARTBL"),
-    ("DART − ERA5", "DARTOP", "ERA5OP"),
+    ("Total vs CTRL", "ERA5(atm)", "ERA5BL", "CTRL"),
+    ("Total vs CTRL", "ERA5(atm+lnd)", "ERA5OP", "CTRL"),
+    ("Total vs CTRL", "DART(atm)", "DARTBL", "CTRL"),
+    ("Total vs CTRL", "DART(lnd)", "DARTBA", "CTRL"),
+    ("Total vs CTRL", "DART(atm+lnd)", "DARTOP", "CTRL"),
+    ("Total vs CTRL", "DART(atm)+ERA5(lnd)", "DARTAE", "CTRL"),
+    ("Land effect", "+LND | ERA5(atm)", "ERA5OP", "ERA5BL"),
+    ("Land effect", "+LND | DART(atm)", "DARTOP", "DARTBL"),
+    ("DA − ERA5", "DART − ERA5", "DARTOP", "ERA5OP"),
 )
-ATTRIBUTION_GROUPS = (("Total vs CTRL", 0, 5), ("Land effect", 6, 7), ("DA − ERA5", 8, 8))
 
 
 def _month_dates(time) -> np.ndarray:
@@ -64,6 +65,7 @@ class SswPlotter:
         self.ssw_dir = Path(ssw_dir)
         self.experiments = list(experiments)
         self.refs = tuple(refs)
+        self.attribution = [row for row in ATTRIBUTION if row[2] in self.experiments and row[3] in self.experiments]
         self.ssw_window = ssw_window
         self.style_map = style_map or STYLE_MAP
         self.fs = font_scale
@@ -171,7 +173,7 @@ class SswPlotter:
         return float(np.sqrt((bias ** 2).mean()))
 
     def rmse_attribution_table(self, index="u_55_65N", p_hpa=10.0, windows=((0, 6), "ssw"), as_percent=True):
-        """RMSE differences between experiment pairs (``ATTRIBUTION``) per window.
+        """RMSE differences between the experiment pairs of ``ATTRIBUTION`` that were run, per window.
 
         ``value``: mean over references; ``ref_halfrange``: half-range across them;
         ``noise95``: 95% noise floor of a difference of two single runs (same units).
@@ -184,13 +186,13 @@ class SswPlotter:
             for ref in self.refs:
                 r = {e: self.rmse(e, ref, index, p_hpa, window) for e in self.experiments}
                 den = r["CTRL"] if as_percent else 1.0
-                vals.append([(r[a] - r[b]) / den * (100 if as_percent else 1) for _, a, b in ATTRIBUTION])
+                vals.append([(r[a] - r[b]) / den * (100 if as_percent else 1) for _, _, a, b in self.attribution])
                 rm.append({e: v / den * (100 if as_percent else 1) for e, v in r.items()})
             vals = np.array(vals)
             noise = float(pair_noise({e: np.mean([x[e] for x in rm]) for e in self.experiments})[0])
-            for (lab, a, b), m, h in zip(ATTRIBUTION, vals.mean(0), 0.5 * np.ptp(vals, axis=0)):
-                rows.append(dict(window=str(window), bar=lab, minuend=a, subtrahend=b, value=m, ref_halfrange=h,
-                                 noise95=noise, exceeds_noise=bool(abs(m) > noise)))
+            for (group, lab, a, b), m, h in zip(self.attribution, vals.mean(0), 0.5 * np.ptp(vals, axis=0)):
+                rows.append(dict(window=str(window), group=group, bar=lab, minuend=a, subtrahend=b, value=m,
+                                 ref_halfrange=h, noise95=noise, exceeds_noise=bool(abs(m) > noise)))
         return pd.DataFrame(rows)
 
     def plot_rmse_attribution(self, index="u_55_65N", p_hpa=10.0, windows=((0, 6), "ssw"), as_percent=True,
@@ -206,19 +208,23 @@ class SswPlotter:
         fig, axes = plt.subplots(len(windows), 1, figsize=figsize, squeeze=False)
         for k, window in enumerate(windows):
             ax = axes[k, 0]
-            sub = table[table.window == str(window)].set_index("bar").loc[[lab for lab, _, _ in ATTRIBUTION]]
+            labels = [lab for _, lab, _, _ in self.attribution]
+            sub = table[table.window == str(window)].set_index("bar").loc[labels]
             mean, half = sub.value.values, sub.ref_halfrange.values
-            x = np.arange(len(ATTRIBUTION))
+            x = np.arange(len(labels))
             noise = float(sub.noise95.iloc[0])
-            ax.axhspan(-noise, noise, color="tab:orange", alpha=0.18, zorder=1, linewidth=0)
+            if np.isfinite(noise):
+                ax.axhspan(-noise, noise, color="tab:orange", alpha=0.18, zorder=1, linewidth=0)
             ax.bar(x, mean, color=["0.3" if abs(v) > noise else "0.75" for v in mean], edgecolor="0.3", zorder=2)
             ax.errorbar(x, mean, yerr=half, fmt="none", ecolor="k", capsize=4, zorder=3)
             ax.axhline(0, color="k", linewidth=0.5)
-            for _, g0, g1 in ATTRIBUTION_GROUPS[:-1]:
-                ax.axvline(g1 + 0.5, color="tab:red", linestyle=":", linewidth=1)
-            for name, g0, g1 in ATTRIBUTION_GROUPS:
-                ax.text((g0 + g1) / 2, 0.97, name, transform=ax.get_xaxis_transform(), ha="center", va="top",
-                        fontsize=self.fs * 0.85)
+            groups = [g for g, _, _, _ in self.attribution]
+            for name in dict.fromkeys(groups):
+                idx = [i for i, g in enumerate(groups) if g == name]
+                if idx[-1] < len(groups) - 1:
+                    ax.axvline(idx[-1] + 0.5, color="tab:red", linestyle=":", linewidth=1)
+                ax.text((idx[0] + idx[-1]) / 2, 0.97, name, transform=ax.get_xaxis_transform(), ha="center",
+                        va="top", fontsize=self.fs * 0.85)
             wlab = "SSW season" if window == "ssw" else (window.capitalize() if isinstance(window, str)
                                                         else f"Lead months {window[0]}–{window[1]}")
             ax.set_title(f"({string.ascii_lowercase[fig_id + k]}) {INDEX_META[index]['label']} {p_hpa:g} hPa "
@@ -231,7 +237,7 @@ class SswPlotter:
                 y0, y1 = ax.get_ylim()
                 ax.set_ylim(y0, y1 + 0.15 * (y1 - y0))
             ax.set_xticks(x)
-            ax.set_xticklabels([lab for lab, _, _ in ATTRIBUTION] if k == len(windows) - 1 else [],
+            ax.set_xticklabels(labels if k == len(windows) - 1 else [],
                                rotation=30, ha="right")
             ax.grid(True, axis="y", alpha=0.3)
         fig.text(0.01, 0.005, f"Whiskers: half-range across {' and '.join(self.refs)}. Shading: 95% noise floor of a "

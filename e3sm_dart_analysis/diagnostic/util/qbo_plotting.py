@@ -37,6 +37,7 @@ from typing import Any, Literal, Mapping
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 from configs.hind_experiment_config import PERIOD, STYLE_MAP
@@ -541,7 +542,6 @@ def qbo_timing_table(qbo_dir, refs, sources, *, period: str = PERIOD, levels_hpa
     westerly zone over ``descent_band_hpa`` and its error ``descent_err`` (the model zone stalls near 70 hPa, so a fit
     through the lowest levels would hide its fast descent above), and ``abs_W_onset_err_<p>``.
     """
-    import pandas as pd
     plotter = QboPlotter(QboPlotParameter.for_variable("ua", period=period), qbo_dir)
     refs = [refs] if isinstance(refs, str) else list(refs)
     lo, hi = memory_band_hpa
@@ -712,3 +712,146 @@ def plot_t_shear_scatter(qbo_dir, ref: str, sources, *, period: str = PERIOD, la
         axes.flat[j].axis("off")
     fig.tight_layout()
     return fig
+
+
+# ---------------------------------------------------------------------------
+# Thermal-wind consistency of the temperature errors (paper figure)
+# ---------------------------------------------------------------------------
+def thermal_wind_slope(qbo_dir, refs, *, period: str = PERIOD, layer_hpa=(10.0, 70.0)) -> float:
+    """Regression slope dT'/d(dU/dln p) (K s/m) of the reanalyses, pooled over the (month, level)
+    points of ``layer_hpa`` and averaged over ``refs``; T' from the first reference's climatology."""
+    ref_t = QboPlotter(QboPlotParameter.for_variable("ta", period=period), qbo_dir).load(refs[0]).qbo
+    lo, hi = min(layer_hpa), max(layer_hpa)
+    slopes = []
+    for r in refs:
+        T, S = _t_and_shear(qbo_dir, r, period, ref_t)
+        slopes.append(np.polyfit(S.sel(plev=slice(lo, hi)).values.ravel(),
+                                 T.sel(plev=slice(lo, hi)).values.ravel(), 1)[0])
+    return float(np.mean(slopes))
+
+
+def thermal_wind_errors(qbo_dir, ref: str, source: str, slope: float, *, period: str = PERIOD):
+    """Errors vs ``ref`` of T and of dU/dln p, and the unbalanced part dT - slope * dS (time, plev)."""
+    load = lambda s, v: QboPlotter(QboPlotParameter.for_variable(v, period=period), qbo_dir).load(s).qbo
+    dT = load(source, "ta") - load(ref, "ta")
+    dS = shear_dlnp(load(source, "ua")) - shear_dlnp(load(ref, "ua"))
+    return dT, dS, (dT - slope * dS).rename("dT_unbalanced")
+
+
+def plot_thermal_wind_consistency(qbo_dir, ref: str, groups: Mapping[str, Any], *, refs=("ERAI", "ERA5"),
+                                  sections=("DARTOP", "ERA5OP"), profile_sources=("DARTOP", "ERA5OP", "CTRL"),
+                                  profile_months=3, floor: str | None = "ERA5", period: str = PERIOD,
+                                  layer_hpa=(10.0, 70.0), ylim=(100.0, 5.0),
+                                  colors=("#2a78d6", "#eb6834", "0.55"), linestyles=("-", "--", ":"),
+                                  dt_levels=np.arange(-12, 13, 2), shear_contours=(-8, -4, -2, 2, 4, 8),
+                                  figsize=(11.5, 8.6), font_scale=11):
+    """Are the temperature errors of each initial state consistent with its wind errors?
+
+    Thermal-wind balance on the equator ties T' to dU/dln p with the slope alpha fitted on the
+    reanalyses (``thermal_wind_slope``), so the balanced part of a temperature error is
+    alpha * dS and dT - alpha * dS is the part that the wind errors do not support.
+
+    (a, b) dT vs ``ref`` (shading) and alpha * dS (contours) for ``sections``;
+    (c) RMS over ``layer_hpa`` of dT - alpha * dS vs lead month: line the group mean, shading the
+    range over the group's runs (land initial states), ``floor`` vs ``ref`` in black;
+    (d) dT (solid) and alpha * dS (dashed) averaged over the first ``profile_months`` months for
+    ``profile_sources``, coloured by group.
+    ``groups`` maps a label to its run keys; the first ``len(colors)`` groups are drawn.
+    Returns (figure, per-run table: corr and slope of dT on dS, unbalanced RMS and mean dT over
+    ``layer_hpa`` for months 1-6 and 7-end).
+    """
+    groups = dict(list(groups.items())[:len(colors)])
+    slope = thermal_wind_slope(qbo_dir, list(refs), period=period, layer_hpa=layer_hpa)
+    lo, hi = min(layer_hpa), max(layer_hpa)
+    fs = font_scale
+    names = [*sections, *profile_sources, *(s for v in groups.values() for s in v), *([floor] if floor else [])]
+    err = {s: thermal_wind_errors(qbo_dir, ref, s, slope, period=period) for s in dict.fromkeys(names)}
+    lead = np.arange(1, next(iter(err.values()))[0].sizes["time"] + 1)
+    color_of = {s: c for (g, members), c in zip(groups.items(), colors) for s in members}
+    ticks = [t for t in (5, 10, 20, 30, 50, 70, 100) if min(ylim) <= t <= max(ylim)]
+
+    def pressure_axis(ax):
+        ax.set_yscale("log")
+        ax.set_ylim(*ylim)
+        ax.set_yticks(ticks)
+        ax.set_yticklabels([f"{t:g}" for t in ticks])
+        ax.minorticks_off()
+        ax.tick_params(labelsize=fs * 0.9)
+
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(2, 2, hspace=0.36, wspace=0.26)
+    # (a, b) sections
+    cf = None
+    for i, s in enumerate(sections):
+        ax = fig.add_subplot(gs[0, i])
+        dT, dS, _ = err[s]
+        p = dT.plev.values
+        cf = ax.contourf(lead, p, dT.transpose("plev", "time").values, levels=dt_levels, cmap="RdBu_r", extend="both")
+        cs = ax.contour(lead, p, (slope * dS).transpose("plev", "time").values, levels=list(shear_contours),
+                        colors="k", linewidths=0.8)
+        ax.clabel(cs, fmt="%g", fontsize=fs * 0.7)
+        pressure_axis(ax)
+        ax.set_xticks(lead[::3])
+        ax.set_title(f"({string.ascii_lowercase[i]}) {s}", fontsize=fs * 1.05, loc="left")
+        ax.set_title(r"$\Delta T$ (shading), $\alpha\,\Delta S$ (contours, K)", fontsize=fs * 0.9, loc="right")
+        ax.set_xlabel("Lead month", fontsize=fs)
+        if i == 0:
+            ax.set_ylabel("Pressure (hPa)", fontsize=fs)
+    cax = fig.add_axes([0.92, 0.585, 0.012, 0.29])
+    cb = fig.colorbar(cf, cax=cax, ticks=dt_levels[::2])
+    cb.set_label(f"$\\Delta T$ vs {ref} (K)", fontsize=fs * 0.9)
+    cb.ax.tick_params(labelsize=fs * 0.85)
+
+    # (c) unbalanced error vs lead month
+    ax = fig.add_subplot(gs[1, 0])
+    rms = lambda x: np.sqrt((x.sel(plev=slice(lo, hi)) ** 2).mean("plev")).values
+    if floor:
+        ax.plot(lead, rms(err[floor][2]), color="k", linewidth=1.6, label=f"{floor} vs {ref}")
+    for (g, members), c, ls in zip(groups.items(), colors, linestyles):
+        curves = np.array([rms(err[s][2]) for s in members])
+        ax.fill_between(lead, curves.min(0), curves.max(0), color=c, alpha=0.22, linewidth=0)
+        ax.plot(lead, curves.mean(0), color=c, linestyle=ls, linewidth=2.2, label=f"{g} (n={len(members)})")
+    ax.set_xlim(1, lead[-1])
+    ax.set_ylim(bottom=0)
+    ax.set_xticks(lead[::3])
+    ax.set_xlabel("Lead month", fontsize=fs)
+    ax.set_ylabel("RMS (K)", fontsize=fs)
+    ax.set_title(f"(c) Unbalanced error $\\Delta T-\\alpha\\,\\Delta S$, {lo:g}–{hi:g} hPa",
+                 fontsize=fs * 1.05, loc="left")
+    ax.grid(True, alpha=0.25)
+    ax.legend(fontsize=fs * 0.82, frameon=False, loc="upper right")
+    ax.tick_params(labelsize=fs * 0.9)
+
+    # (d) early-lead profiles of the error and its balanced part
+    ax = fig.add_subplot(gs[1, 1])
+    early = slice(0, profile_months)
+    for s in profile_sources:
+        dT, dS, _ = err[s]
+        c = color_of.get(s, "k")
+        ax.plot(dT.isel(time=early).mean("time"), dT.plev, color=c, linewidth=2.2, marker="o", markersize=5,
+                label=rf"{s} $\Delta T$")
+        ax.plot(slope * dS.isel(time=early).mean("time"), dS.plev, color=c, linewidth=1.6, linestyle="--",
+                label=rf"{s} $\alpha\,\Delta S$")
+    ax.axvline(0, color="k", linewidth=0.4)
+    pressure_axis(ax)
+    ax.set_xlabel("K", fontsize=fs)
+    ax.set_title(f"(d) Months 1–{profile_months} mean: $\\Delta T$ (solid) vs $\\alpha\\,\\Delta S$ (dashed)",
+                 fontsize=fs * 1.05, loc="left")
+    ax.grid(True, alpha=0.25)
+    ax.legend(fontsize=fs * 0.78, frameon=False, loc="upper left")
+    fig.text(0.5, 0.015, f"α = {slope:.3f} K s m$^{{-1}}$: regression of T′ on ∂U/∂ln p in "
+             f"{', '.join(refs)} ({lo:g}–{hi:g} hPa); ΔS = Δ(∂U/∂ln p); Δ = run − {ref}.",
+             ha="center", fontsize=fs * 0.85)
+
+    rows = []
+    for g, members in groups.items():
+        for s in members:
+            dTl, dSl, ul = (z.sel(plev=slice(lo, hi)) for z in err[s])
+            x, y = dSl.values.ravel(), dTl.values.ravel()
+            rows.append({"group": g, "source": s, "r_dT_dS": _pcorr(x, y, 2), "slope_dT_dS": np.polyfit(x, y, 1)[0],
+                         "unbalanced_rms_m1-6": float(np.sqrt((ul.isel(time=slice(0, 6)) ** 2).mean())),
+                         f"unbalanced_rms_m7-{lead[-1]}": float(np.sqrt((ul.isel(time=slice(6, None)) ** 2).mean())),
+                         "mean_dT_m1-6": float(dTl.isel(time=slice(0, 6)).mean())})
+    table = pd.DataFrame(rows).set_index("source")
+    table.attrs["alpha"] = slope
+    return fig, table

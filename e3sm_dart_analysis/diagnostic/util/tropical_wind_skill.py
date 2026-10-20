@@ -177,13 +177,21 @@ def crossover_lead(skills: dict[str, xr.Dataset], a: str = "DART", b: str = "ERA
 def plot_wind_skill_groups(skills: dict[str, xr.Dataset], variable: str, *, max_lead: int = 30,
                            a: str = "DART", b: str = "ERA5") -> plt.Figure:
     """(a) daily ACC by atmosphere initial state (mean, member range); (b) group ``a`` - ``b``
-    as the factorial effect with its 95% interval (noise from the interaction residual)."""
+    as the factorial effect with its 95% interval (noise from the interaction residual), or,
+    when the experiments do not support the additive fit (e.g. one run per atm state), the
+    difference of the group means without an interval."""
     sk = {e: s.sel(lead=slice(0, max_lead)) for e, s in skills.items()}
     lead = next(iter(sk.values())).lead.values
     curves = {e: s.ACC.values for e, s in sk.items()}
     fit = additive_fit(curves)
     k = fit["contrasts"].index(f"atm {a}−{b}")
     est, half = fit["effect"][k], fit["t_crit"] * fit["se"][k]
+    effect_label = f"atm {a} − {b} (additive fit)"
+    g = groups_by(curves, "atm")
+    if not np.isfinite(est).any() and g[a] and g[b]:
+        est = np.mean([curves[e] for e in g[a]], 0) - np.mean([curves[e] for e in g[b]], 0)
+        half = np.full_like(est, np.nan)
+        effect_label = f"atm {a} − {b} (group means, no noise estimate)"
     cross = crossover_lead(skills, a, b)
     fig, axes = plt.subplots(1, 2, figsize=(15, 4.6))
     plot_group_curves(axes[0], lead, curves)
@@ -191,7 +199,7 @@ def plot_wind_skill_groups(skills: dict[str, xr.Dataset], variable: str, *, max_
     axes[0].set_ylabel("ACC")
     axes[0].set_title(f"(a) {variable} daily ACC by atmosphere initial state", loc="left")
     axes[0].legend(fontsize=9, frameon=False)
-    axes[1].plot(lead, est, color="k", linewidth=2, label=f"atm {a} − {b} (additive fit)")
+    axes[1].plot(lead, est, color="k", linewidth=2, label=effect_label)
     axes[1].fill_between(lead, est - half, est + half, color="0.6", alpha=0.4, linewidth=0, label="95% CI")
     axes[1].axhline(0, color="k", linewidth=0.5)
     if np.isfinite(cross):

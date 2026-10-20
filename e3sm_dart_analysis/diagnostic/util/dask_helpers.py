@@ -103,17 +103,19 @@ def _chunk_existing_dims(obj, chunks: Optional[Mapping[str, int]] = None):
     return obj.assign(numeric)
 
 
-def compute_all(objects: Mapping[Any, Any]) -> dict:
+def compute_all(objects: Mapping[Any, Any], *, optimize_graph: bool = True) -> dict:
     """Compute a mapping of lazy xarray objects in one Dask call.
 
     Every source's reduction runs in a single graph, so file reads and
     reductions of different sources proceed in parallel instead of one
     ``.compute()`` after another. Values that are not Dask-backed pass through.
+    ``optimize_graph=False`` skips Dask's graph optimization, which in dask
+    2026.3 drops shared tasks of some graphs ("Missing dependency ...").
     """
     import dask
 
     keys = list(objects)
-    return dict(zip(keys, dask.compute(*(objects[k] for k in keys))))
+    return dict(zip(keys, dask.compute(*(objects[k] for k in keys), optimize_graph=optimize_graph)))
 
 
 def open_dataset_lazy(path, *, chunks: Optional[Mapping[str, int]] = None, **kwargs):

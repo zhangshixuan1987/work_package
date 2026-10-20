@@ -31,6 +31,7 @@ as a pseudo-ensemble; the observed value is compared with their range.
 """
 from __future__ import annotations
 
+import re
 from typing import Mapping
 
 import matplotlib.pyplot as plt
@@ -239,3 +240,26 @@ def model_range_check(table: pd.DataFrame, refs, experiments) -> pd.DataFrame:
             row[f"{r}_in_range"] = bool(x.min() <= v <= x.max())
         rows.append(row)
     return pd.DataFrame(rows).set_index("metric")
+
+
+def relabel_figure(fig: plt.Figure, labels: Mapping[str, str]) -> plt.Figure:
+    """Replace experiment keys (whole words) by their display labels in every text of ``fig``:
+    titles, legends, annotations and fixed tick labels."""
+    from matplotlib.ticker import FixedFormatter, FuncFormatter
+    labels = {k: v for k, v in labels.items() if k != v}
+    if not labels:
+        return fig
+    pattern = re.compile(r"\b(" + "|".join(map(re.escape, sorted(labels, key=len, reverse=True))) + r")\b")
+    sub = lambda text: pattern.sub(lambda m: labels[m.group(1)], text)
+    for t in fig.findobj(lambda o: hasattr(o, "get_text") and hasattr(o, "set_text")):
+        t.set_text(sub(t.get_text()))
+    for ax in fig.axes:  # tick labels are redrawn from the formatter (FuncFormatter for fixed labels since mpl 3.9)
+        for axis in (ax.xaxis, ax.yaxis):
+            fmt = axis.get_major_formatter()
+            if isinstance(fmt, FixedFormatter):
+                fmt.seq = [sub(str(x)) for x in fmt.seq]
+            elif isinstance(fmt, FuncFormatter) and not getattr(fmt.func, "_relabelled", False):
+                func = lambda x, pos=None, f=fmt.func: sub(str(f(x, pos)))
+                func._relabelled = True
+                fmt.func = func
+    return fig
