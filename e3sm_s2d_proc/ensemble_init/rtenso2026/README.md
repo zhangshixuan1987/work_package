@@ -27,8 +27,8 @@ prepares the initial conditions for all other components.
 | --- | --- | --- |
 | Atmosphere (EAM) | Interpolated from ERA5 reanalysis, as for the brute-force atmosphere IC (`v3.LR.amip_0101.HICCUP.atm_era5`) | Collaborators |
 | Ocean (MPAS-O) | Interpolated from the CFSR analysis, as for the brute-force ocean IC (Luke Van Roekel's CFSRv2) | Collaborators |
-| Sea ice (MPAS-SI) | BruteForce restart of a selected year: closest to climatology (`clim`) or to ERA5 (`obs`) (see below) | This directory |
-| Land (ELM) | BruteForce restart of a selected year: closest to climatology (`clim`) or to ERA5 (`obs`) (see below) | This directory |
+| Sea ice (MPAS-SI) | BruteForce restart of a selected year: closest to climatology (`clim`) or to the observations (`obs_era5land_nsidc`, default) (see below) | This directory |
+| Land (ELM) | BruteForce restart of a selected year: closest to climatology (`clim`) or to the observations (`obs_era5land_nsidc`, default) (see below) | This directory |
 | River (MOSART) | BruteForce restart of the same year as the land (see below) | This directory |
 | Coupler | Not yet decided (not handled by the selection tools) | This directory |
 | Atmospheric ensemble members | DART 20-member subset applied to the ERA5 base state (see below) | This directory |
@@ -42,18 +42,26 @@ No model restarts exist for 2026 (the BruteForce set ends in 2018). Averaging
 restarts across years breaks the internal consistency of the model state
 (snow layers, ice categories, phenology), so for each target date one year of
 the BruteForce archive is selected and its ELM, MOSART, and MPAS-Seaice
-restarts are used unchanged (renamed to the target date). Two branches choose
+restarts are used unchanged (renamed to the target date). The branches choose
 the year:
 
 | Branch | Selected year | Target | Output |
 | --- | --- | --- | --- |
 | `clim` | closest to the climatology | mean of the candidate years | `initial_conditions/YYYYMMDD/clim/` |
-| `obs` | closest to the observed state | ERA5 anomaly on the target date | `initial_conditions/YYYYMMDD/obs/` |
+| `obs_era5land_nsidc` (default) | closest to the observed state | observed anomaly on the target date: ERA5-Land (land), NOAA/NSIDC CDR (sea ice) | `initial_conditions/YYYYMMDD/obs_era5land_nsidc/` |
+| `obs` | closest to the observed state | ERA5 anomaly on the target date (land and sea ice) | `initial_conditions/YYYYMMDD/obs/` |
 
-The archive `/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/BruteForce/` and
-ERA5 (`/global/cfs/projectdirs/m3522/cmip6/ERA5`) are only read. Candidate
-years are those with all three restarts for the target calendar date
-(1980-2018), excluding the target year itself.
+`clim_anom` (`03_build_clim_anomaly_ic.ipynb`) instead adjusts the `clim` year
+to the model climatology plus the observed (ERA5-Land/NSIDC) anomaly.
+
+The metric below is written with ERA5 variable names; ERA5-Land uses the same
+names (`sd`, `swvl1`-`swvl4`, `stl1`-`stl4`) on a 1-degree grid, and the NSIDC CDR
+gives `ci` as a daily mean. The archive
+`/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/BruteForce/`, ERA5
+(`/global/cfs/projectdirs/m3522/cmip6/ERA5`), ERA5-Land, and NOAA/NSIDC
+(`/global/cfs/cdirs/e3sm/zhan391/data/{ERA5_LND,NOAA_NSIDC}`) are only read.
+Candidate years are those with all three restarts for the target calendar date
+from `FIRST_YEAR` = 1995 to 2018, excluding the target year itself.
 
 ### Distance metric
 
@@ -68,9 +76,13 @@ years are those with all three restarts for the target calendar date
    | Land | surface soil water | `H2OSOI_LIQ + H2OSOI_ICE`, soil layers 1-3 (about 0-9 cm) | as above | `swvl1` (0-7 cm) |
    | Land | subsurface soil water | `H2OSOI_LIQ + H2OSOI_ICE`, soil layers 4 and below | as above | `swvl2-4`, depth-weighted (7-289 cm) |
    | Land | surface soil temperature | `T_SOISNO`, soil layer 1 (K) | as above | `stl1` |
+   | Land | subsurface soil temperature | `T_SOISNO`, soil layers 4-10, depth-weighted over 0.09-2.89 m (K) | as above | `stl2-4`, depth-weighted (7-289 cm) |
 
-   The two soil-water fields cover disjoint layers, so no layer is counted
-   twice. The river (MOSART) is not part of the distance: its channel storage
+   The two soil-water fields cover disjoint layers, as do the two
+   soil-temperature fields (layer 1, and layers 4-10), so no layer is counted
+   twice. The ELM restart does not store layer depths; the standard 15-layer
+   ELM soil grid is used (nodes `z_j = 0.025 (exp(0.5 (j - 0.5)) - 1)` m),
+   with layer 10 counted only above 2.89 m, the bottom of ERA5 `stl4`. The river (MOSART) is not part of the distance: its channel storage
    is driven by land runoff and would count land twice. Its restart is still
    written, always from the land year.
 
@@ -101,8 +113,9 @@ years are those with all three restarts for the target calendar date
      unit or layer-depth differences cancel. Only fields with an ERA5
      counterpart are used.
 
-   With `box = (dlat, dlon)` (default 30 x 60 degrees), model and ERA5 values
-   are first averaged over lat-lon boxes with the area weights, so years are
+   With `box = (dlat, dlon)` (default 15 x 30 degrees, distances averaged over 4
+   placements of the box edges), model and observed values are first averaged
+   over lat-lon boxes with the area weights, so years are
    matched on large-scale anomalies instead of grid-point detail (see "Choice
    of box size").
 
@@ -116,43 +129,65 @@ years are those with all three restarts for the target calendar date
    state. `per_component` uses each component's smallest `D_c` for land and
    sea ice. The river always takes the land year.
 
-`obs` needs ERA5 for the target date; ERA5 on disk currently ends in June
-2026, so 2026-08-01 and 2026-11-01 wait for it.
+The `obs*` branches need observations for the target date: ERA5-Land and NSIDC
+on disk reach 2026-08-01 (2026-11-01 waits for them); ERA5 ends in June 2026,
+so `obs` also waits for 2026-08-01.
 
 ### Choice of box size
 
-At individual grid points, year-to-year anomalies are dominated by small-scale
-variability, so no candidate year matched the 2015 ERA5 anomaly better than
-chance. The 2015 dates allow a direct test: every candidate year can also be
-scored against the actual 2015 model state (same metric, target = the actual
-2015 anomaly, `obs` fields). Averaged over the four 2015 dates:
+The box size is chosen first (`01_choose_box_size.ipynb`), from the archive
+alone, so the 2015 test dates stay independent of it. For each calendar date
+and each year `y` of 1995-2018, `y` is treated as the unknown target: the `obs`
+selection picks, from the other years, the year closest to the observed
+(ERA5-Land/NSIDC) anomaly of `y`, and the pick is scored against the actual model state of `y`, on the
+native model grid (primary criterion) and as 30 x 60 box means (tie-breaker).
+Every box is judged at these same two scales. Skill is 0 for a random year and
+1 for the closest year; 24 test years per date, mean over the four dates
+(ERA5-Land and NOAA/NSIDC observations; five land fields including subsurface
+soil temperature; box distances averaged over 4 placements of the box edges,
+see below):
 
-| `box` | Rank of the `obs` year among 38 (1 = closest to actual 2015) | Rank correlation, `obs` distance vs closeness to 2015 |
-| --- | --- | --- |
-| model points | 14.5 | 0.38 |
-| 10 x 20 | 9.0 | 0.62 |
-| 20 x 40 | 7.5 | 0.61 |
-| 30 x 60 | 2.0 | 0.76 |
+| `box` | Grid points, observable fields | Grid points, all key fields | 30 x 60 means, observable | 30 x 60 means, all key fields |
+| --- | --- | --- | --- | --- |
+| model points | 0.798 | 0.677 | 0.775 | 0.652 |
+| 10 x 20 | **0.801** | **0.715** | 0.772 | 0.676 |
+| 15 x 30 | 0.780 | 0.691 | 0.795 | **0.690** |
+| 20 x 40 | 0.764 | 0.695 | **0.800** | 0.673 |
+| 30 x 60 | 0.709 | 0.586 | **0.800** | 0.631 |
+| 45 x 90 | 0.669 | 0.633 | 0.773 | 0.678 |
 
-The default is therefore `box = (30, 60)` for both branches. With it (and the
-current fields: river excluded, disjoint soil layers), the `obs` years for 2015
-rank 3, 1, 3, and 7 against the actual 2015 state (rank correlations
-0.64-0.97), while the `clim` years rank 4-27, as expected for a climatological
-choice. The closeness test is made at the same box scale, so it
-measures large-scale agreement only.
+The primary criterion is closeness on the native model grid (the first two
+columns): grid points, 10 x 20, and 15 x 30 are tied there (within two standard
+errors of the best), while larger boxes are clearly worse. Among the tied
+boxes, 15 x 30 matches the large-scale pattern best (30 x 60 box means), so it
+is chosen. Month-to-month differences are mostly within two standard errors,
+so one box is used for all dates.
+
+**Box-edge placement.** With a single grid of boxes, the result depended on
+where the box edges fell (15 x 30 scored below both 10 x 20 and 20 x 40). The
+selection distance is therefore the RMS over 4 placements of the box grid
+(standard, and shifted by half a box in latitude, in longitude, and in both;
+`box_shifts=4` in `compute_distances`, `--box-shifts` in the CLI). This
+removes the edge noise and improves the selection for every box size. The
+default is `box = (15, 30)`, `box_shifts = 4` for both branches. (An earlier
+choice of 30 x 60 was based on the four 2015 dates alone, scored at the
+selection box, with 1980-2018 candidates.)
 
 ### Files
 
 | File | Purpose |
 | --- | --- |
-| `01_build_climatology_ic.ipynb` | Key fields, distance tables and plots for both branches and every date, and writing the selected restarts |
-| `02_evaluate_ic_metrics.ipynb` | Distance/rank evaluation of `clim` and `obs` against actual 2015, field-level similarity metrics (`d_box`, `r_box`, `d_grid`, `r_grid`, `RMSE`, `bias`), global integrated restart summaries, and $30^\circ\times 60^\circ$ box anomaly maps |
-| `03_plot_mpassi_ic_mosaic.ipynb` | Native unstructured MPAS-Seaice mesh plots via `mosaic`: NH/SH ice concentration, ice thickness, and snow on ice (state, difference vs 2015, standardized anomalies $z$, and 4-season comparison) |
-| `04_plot_elm_ic_mosaic.ipynb` | Native ELM `grid1d` land mesh plots via `mosaic`: snow water equivalent (`H2OSNO`), surface soil water (0–9 cm), subsurface soil water (>9 cm), and surface soil temperature (`T_SOISNO` layer 1) |
-| `05_evaluate_box_size_sensitivity.ipynb` | Objective sensitivity sweep across 11 box scales (grid points up to 60°×120°) evaluating closeness ranks, Spearman $\rho$, and model error against actual 2015 restarts |
+| `01_choose_box_size.ipynb` | Step 1: leave-one-out choice of `BOX` from the 1995-2018 archive (see "Choice of box size") |
+| `02_build_climatology_ic.ipynb` | Step 2: key fields, distance tables and plots for both branches and every date, and writing the selected restarts |
+| `03_build_clim_anomaly_ic.ipynb` | Step 3: `clim_anom` option, the `clim` year restart with its key fields set to the model climatology plus the observed (ERA5-Land/NSIDC) anomaly on the target date (written to `YYYYMMDD/clim_anom/`), and its distances to the observations and to actual 2015 next to the `clim` and `obs` years |
+| `04_evaluate_ic_metrics.ipynb` | Step 4: distance/rank evaluation of `clim` and `obs` against actual 2015, field-level similarity metrics (`d_box`, `r_box`, `d_grid`, `r_grid`, `RMSE`, `bias`), global integrated restart summaries, and `BOX`-scale anomaly maps |
+| `05_plot_mpassi_ic_mosaic.ipynb` | Native unstructured MPAS-Seaice mesh plots via `mosaic`: NH/SH ice concentration, ice thickness, and snow on ice (state, difference vs 2015, standardized anomalies $z$, and 4-season comparison) |
+| `06_plot_elm_ic_mosaic.ipynb` | Native ELM `grid1d` land mesh plots via `mosaic`: snow water equivalent (`H2OSNO`), surface soil water (0–9 cm), subsurface soil water (>9 cm), surface soil temperature (`T_SOISNO` layer 1), and subsurface soil temperature (`T_SOISNO` layers 4-10) |
 | `submit_clim_restarts.bash` | Slurm array over the eight dates, both branches per task (`sbatch submit_clim_restarts.bash`; `DRY_RUN=true bash submit_clim_restarts.bash` prints distances and selections only) |
 | `util/make_clim_restart.py` | CLI for one date and branch: `python util/make_clim_restart.py --date YYYY-MM-DD --branch {clim,obs} [--dry-run] [--box DLAT DLON] [--mode per_component] [--component-weights mpassi=2]` |
 | `util/clim_restart.py` | Key fields, ERA5 matching, distances, selection, copying, and summaries |
+| `util/box_loo.py` | Leave-one-out box-size test used by 01 |
+| `util/anom_restart.py` | Climatology-plus-anomaly increments (ratio for sea ice, snow, and soil water; shift for soil temperature), writing, and state distances |
 | `util/ic_eval.py` | Similarity evaluation tables, box anomaly plots, and native-mesh `mosaic` plotting for MPAS-Seaice and ELM |
 
 Each output directory (`initial_conditions/YYYYMMDD/<branch>/`) gets the three
@@ -171,15 +206,16 @@ for the 2015 and 2026 dates of that month. Writing copies one 14.6 GB ELM restar
 
 Initial conditions from another year differ from the actual 2015 BruteForce
 restarts, so 2015 is used to measure how much this matters. For each 2015
-date there are three sets of initial conditions:
+date there are four sets of initial conditions:
 
 | Variant | Sea ice, land, river | Location |
 | --- | --- | --- |
 | Actual (control) | 2015 restarts from `20251024_s2d_spinup` | `/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/BruteForce/2015-MM-01-00000/` (existing) |
 | `clim` | Year closest to the same-date climatology (2015 excluded) | `/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/2015MM01/clim/` |
-| `obs` | Year closest to the 2015 ERA5 anomaly (2015 excluded) | `/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/2015MM01/obs/` |
+| `obs_era5land_nsidc` | Year closest to the 2015 observed (ERA5-Land/NSIDC) anomaly (2015 excluded) | `/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/2015MM01/obs_era5land_nsidc/` |
+| `clim_anom` | `clim` year + 2015 observed anomaly | `/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/2015MM01/clim_anom/` |
 
-Comparing hindcasts from the three shows the forecast sensitivity to using a
+Comparing hindcasts from these shows the forecast sensitivity to using a
 selected year instead of the actual sea-ice, land, and river states. Because
 the actual 2015 restarts exist, the evaluation notebooks also score every
 candidate year against them, showing how close each branch's choice is to the
@@ -193,13 +229,15 @@ directory holds only the source files.
 ```text
 /global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/
   YYYYMMDD/clim/   restarts, rpointers, selection.json (closest to climatology)
+  YYYYMMDD/obs_era5land_nsidc/  the same for the year closest to ERA5-Land/NSIDC (default)
   YYYYMMDD/obs/    the same for the year closest to ERA5
-  cache/           model and ERA5 key fields (reused between runs)
+  YYYYMMDD/clim_anom/  clim year + ERA5-Land/NSIDC anomaly (03), with anomaly.json
+  cache/           model and observed key fields (reused between runs)
   logs/            Slurm logs from submit_clim_restarts.bash
 
 /global/cfs/cdirs/e3sm/www/zhan391/E3SMv3_S2D/rtenso2026_ic/
-  figure/          diagnostic figures (.png) from 02–04 evaluation/plotting notebooks
-  data/            similarity and global summary tables (.csv)
+  figure/          diagnostic figures (.png) from 01 and the 04–06 evaluation/plotting notebooks
+  data/            box-size test, similarity, and global summary tables (.csv)
 ```
 
 Date directories exist for all eight dates (`20150201`-`20151101` and

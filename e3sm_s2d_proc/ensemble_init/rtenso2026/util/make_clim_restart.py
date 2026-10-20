@@ -31,8 +31,10 @@ def main():
     p.add_argument("--branch", default="clim", choices=["clim", "obs"])
     p.add_argument("--components", nargs="+", default=list(ALL_COMPONENTS), choices=ALL_COMPONENTS)
     p.add_argument("--mode", default="joint", choices=["joint", "per_component"])
-    p.add_argument("--box", type=float, nargs=2, default=[30.0, 60.0], metavar=("DLAT", "DLON"),
-                   help="compare means over DLAT x DLON degree boxes (default 30 60; 0 0 = model points)")
+    p.add_argument("--box", type=float, nargs=2, default=[15.0, 30.0], metavar=("DLAT", "DLON"),
+                   help="compare means over DLAT x DLON degree boxes (default 15 30, from 01_choose_box_size.ipynb; 0 0 = model points)")
+    p.add_argument("--box-shifts", type=int, default=4, choices=[1, 2, 4],
+                   help="average the distance over this many placements of the box edges (default 4, from 01_choose_box_size.ipynb)")
     p.add_argument("--component-weights", nargs="*", default=[], metavar="COMP=W",
                    help="weights a_c in the joint distance, e.g. mpassi=2 (default 1 each)")
     p.add_argument("--src-root", default=SRC_ROOT, help="model initial-condition archive (read-only)")
@@ -72,7 +74,8 @@ def main():
         return
     try:
         distances, _ = run_selection(
-            plan, box=tuple(args.box) if all(args.box) else None, mode=args.mode, component_weights=weights,
+            plan, box=tuple(args.box) if all(args.box) else None, box_shifts=args.box_shifts, mode=args.mode,
+            component_weights=weights,
             cache_dir=(Path(args.out_root) / "cache" if args.cache_dir is None
                        else Path(args.cache_dir) if args.cache_dir else None),
             write=not args.dry_run, overwrite=args.overwrite,

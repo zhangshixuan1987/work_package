@@ -52,12 +52,20 @@ elm        snow water equivalent       H2OSNO (mm)                        sd
            surface soil water          liquid + ice, soil layers 1-3      swvl1 (0-7 cm)
            subsurface soil water       liquid + ice, soil layers 4+       swvl2-4, depth-weighted (7-289 cm)
            surface soil temperature    T_SOISNO, soil layer 1 (K)         stl1
+           subsurface soil temperature T_SOISNO, soil layers 4-10,        stl2-4, depth-weighted (7-289 cm)
+                                       depth-weighted to 2.89 m (K)
 =========  ==========================  =================================  =====================
 
 Weights: sea ice ``areaCell`` (split by hemisphere); land
 ``cols1d_wtxy * cos(lat)`` on active columns (summed to 0.5-degree grid cells
 for the ``obs`` comparison).
 ERA5 values are taken at the nearest 0.25-degree grid point at 00Z.
+
+Other observation sets are recognized from the layout of the observation root
+(``obs_source``): ERA5-Land (``<root>/1x1/3hourly/ERA5_Land_<date>_00UTC.nc``,
+same variable names as ERA5) for land and the NOAA/NSIDC sea-ice CDR
+(``<root>/1x1/daily/ICEFRAC.daily.<year>.nc``, read as ``ci``) for sea ice,
+both on a 1-degree grid and sampled at the nearest cell.
 
 Source files are only ever opened read-only, and output may not be written
 inside the source archive.
@@ -72,7 +80,7 @@ import shutil
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 import netCDF4 as nc
 import numpy as np
@@ -105,6 +113,8 @@ KEY_FIELDS = {
         "subsurface soil water": ("H2OSOI_LIQ + H2OSOI_ICE, soil layers 4 and below (kg m-2)",
                                   "active columns, cols1d_wtxy*cos(lat)"),
         "surface soil temperature": ("T_SOISNO, soil layer 1 (K)", "active columns, cols1d_wtxy*cos(lat)"),
+        "subsurface soil temperature": ("T_SOISNO, soil layers 4-10, depth-weighted over 0.09-2.89 m (K)",
+                                        "active columns, cols1d_wtxy*cos(lat)"),
     },
 }
 
@@ -120,16 +130,38 @@ OBS_FIELDS = {
         "surface soil water": "swvl1",
         "subsurface soil water": "swvl2-4",
         "surface soil temperature": "stl1",
+        "subsurface soil temperature": "stl2-4",
     },
 }
 
 ERA5_ROOT = "/global/cfs/projectdirs/m3522/cmip6/ERA5/e5.oper.an.sfc"
 ERA5_CODES = {
     "ci": "128_031_ci", "sd": "128_141_sd", "stl1": "128_139_stl1",
+    "stl2": "128_170_stl2", "stl3": "128_183_stl3", "stl4": "128_236_stl4",
     "swvl1": "128_039_swvl1", "swvl2": "128_040_swvl2",
     "swvl3": "128_041_swvl3", "swvl4": "128_042_swvl4",
 }
 ERA5_SWVL_THICKNESS = {"swvl1": 0.07, "swvl2": 0.21, "swvl3": 0.72, "swvl4": 1.89}   # m
+ERA5_STL_THICKNESS = {"stl2": 0.21, "stl3": 0.72, "stl4": 1.89}                       # m
+# Depth-weighted ERA5 layer groups: name -> {variable: layer thickness (m)}.
+ERA5_LAYER_GROUPS = {
+    "swvl2-4": {v: ERA5_SWVL_THICKNESS[v] for v in ("swvl2", "swvl3", "swvl4")},
+    "stl2-4": ERA5_STL_THICKNESS,
+}
+
+# ELM standard soil layers (nlevgrnd = 15): node depths z_j = 0.025 (exp(0.5 (j - 0.5)) - 1) m and
+# interfaces halfway between nodes. The restart does not store them.
+_ELM_Z = 0.025 * (np.exp(0.5 * (np.arange(1, 16) - 0.5)) - 1)
+ELM_SOIL_INTERFACES = np.concatenate([[0.0], 0.5 * (_ELM_Z[:-1] + _ELM_Z[1:]), [1.5 * _ELM_Z[-1] - 0.5 * _ELM_Z[-2]]])
+# Subsurface soil temperature: soil layers 4-10, each weighted by its thickness above 2.89 m (the
+# bottom of ERA5 stl4), so the model layers cover the depth range of ERA5 stl2-4.
+ELM_TSUB_WEIGHTS = np.clip(np.minimum(ELM_SOIL_INTERFACES[4:11], 2.89) - ELM_SOIL_INTERFACES[3:10], 0.0, None)
+
+# Observation sets other than ERA5 (0.25 degree), recognized from the root
+# layout. Both are on a 1-degree grid, lat -89.5..89.5, lon 0.5..359.5.
+ERA5_LAND_FILE = "1x1/3hourly/ERA5_Land_{date}_00UTC.nc"     # one 00Z snapshot per file
+NSIDC_FILE = "1x1/daily/ICEFRAC.daily.{year:04d}.nc"         # daily means, one file per year
+NSIDC_VARS = {"ci": "ICEFRAC"}
 
 
 def metric_table(obs_fields: Any | None = None) -> pd.DataFrame:
@@ -210,11 +242,46 @@ def _resolve_obs_fields(
     return out
 
 
+def obs_source(root: str | Path | None = None) -> str:
+    """Observation set under ``root``: ``"era5"``, ``"era5_land"``, or ``"nsidc"``."""
+    root = Path(ERA5_ROOT if root is None else root)
+    if (root / "1x1" / "3hourly").is_dir() and any((root / "1x1" / "3hourly").glob("ERA5_Land_*.nc")):
+        return "era5_land"
+    if (root / "1x1" / "daily").is_dir() and any((root / "1x1" / "daily").glob("ICEFRAC.daily.*.nc")):
+        return "nsidc"
+    return "era5"
+
+
 def era5_file(var: str, year: int, month: int, era5_root: str | Path | None = None) -> Path | None:
     root = ERA5_ROOT if era5_root is None else era5_root
     hits = glob.glob(f"{Path(root)}/{year:04d}{month:02d}/"
                      f"e5.oper.an.sfc.{ERA5_CODES[var]}.ll025sc.{year:04d}{month:02d}0100_*.nc")
     return Path(hits[0]) if hits else None
+
+
+def _nsidc_time_index(path: Path, year: int, mmdd: str) -> int | None:
+    """Index of <year>-<mmdd> in a NSIDC daily file (time in days since 1970-01-01)."""
+    day = (np.datetime64(f"{year:04d}-{mmdd}") - np.datetime64("1970-01-01")).astype(int)
+    with nc.Dataset(path, "r") as ds:
+        hits = np.flatnonzero(np.floor(ds.variables["time"][:]) == day)
+    return int(hits[0]) if hits.size else None
+
+
+def obs_file(var: str, year: int, mmdd: str, root: str | Path | None = None) -> Path | None:
+    """File holding observed ``var`` on <year>-<mmdd> under ``root``, or None."""
+    source = obs_source(root)
+    if source == "era5":
+        return era5_file(var, year, int(mmdd[:2]), era5_root=root)
+    if source == "era5_land":
+        path = Path(root) / ERA5_LAND_FILE.format(date=f"{year:04d}-{mmdd}")
+        if not path.is_file():
+            return None
+        with nc.Dataset(path, "r") as ds:
+            return path if var in ds.variables else None
+    if var not in NSIDC_VARS:
+        return None
+    path = Path(root) / NSIDC_FILE.format(year=year)
+    return path if path.is_file() and _nsidc_time_index(path, year, mmdd) is not None else None
 
 
 def era5_available(
@@ -239,7 +306,6 @@ def era5_available(
         mmdd = str(mmdd_or_components)
         actual_components = components or ALL_COMPONENTS
 
-    month = int(mmdd[:2])
     roots = _resolve_obs_roots(obs_root=obs_root, era5_root=era5_root)
     fmap = _resolve_obs_fields(obs_fields)
     for c in actual_components:
@@ -249,9 +315,9 @@ def era5_available(
         needed = {
             v
             for f in fmap[c].values()
-            for v in (["swvl2", "swvl3", "swvl4"] if f == "swvl2-4" else [f])
+            for v in (list(ERA5_LAYER_GROUPS[f]) if f in ERA5_LAYER_GROUPS else [f])
         }
-        if not all(era5_file(v, year, month, era5_root=c_root) is not None for v in needed):
+        if not all(obs_file(v, year, mmdd, root=c_root) is not None for v in needed):
             return False
     return True
 
@@ -270,6 +336,7 @@ class SelectionPlan:
     era5_root: str = ERA5_ROOT
     obs_roots: dict[str, str] = field(default_factory=lambda: _resolve_obs_roots())
     obs_fields: dict[str, dict[str, str]] = field(default_factory=lambda: _resolve_obs_fields())
+    label: str = ""               # output subdirectory; defaults to the branch
 
     @property
     def mmdd(self) -> str:
@@ -308,9 +375,10 @@ def make_plan(
     last_year: int | None = None,
     exclude_years: Iterable[int] = (),
     exclude_target_year: bool = True,
+    label: str | None = None,
 ) -> SelectionPlan:
     """Candidate years (all components available) and output directory
-    ``<out_root>/YYYYMMDD/<branch>``.
+    ``<out_root>/YYYYMMDD/<label>`` (``label`` defaults to the branch).
 
     If ``obs_root`` / ``era5_root`` or ``obs_fields`` are ``None`` (or omitted
     for a component), the default ERA5 setup is used automatically.
@@ -383,12 +451,13 @@ def make_plan(
         candidate_years=years,
         src_root=str(src_root),
         src_prefix=src_prefix,
-        out_dir=str(out_root / target_date.replace("-", "") / branch),
+        out_dir=str(out_root / target_date.replace("-", "") / (label or branch)),
         out_prefix=out_prefix,
         excluded_years=sorted(excluded),
         era5_root=resolved_roots.get("elm", ERA5_ROOT),
         obs_roots=resolved_roots,
         obs_fields=resolved_fields,
+        label=label or branch,
     )
 
 
@@ -430,7 +499,10 @@ def read_key_fields(component: str, path: Path) -> dict[str, tuple[np.ndarray, n
             out["snow water equivalent"] = (_clean(_read(ds, "H2OSNO")), weight)
             out["surface soil water"] = (water[:, :3].sum(axis=1), weight)
             out["subsurface soil water"] = (water[:, 3:].sum(axis=1), weight)
-            out["surface soil temperature"] = (_clean(_read(ds, "T_SOISNO")[:, k]), weight)
+            tsoi = _clean(_read(ds, "T_SOISNO")[:, k:])
+            out["surface soil temperature"] = (tsoi[:, 0], weight)
+            out["subsurface soil temperature"] = (
+                tsoi[:, 3:10] @ ELM_TSUB_WEIGHTS / ELM_TSUB_WEIGHTS.sum(), weight)
         else:
             raise ValueError(f"No key fields for {component}")
     return out
@@ -532,21 +604,51 @@ def _era5_index(lat: np.ndarray, lon: np.ndarray) -> tuple[np.ndarray, np.ndarra
     return i, j
 
 
+def _obs_slice(var: str, year: int, mmdd: str, root: str | Path) -> np.ndarray:
+    """Observed ``var`` on <year>-<mmdd> on the native grid of ``root``, NaN where missing."""
+    source = obs_source(root)
+    if source == "era5":
+        return _era5_slice(var, year, mmdd, era5_root=root)
+    path = obs_file(var, year, mmdd, root=root)
+    if path is None:
+        raise FileNotFoundError(f"{source} {var} for {year}-{mmdd} not found under {root}")
+    with nc.Dataset(path, "r") as ds:
+        if source == "era5_land":
+            data = ds.variables[var][0]
+        else:
+            data = ds.variables[NSIDC_VARS[var]][_nsidc_time_index(path, year, mmdd)]
+    data = np.ma.filled(np.ma.asarray(data).astype(np.float64), np.nan)
+    data[np.abs(data) > SPVAL_THRESHOLD] = np.nan
+    return data
+
+
+def _obs_index(lat: np.ndarray, lon: np.ndarray, root: str | Path) -> tuple[np.ndarray, np.ndarray]:
+    """Nearest-cell indices of (lat, lon) on the grid of ``root``."""
+    if obs_source(root) == "era5":
+        return _era5_index(lat, lon)
+    i = np.clip(np.floor(lat + 90.0).astype(np.int64), 0, 179)     # lat -89.5 .. 89.5
+    j = np.floor(np.mod(lon, 360.0)).astype(np.int64) % 360        # lon 0.5 .. 359.5
+    return i, j
+
+
 def read_obs_fields(plan: SelectionPlan, component: str, year: int, points: dict) -> list[np.ndarray]:
-    """ERA5 values of the component's observable fields at the comparison points."""
-    i, j = _era5_index(points["lat"], points["lon"])
+    """Observed values of the component's observable fields at the comparison points."""
+    c_root = plan.obs_root_for(component)
+    i, j = _obs_index(points["lat"], points["lon"], c_root)
     out = []
     cache: dict[str, np.ndarray] = {}
-    c_root = plan.obs_root_for(component)
 
     def era5(var):
         if var not in cache:
-            cache[var] = _era5_slice(var, year, plan.mmdd, era5_root=c_root)[i, j]
+            cache[var] = _obs_slice(var, year, plan.mmdd, c_root)[i, j]
         return cache[var]
 
     for var in plan.obs_fields_for(component).values():
-        if var == "swvl2-4":
-            out.append(sum(era5(v) * ERA5_SWVL_THICKNESS[v] for v in ("swvl2", "swvl3", "swvl4")))
+        if var == "swvl2-4":      # total water over the layers (m water)
+            out.append(sum(era5(v) * dz for v, dz in ERA5_LAYER_GROUPS[var].items()))
+        elif var in ERA5_LAYER_GROUPS:     # depth-weighted mean (temperature)
+            group = ERA5_LAYER_GROUPS[var]
+            out.append(sum(era5(v) * dz for v, dz in group.items()) / sum(group.values()))
         else:
             out.append(era5(var))
     return out
@@ -562,11 +664,14 @@ def load_obs_fields(
     """ERA5 fields ``{name: values[n_years, n_points]}`` at the comparison points.
 
     With ``cache_dir``, every year read is kept in
-    ``<cache_dir>/obs_<component>_<MM-DD>.npz`` and reused.
+    ``<cache_dir>/obs_<component>_<MM-DD>.npz`` (ERA5) or
+    ``obs_<component>_<source>_<MM-DD>.npz`` (other observation sets) and reused.
     """
     names = list(plan.obs_fields_for(component))
     points = comparison_points(plan, component, cache_dir)
-    cache = Path(cache_dir) / f"obs_{component}_{plan.mmdd}.npz" if cache_dir else None
+    source = obs_source(plan.obs_root_for(component))
+    tag = "" if source == "era5" else f"{source}_"
+    cache = Path(cache_dir) / f"obs_{component}_{tag}{plan.mmdd}.npz" if cache_dir else None
     stored: dict[int, list[np.ndarray]] = {}
     if cache is not None and cache.is_file():
         with np.load(cache) as z:
@@ -579,7 +684,7 @@ def load_obs_fields(
     t0 = time.time()
     for n, year in enumerate(missing):
         stored[year] = read_obs_fields(plan, component, year, points)
-        log(f"  ERA5 {component} {year}-{plan.mmdd} read ({n + 1}/{len(missing)}, {time.time() - t0:.0f} s)")
+        log(f"  {source} {component} {year}-{plan.mmdd} read ({n + 1}/{len(missing)}, {time.time() - t0:.0f} s)")
 
     if cache is not None and missing:
         cache.parent.mkdir(parents=True, exist_ok=True)
@@ -607,18 +712,38 @@ def _columns_to_gridcells(values: np.ndarray, weight: np.ndarray, col_grid: np.n
     return out, wg
 
 
+def box_offsets(box: tuple[float, float] | None, shifts: int = 1) -> list[tuple[float, float]]:
+    """Grid offsets (dlat, dlon degrees) for ``shifts`` placements of the box edges.
+
+    1: the standard grid; 2: also shifted by half a box in both directions;
+    4: also shifted by half a box in latitude only and in longitude only.
+    """
+    if box is None or shifts == 1:
+        return [(0.0, 0.0)]
+    dlat, dlon = box
+    if shifts == 2:
+        return [(0.0, 0.0), (dlat / 2, dlon / 2)]
+    if shifts == 4:
+        return [(0.0, 0.0), (dlat / 2, 0.0), (0.0, dlon / 2), (dlat / 2, dlon / 2)]
+    raise ValueError(f"box shifts must be 1, 2, or 4, got {shifts}")
+
+
 def _to_boxes(values: np.ndarray, weight: np.ndarray, lat: np.ndarray, lon: np.ndarray,
-              box: tuple[float, float]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+              box: tuple[float, float], offset: tuple[float, float] = (0.0, 0.0),
+              ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Weighted means over lat-lon boxes of ``box = (dlat, dlon)`` degrees.
 
-    Returns (box values, box weights, box index of each point). Points missing
-    in any row are left out.
+    ``offset = (olat, olon)`` shifts the box edges by that many degrees (the
+    polar bands are then partial boxes). Returns (box values, box weights, box
+    index of each point). Points missing in any row are left out.
     """
     dlat, dlon = box
+    olat, olon = offset
+    nlat = int(np.ceil((180 + olat) / dlat - 1e-9))
     nlon = int(round(360 / dlon))
-    index = (np.minimum(np.floor((lat + 90) / dlat), round(180 / dlat) - 1).astype(np.int64) * nlon
-             + np.floor(np.mod(lon, 360) / dlon).astype(np.int64) % nlon)
-    nbox = int(round(180 / dlat)) * nlon
+    index = (np.minimum(np.floor((lat + 90 + olat) / dlat), nlat - 1).astype(np.int64) * nlon
+             + np.floor(np.mod(lon + olon, 360) / dlon).astype(np.int64) % nlon)
+    nbox = nlat * nlon
     valid = np.all(np.isfinite(values), axis=0)
     w = np.where(valid, weight, 0.0)
     wb = np.bincount(index, weights=w, minlength=nbox)
@@ -629,11 +754,11 @@ def _to_boxes(values: np.ndarray, weight: np.ndarray, lat: np.ndarray, lon: np.n
     return out, wb, index
 
 
-def _apply_box(values, weight, lat, lon, box, obs=None):
+def _apply_box(values, weight, lat, lon, box, obs=None, offset=(0.0, 0.0)):
     """Aggregate model (and observed) values to boxes with the model weights.
 
     With ``obs``, both are averaged over the same points: those valid in every
-    model and observed row.
+    model and observed row. ``offset`` shifts the box edges (see ``_to_boxes``).
     """
     if box is None:
         return values, weight, obs
@@ -641,9 +766,9 @@ def _apply_box(values, weight, lat, lon, box, obs=None):
         valid = np.all(np.isfinite(values), axis=0) & np.all(np.isfinite(obs), axis=0)
         values = np.where(valid, values, np.nan)
         obs = np.where(valid, obs, np.nan)
-    agg, wb, _ = _to_boxes(values, weight, lat, lon, box)
+    agg, wb, _ = _to_boxes(values, weight, lat, lon, box, offset)
     if obs is not None:
-        obs, _, _ = _to_boxes(obs, weight, lat, lon, box)
+        obs, _, _ = _to_boxes(obs, weight, lat, lon, box, offset)
     return agg, wb, obs
 
 
@@ -715,6 +840,7 @@ def compute_distances(
     plan: SelectionPlan,
     *,
     box: tuple[float, float] | None = None,
+    box_shifts: int = 1,
     component_weights: Mapping[str, float] | None = None,
     cache_dir: Path | None = None,
     log=print,
@@ -723,7 +849,9 @@ def compute_distances(
 
     ``box = (dlat, dlon)`` compares area-weighted means over lat-lon boxes of
     that size instead of individual model points (ERA5 is averaged over the
-    same points and boxes).
+    same points and boxes). With ``box_shifts`` 2 or 4, each field distance is
+    the RMS over that many placements of the box edges (``box_offsets``), so
+    the result does not hinge on where the edges fall.
 
     Columns: ``<component>: <field>`` (d_f), ``<component>`` (D_c), ``joint`` (D).
     """
@@ -738,8 +866,9 @@ def compute_distances(
         if plan.branch == "clim":
             lat, lon = _model_points(plan, comp, cache_dir)
             for name, (values, weight) in model.items():
-                values, weight, _ = _apply_box(values, weight, lat, lon, box)
-                table[f"{comp}: {name}"] = field_distance(values, weight)
+                d2 = [field_distance(*_apply_box(values, weight, lat, lon, box, offset=off)[:2]) ** 2
+                      for off in box_offsets(box, box_shifts)]
+                table[f"{comp}: {name}"] = np.sqrt(np.mean(d2, axis=0))
                 cols.append(f"{comp}: {name}")
         else:
             obs = load_obs_fields(plan, comp, plan.candidate_years + [plan.target_year], cache_dir, log)
@@ -749,10 +878,12 @@ def compute_distances(
                 if comp == "elm":
                     values, weight = _columns_to_gridcells(values, weight, points["col_grid"],
                                                            points["lat"].size)
-                values, weight, o = _apply_box(values, weight, points["lat"], points["lon"], box,
-                                               obs=obs[name])
-                table[f"{comp}: {name}"] = field_distance(
-                    values, weight, obs_years=o[:-1], obs_target=o[-1])
+                d2 = []
+                for off in box_offsets(box, box_shifts):
+                    vb, wb, o = _apply_box(values, weight, points["lat"], points["lon"], box,
+                                           obs=obs[name], offset=off)
+                    d2.append(field_distance(vb, wb, obs_years=o[:-1], obs_target=o[-1]) ** 2)
+                table[f"{comp}: {name}"] = np.sqrt(np.mean(d2, axis=0))
                 cols.append(f"{comp}: {name}")
         table[comp] = np.sqrt((table[cols] ** 2).mean(axis=1))
         used.append(comp)
@@ -824,6 +955,7 @@ def write_selected_restarts(
     *,
     mode: str = "joint",
     box: tuple[float, float] | None = None,
+    box_shifts: int = 1,
     component_weights: Mapping[str, float] | None = None,
     overwrite: bool = False,
     log=print,
@@ -836,24 +968,33 @@ def write_selected_restarts(
     out_dir = Path(plan.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     copied = {}
+    previous = {}
+    if (out_dir / "selection.json").is_file():
+        previous = json.loads((out_dir / "selection.json").read_text()).get("selection", {})
     for comp, year in selection.items():
         src, dst = plan.source(comp, year), plan.output(comp)
-        if dst.exists() and not overwrite:
-            raise FileExistsError(f"{dst} exists; pass overwrite=True to replace it")
-        t0 = time.time()
-        tmp = dst.with_name(f".{dst.name}.tmp")
-        shutil.copyfile(src, tmp)
-        os.replace(tmp, dst)
         info = COMPONENTS[comp]
+        unchanged = (dst.is_file() and previous.get(comp, {}).get("source") == str(src)
+                     and dst.stat().st_size == src.stat().st_size)
+        if unchanged:
+            log(f"  {comp}: {dst} already holds {year}; not copied")
+        else:
+            if dst.exists() and not overwrite:
+                raise FileExistsError(f"{dst} exists; pass overwrite=True to replace it")
+            t0 = time.time()
+            tmp = dst.with_name(f".{dst.name}.tmp")
+            shutil.copyfile(src, tmp)
+            os.replace(tmp, dst)
+            log(f"  {comp}: {src.name} -> {dst} ({time.time() - t0:.0f} s)")
         pointer = f"./{dst.name}" if info["pointer"] == "file" else f"{plan.target_date}_00:00:00"
         (out_dir / info["rpointer"]).write_text(pointer + "\n")
         copied[comp] = {"year": int(year), "source": str(src), "output": str(dst)}
-        log(f"  {comp}: {src.name} -> {dst} ({time.time() - t0:.0f} s)")
 
     summary = {
         "plan": asdict(plan),
         "mode": mode,
         "box_degrees": list(box) if box else None,
+        "box_shifts": box_shifts,
         "component_weights": dict(component_weights or {}),
         "selection": copied,
         "fields": [c for c in distances.columns if ": " in c],
@@ -867,6 +1008,7 @@ def run_selection(
     plan: SelectionPlan,
     *,
     box: tuple[float, float] | None = None,
+    box_shifts: int = 1,
     mode: str = "joint",
     component_weights: Mapping[str, float] | None = None,
     cache_dir: Path | None = None,
@@ -877,12 +1019,12 @@ def run_selection(
     """Compute distances, select the year(s), and optionally copy the files."""
     log(f"{plan.target_date} [{plan.branch}]: {len(plan.candidate_years)} candidate years "
         f"({plan.candidate_years[0]}-{plan.candidate_years[-1]}, excluded {plan.excluded_years})")
-    distances = compute_distances(plan, box=box, component_weights=component_weights,
-                                  cache_dir=cache_dir, log=log)
+    distances = compute_distances(plan, box=box, box_shifts=box_shifts,
+                                  component_weights=component_weights, cache_dir=cache_dir, log=log)
     selection = select_years(distances, plan.components, mode)
     log(f"  selected ({mode}): {selection}")
     if write:
-        write_selected_restarts(plan, selection, distances, mode=mode, box=box,
+        write_selected_restarts(plan, selection, distances, mode=mode, box=box, box_shifts=box_shifts,
                                 component_weights=component_weights, overwrite=overwrite, log=log)
     return distances, selection
 
