@@ -23,6 +23,11 @@ Sections can be plotted raw (``field="qbo"``) or as anomalies
 experiments), or the first month (``first_month``). Temperature defaults to
 ``ref_clim`` anomalies.
 
+``plot_hovmoller_ua_ta`` draws the U and T sections in one figure (one row each)
+against a single reference; ``plot_amplitude_ua_ta``, ``plot_skill_bars_ua_ta``,
+``plot_persistence_ua_ta`` and ``plot_coherence_ua_ta`` do the same for the
+other metrics (T scored as anomalies, see ``QboPlotter.to_field``).
+
 ``plot_t_shear_corr_profiles`` and ``plot_t_shear_scatter`` diagnose the
 thermal-wind coupling of the QBO: corr_t(T', dU/dln p) by level and scatter
 in a layer.
@@ -87,6 +92,24 @@ def _line_kwargs(name: str, style_map: dict | None, ref: str | None = None) -> d
     kw.setdefault("linestyle", "-")
     kw.setdefault("linewidth", 2.2 if name in (ref, *_EMPHASIS) else 1.6)
     return kw
+
+
+_PRESSURE_TICKS = (1, 2, 5, 10, 20, 30, 50, 70, 100)
+
+
+def _pressure_axis(ax, ylim=(100, 1), labelsize=None) -> None:
+    """Log pressure axis, surface down, labelled in plain hPa (1, 2, 5, 10, ...) instead of 10^n."""
+    ticks = [t for t in _PRESSURE_TICKS if min(ylim) <= t <= max(ylim)]
+    ax.set_yscale("log")
+    ax.set_ylim(*ylim)
+    ax.set_yticks(ticks, [f"{t:g}" for t in ticks])
+    ax.yaxis.set_minor_locator(plt.NullLocator())
+    if labelsize is not None:
+        ax.tick_params(axis="y", labelsize=labelsize)
+
+
+def _errorbar_text(errorbar: str) -> str:
+    return "95% block-bootstrap CI" if errorbar == "bootstrap" else "half-range across references"
 
 
 def _yyyymm(tvals) -> np.ndarray:
@@ -241,11 +264,9 @@ class QboPlotter:
                              levels=levels, cmap=cmap, extend="both")
             ax.set_title(f"({string.ascii_lowercase[fig_id + i]}) {title}", fontsize=fs["title"], loc="left")
             ax.set_title(self.parameter.main_title, fontsize=fs["title"] * 0.95, loc="right")
-            ax.set_yscale("log")
-            ax.set_ylim(100, 1)
+            _pressure_axis(ax, labelsize=fs["tick"])
             if c == 0:
-                ax.set_ylabel("hPa", fontsize=fs["label"])
-                ax.tick_params(axis="y", labelsize=fs["tick"])
+                ax.set_ylabel("Pressure (hPa)", fontsize=fs["label"])
             else:
                 ax.tick_params(axis="y", labelleft=False)
             if r == nrows - 1 or i + ncols >= n:
@@ -303,31 +324,32 @@ class QboPlotter:
 
     def plot_amplitude(self, ref: str, sources, *, amplitude_method: AmpMethod = "rms", style_map=None,
                        figsize=(6.8, 7.8), font_scale=12, xlim=None, ylim=(100, 1), legend_outside=True,
-                       fig_id=0, skip_bad=True) -> plt.Figure:
-        """Amplitude profiles of every source with the reference on top."""
+                       fig_id=0, skip_bad=True, ax=None, legend=True) -> plt.Figure:
+        """Amplitude profiles of every source with the reference on top (into ``ax`` if given)."""
         ref_d, tests = self.load_set(ref, sources, amplitude_method, skip_bad)
-        fig, ax = plt.subplots(figsize=figsize)
+        fig, ax = plt.subplots(figsize=figsize) if ax is None else (ax.figure, ax)
         for d in [*tests, ref_d]:
             ax.plot(d.amplitude.values, d.amplitude.plev.values, label=d.name,
                     **_line_kwargs(d.name, style_map, ref))
         p = self.parameter
         ax.set_title(f"({string.ascii_lowercase[fig_id]}) {p.main_title}", fontsize=font_scale * 1.05, loc="left")
         ax.set_xlabel(f"{amplitude_method.upper()} amplitude ({p.var_units})", fontsize=font_scale)
-        ax.set_ylabel("hPa", fontsize=font_scale)
-        ax.set_yscale("log")
-        ax.set_ylim(*ylim)
+        ax.set_ylabel("Pressure (hPa)", fontsize=font_scale)
+        _pressure_axis(ax, ylim)
         if xlim is not None:
             ax.set_xlim(*xlim)
         ax.grid(True, which="both", alpha=0.25)
         ax.tick_params(labelsize=font_scale * 0.95)
-        if legend_outside:
-            ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=font_scale * 0.9, frameon=False)
-        else:
-            ax.legend(loc="best", fontsize=font_scale * 0.9, frameon=False)
+        if legend:
+            ax.legend(**(dict(loc="center left", bbox_to_anchor=(1.02, 0.5)) if legend_outside else dict(loc="best")),
+                      fontsize=font_scale * 0.9, frameon=False)
         return fig
 
     def skill_table(self, refs, sources, *, n_boot=500, block_len=6, seed=0, skip_bad=True):
-        """RMSE/PCC of every source averaged over ``refs`` (list) with CI and reference half-range."""
+        """RMSE/PCC of every source averaged over ``refs`` (list) with CI and reference half-range.
+
+        Scored on the plotted field (``to_field``; anomalies take the climatology of ``refs[0]``).
+        """
         refs = [refs] if isinstance(refs, str) else list(refs)
         ref_ds = [self.load(r) for r in refs]
         rows = []
@@ -341,19 +363,19 @@ class QboPlotter:
                     raise
                 print(f"[SKIP] {s}: {e}")
                 continue
-            per = np.array([self.rmse_and_pcc(t.qbo, r.qbo) for r in ref_ds])
+            tf, rfs = self.to_field(t.qbo, ref_ds[0].qbo), [self.to_field(r.qbo, ref_ds[0].qbo) for r in ref_ds]
+            per = np.array([self.rmse_and_pcc(tf, r) for r in rfs])
             rmse, pcc, rmse_ci, pcc_ci = self.block_bootstrap_skill(
-                t.qbo, [r.qbo for r in ref_ds], n_boot=n_boot, block_len=block_len, seed=seed)
+                tf, rfs, n_boot=n_boot, block_len=block_len, seed=seed)
             rows.append(dict(source=s, rmse=rmse, pcc=pcc, rmse_lo=rmse_ci[0], rmse_hi=rmse_ci[1],
                              pcc_lo=pcc_ci[0], pcc_hi=pcc_ci[1],
                              rmse_ref_halfrange=0.5 * np.ptp(per[:, 0]), pcc_ref_halfrange=0.5 * np.ptp(per[:, 1])))
-        import pandas as pd
         return pd.DataFrame(rows)
 
     def plot_skill_bars(self, refs, sources, *, errorbar: Literal["bootstrap", "ref_spread"] = "bootstrap",
                         sort_by: Literal["input", "rmse", "pcc"] = "rmse", baseline: str = "CTRL",
                         n_boot=500, block_len=6, seed=0, figsize=(11.0, 4.6), font_scale=12, nrows=1, ncols=2,
-                        rmse_ylim=(0, 20), pcc_ylim=(-0.8, 0.8), fig_id=0, skip_bad=True, table=None):
+                        rmse_ylim=(0, 20), pcc_ylim=(-0.8, 0.8), fig_id=0, skip_bad=True, table=None, axes=None):
         """RMSE and PCC bars vs one reference or averaged over several.
 
         Error bars: 95% block-bootstrap CI (``bootstrap``) or half the range across
@@ -361,6 +383,7 @@ class QboPlotter:
         with the % change vs ``baseline``; with two references their own
         disagreement is shown as a floor. ``table``: a precomputed ``skill_table``
         for the same ``refs`` (``sources`` and the bootstrap options are then unused).
+        ``axes``: an (RMSE, PCC) pair to draw into, without the footnote and layout.
         Returns (figure, table).
         """
         refs = [refs] if isinstance(refs, str) else list(refs)
@@ -380,15 +403,21 @@ class QboPlotter:
             rmse_err = np.vstack([tab.rmse - tab.rmse_lo, tab.rmse_hi - tab.rmse])
             pcc_err = np.vstack([tab.pcc - tab.pcc_lo, tab.pcc_hi - tab.pcc])
         x = np.arange(len(tab))
-        fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
-        ax, ax2 = axes.flat[0], axes.flat[1]
+        own = axes is None
+        if own:
+            fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
+        ax, ax2 = np.ravel(axes)[:2]
+        fig = ax.figure
         tick_fs = font_scale * 0.95
+        var = self.parameter.var_label
         ref_txt = refs[0] if len(refs) == 1 else f"avg over {', '.join(refs)}"
         ax.bar(x, tab.rmse, yerr=rmse_err, color="0.6", capsize=3)
-        ax.set_title(f"({string.ascii_lowercase[fig_id]}) RMSE vs {ref_txt}", fontsize=font_scale * 1.05, loc="left")
+        ax.set_title(f"({string.ascii_lowercase[fig_id]}) {var} RMSE vs {ref_txt}", fontsize=font_scale * 1.05, loc="left")
         ax.set_ylabel(f"RMSE ({self.parameter.var_units})", fontsize=font_scale)
         if rmse_ylim:
             ax.set_ylim(*rmse_ylim)
+        else:  # room above the bars for the % labels and the reference-floor note
+            ax.set_ylim(0, 1.35 * float(np.nanmax(tab.rmse.values + np.atleast_2d(rmse_err)[-1])))
         if baseline in tab.source.values:
             b = float(tab.loc[tab.source == baseline, "rmse"].iloc[0])
             dy = 0.06 * np.diff(ax.get_ylim())[0]
@@ -396,13 +425,13 @@ class QboPlotter:
                 ax.text(xi, v + dy, f"{100 * (v - b) / b:+.0f}%", ha="center", va="bottom", fontsize=tick_fs * 0.85)
         ax2.bar(x, tab.pcc, yerr=pcc_err, color="0.6", capsize=3)
         ax2.axhline(0.0, linewidth=0.8, alpha=0.6)
-        ax2.set_title(f"({string.ascii_lowercase[fig_id + 1]}) PCC vs {ref_txt}", fontsize=font_scale * 1.05, loc="left")
+        ax2.set_title(f"({string.ascii_lowercase[fig_id + 1]}) {var} PCC vs {ref_txt}", fontsize=font_scale * 1.05, loc="left")
         ax2.set_ylabel("PCC", fontsize=font_scale)
         if pcc_ylim:
             ax2.set_ylim(*pcc_ylim)
         if len(refs) == 2:
             r0, r1 = (self.load(r).qbo for r in refs)
-            rmse_b, pcc_b = self.rmse_and_pcc(r0, r1)
+            rmse_b, pcc_b = self.rmse_and_pcc(self.to_field(r1, r0), self.to_field(r0, r0))
             ax.axhline(rmse_b, color="k", linestyle="--", linewidth=0.8)
             ax.text(0.02, 0.96, f"RMSE({refs[0]},{refs[1]}) = {rmse_b:.2f}", transform=ax.transAxes,
                     va="top", fontsize=tick_fs * 0.9)
@@ -413,30 +442,39 @@ class QboPlotter:
             a.set_xticklabels(tab.source, rotation=45, ha="right", fontsize=tick_fs)
             a.tick_params(axis="y", labelsize=tick_fs)
             a.grid(True, axis="y", alpha=0.25)
-        err_txt = "95% block-bootstrap CI" if errorbar == "bootstrap" else "half-range across references"
-        fig.text(0.99, 0.01, f"Error bars: {err_txt}", ha="right", fontsize=tick_fs * 0.8)
-        fig.tight_layout()
+        if own:
+            fig.text(0.99, 0.01, f"Error bars: {_errorbar_text(errorbar)}", ha="right", fontsize=tick_fs * 0.8)
+            fig.tight_layout()
         return fig, tab
 
     def plot_lagcorr_persistence(self, ref: str, sources, *, init_months=3, max_lag=18, style_map=None,
                                  figsize=(9.5, 8.0), font_scale=12, nrows=2, ncols=1, ylim=(-1.0, 1.2),
-                                 fig_id=0, skip_bad=True) -> plt.Figure:
-        """(a) corr_p(initial profile, profile at lag L); (b) corr_p(source, reference) at lag L."""
+                                 fig_id=0, skip_bad=True, axes=None) -> plt.Figure:
+        """(a) corr_p(initial profile, profile at lag L); (b) corr_p(source, reference) at lag L.
+
+        Profiles of the plotted field (``to_field``: T anomalies, so the mean vertical structure
+        does not dominate the correlation). ``axes``: a pair to draw into, without legend and layout.
+        """
         ref_d, tests = self.load_set(ref, sources, skip_bad=skip_bad)
-        ref_arr = ref_d.qbo.values
+        field = {d.name: self.to_field(d.qbo, ref_d.qbo).transpose("time", "plev").values for d in [ref_d, *tests]}
+        ref_arr = field[ref_d.name]
         lmax = min(max_lag, ref_arr.shape[0] - 1) if max_lag is not None else ref_arr.shape[0] - 1
         lags = np.arange(lmax + 1)
         series = [ref_d, *tests]
-        fig, axes = plt.subplots(nrows, ncols, figsize=figsize, sharex=True, squeeze=False)
-        ax1, ax2 = axes.flat[0], axes.flat[1]
+        own = axes is None
+        if own:
+            fig, axes = plt.subplots(nrows, ncols, figsize=figsize, sharex=True, squeeze=False)
+        ax1, ax2 = np.ravel(axes)[:2]
+        fig = ax1.figure
+        var = self.parameter.var_label
         for d in series:
-            arr = d.qbo.values
+            arr = field[d.name]
             x0 = np.nanmean(arr[:init_months], axis=0)
             kw = _line_kwargs(d.name, style_map, ref)
             ax1.plot(lags, [_pcorr(x0, arr[lag]) for lag in lags], label=d.name, **kw)
             ax2.plot(lags, [_pcorr(arr[lag], ref_arr[lag]) for lag in lags], label=d.name, **kw)
-        for k, (ax, title) in enumerate(((ax1, f"Persistence vs initial {init_months}-month profile"),
-                                         (ax2, f"Correlation with {ref}"))):
+        for k, (ax, title) in enumerate(((ax1, f"{var} persistence vs initial {init_months}-month profile"),
+                                         (ax2, f"{var} correlation with {ref}"))):
             ax.axhline(0.0, linewidth=0.8, alpha=0.6)
             ax.set_xlim(0, lags[-1])
             ax.set_ylim(*ylim)
@@ -445,6 +483,8 @@ class QboPlotter:
             ax.tick_params(labelsize=font_scale * 0.95)
             ax.grid(True, alpha=0.25)
         ax2.set_xlabel("Lag (months)", fontsize=font_scale)
+        if not own:
+            return fig
         if ncols > 1:
             ax1.set_xlabel("Lag (months)", fontsize=font_scale)
         h, lab = ax1.get_legend_handles_labels()
@@ -454,10 +494,11 @@ class QboPlotter:
 
     def plot_vertical_coherence(self, ref: str, sources, *, ref_level_hpa=30.0, field: Field | None = None,
                                 anom_mode: AnomMode | None = None, style_map=None, figsize=(6.8, 7.8),
-                                font_scale=12, ylim=(100, 1), fig_id=0, skip_bad=True) -> plt.Figure:
-        """r(p) = corr_t(X(t, p), X(t, p0)) for the reference and every source."""
+                                font_scale=12, ylim=(100, 1), fig_id=0, skip_bad=True, ax=None,
+                                legend=True) -> plt.Figure:
+        """r(p) = corr_t(X(t, p), X(t, p0)) for the reference and every source (into ``ax`` if given)."""
         ref_d, tests = self.load_set(ref, sources, skip_bad=skip_bad)
-        fig, ax = plt.subplots(figsize=figsize)
+        fig, ax = plt.subplots(figsize=figsize) if ax is None else (ax.figure, ax)
         for d in [*tests, ref_d]:
             x = self.to_field(d.qbo, ref_d.qbo, field, anom_mode)
             i0 = int(np.argmin(np.abs(x.plev.values - ref_level_hpa)))
@@ -469,13 +510,149 @@ class QboPlotter:
         ax.set_title(f"({string.ascii_lowercase[fig_id]}) {self.parameter.main_title}: coherence with "
                      f"{ref_level_hpa:g} hPa", fontsize=font_scale * 1.05, loc="left")
         ax.set_xlabel("Correlation over time", fontsize=font_scale)
-        ax.set_ylabel("hPa", fontsize=font_scale)
+        ax.set_ylabel("Pressure (hPa)", fontsize=font_scale)
         ax.set_xlim(-1, 1)
-        ax.set_yscale("log")
-        ax.set_ylim(*ylim)
+        _pressure_axis(ax, ylim)
         ax.grid(True, which="both", alpha=0.25)
-        ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=font_scale * 0.9, frameon=False)
+        ax.tick_params(labelsize=font_scale * 0.95)
+        if legend:
+            ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=font_scale * 0.9, frameon=False)
         return fig
+
+
+# ---------------------------------------------------------------------------
+# U and T in one figure
+# ---------------------------------------------------------------------------
+def ua_ta_plotters(qbo_dir, *, period: str = PERIOD, ta_field: Field = "qbo_anom",
+                   ta_anom_mode: AnomMode = "ref_clim") -> dict[str, QboPlotter]:
+    """{"ua": raw U plotter, "ta": T plotter drawing ``ta_field``/``ta_anom_mode``}."""
+    return {v: QboPlotter(QboPlotParameter.for_variable(v, period=period, default_field=f,
+                                                        default_anom_mode=ta_anom_mode), qbo_dir)
+            for v, f in (("ua", "qbo"), ("ta", ta_field))}
+
+
+def _legend_right(fig, ax, font_scale) -> None:
+    h, lab = ax.get_legend_handles_labels()
+    fig.legend(h, lab, loc="center left", bbox_to_anchor=(1.0, 0.5), fontsize=font_scale * 0.9, frameon=False)
+
+
+def plot_amplitude_ua_ta(qbo_dir, ref: str, sources, *, amplitude_method: AmpMethod = "rms",
+                         xlim=((0, 30), None), figsize=(12.0, 7.0), font_scale=12, **kw) -> plt.Figure:
+    """(a) U and (b) T amplitude profiles (``kw``: ``ua_ta_plotters`` options, ``skip_bad``)."""
+    skip_bad = kw.pop("skip_bad", True)
+    fig, axes = plt.subplots(1, 2, figsize=figsize, sharey=True)
+    for k, (pl, ax, lim) in enumerate(zip(ua_ta_plotters(qbo_dir, **kw).values(), axes, xlim)):
+        pl.plot_amplitude(ref, sources, amplitude_method=amplitude_method, xlim=lim, font_scale=font_scale,
+                          fig_id=k, skip_bad=skip_bad, ax=ax, legend=False)
+    axes[1].set_ylabel("")
+    fig.tight_layout()
+    _legend_right(fig, axes[0], font_scale)
+    return fig
+
+
+def plot_coherence_ua_ta(qbo_dir, ref: str, sources, *, ref_level_hpa=30.0, figsize=(12.0, 7.0), font_scale=12,
+                         **kw) -> plt.Figure:
+    """Vertical coherence with ``ref_level_hpa`` of (a) U and (b) T."""
+    skip_bad = kw.pop("skip_bad", True)
+    fig, axes = plt.subplots(1, 2, figsize=figsize, sharey=True)
+    for k, (pl, ax) in enumerate(zip(ua_ta_plotters(qbo_dir, **kw).values(), axes)):
+        pl.plot_vertical_coherence(ref, sources, ref_level_hpa=ref_level_hpa, font_scale=font_scale, fig_id=k,
+                                   skip_bad=skip_bad, ax=ax, legend=False)
+        ax.set_title(f"({string.ascii_lowercase[k]}) {pl.parameter.var_label}: coherence with "
+                     f"{ref_level_hpa:g} hPa", fontsize=font_scale * 1.05, loc="left")
+    axes[1].set_ylabel("")
+    fig.tight_layout()
+    _legend_right(fig, axes[0], font_scale)
+    return fig
+
+
+def plot_skill_bars_ua_ta(qbo_dir, refs, sources, *, tables: Mapping[str, pd.DataFrame] | None = None,
+                          errorbar: Literal["bootstrap", "ref_spread"] = "bootstrap", n_boot=500, block_len=6,
+                          rmse_ylim=((0, 20), None), pcc_ylim=(-0.8, 0.8), figsize=(11.0, 8.4), font_scale=12,
+                          **kw) -> plt.Figure:
+    """RMSE (left) and PCC (right) bars of U (top) and T (bottom), sources ordered by U RMSE.
+
+    ``tables``: precomputed ``skill_table`` per variable for the same ``refs``.
+    """
+    skip_bad = kw.pop("skip_bad", True)
+    plotters = ua_ta_plotters(qbo_dir, **kw)
+    tabs = {v: tables[v] if tables is not None else
+            pl.skill_table(refs, sources, n_boot=n_boot, block_len=block_len, skip_bad=skip_bad)
+            for v, pl in plotters.items()}
+    order = list(tabs["ua"].sort_values("rmse").source)
+    fig, axes = plt.subplots(2, 2, figsize=figsize)
+    for r, (v, pl) in enumerate(plotters.items()):
+        tab = tabs[v].set_index("source").loc[[s for s in order if s in set(tabs[v].source)]].reset_index()
+        pl.plot_skill_bars(refs, sources, table=tab, sort_by="input", errorbar=errorbar, rmse_ylim=rmse_ylim[r],
+                           pcc_ylim=pcc_ylim, font_scale=font_scale, fig_id=2 * r, axes=axes[r])
+    for ax in axes[0]:
+        ax.tick_params(axis="x", labelbottom=False)
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
+    fig.text(0.99, 0.005, f"Error bars: {_errorbar_text(errorbar)}", ha="right", fontsize=font_scale * 0.75)
+    return fig
+
+
+def plot_persistence_ua_ta(qbo_dir, ref: str, sources, *, init_months=3, max_lag=18, figsize=(14.0, 8.0),
+                           font_scale=12, **kw) -> plt.Figure:
+    """Persistence of the initial profile (top) and correlation with ``ref`` (bottom) for U (left) and T (right)."""
+    skip_bad = kw.pop("skip_bad", True)
+    fig, axes = plt.subplots(2, 2, figsize=figsize, sharex=True, sharey=True)
+    for c, pl in enumerate(ua_ta_plotters(qbo_dir, **kw).values()):
+        pl.plot_lagcorr_persistence(ref, sources, init_months=init_months, max_lag=max_lag, font_scale=font_scale,
+                                    fig_id=2 * c, skip_bad=skip_bad, axes=axes[:, c])
+    for ax in axes[:, 1]:
+        ax.set_ylabel("")
+    fig.tight_layout()
+    _legend_right(fig, axes[0, 0], font_scale)
+    return fig
+
+
+def plot_hovmoller_ua_ta(qbo_dir, ref: str, sources, *, period: str = PERIOD, ta_field: Field = "qbo_anom",
+                         ta_anom_mode: AnomMode = "ref_clim", ylim=(100, 1), w_per_col=4.2, h_per_row=3.4,
+                         font_scale=12, time_every=6, cmap="RdBu_r", skip_bad=True) -> plt.Figure:
+    """Time-pressure sections of U (top row) and T (bottom row) for ``ref`` and every source.
+
+    T is drawn as ``ta_field``/``ta_anom_mode`` (default: anomalies from the ``ref`` monthly
+    climatology); each source panel gives RMSE/PCC vs ``ref`` of the field shown. A source must
+    have both variables on the reference grid, so the two rows share their columns.
+    """
+    plotters = ua_ta_plotters(qbo_dir, period=period, ta_field=ta_field, ta_anom_mode=ta_anom_mode)
+    loaded = {v: pl.load_set(ref, sources, skip_bad=skip_bad) for v, pl in plotters.items()}
+    names = [ref, *(n for n in sources if all(any(t.name == n for t in loaded[v][1]) for v in plotters))]
+    fs = dict(title=round(font_scale), label=round(font_scale * 0.95), tick=round(font_scale * 0.9),
+              anno=round(font_scale * 0.75))
+    fig, axes = plt.subplots(2, len(names), figsize=(w_per_col * len(names), 2 * h_per_row),
+                             sharex=True, sharey=True, squeeze=False, layout="constrained")
+    for r, (v, pl) in enumerate(plotters.items()):
+        ref_d, tests = loaded[v]
+        by_name = {d.name: d for d in [ref_d, *tests]}
+        ref_f = pl.to_field(ref_d.qbo, ref_d.qbo)
+        levels, ticks = pl._default_levels(diff=False)
+        p = pl.parameter
+        cs = None
+        for c, n in enumerate(names):
+            ax = axes[r, c]
+            da = ref_f if n == ref else pl.to_field(by_name[n].qbo, ref_d.qbo)
+            cs = ax.contourf(np.arange(da.sizes["time"]), da.plev.values, da.transpose("plev", "time").values,
+                             levels=levels, cmap=cmap, extend="both")
+            ax.set_title(f"({string.ascii_lowercase[r * len(names) + c]}) {n}", fontsize=fs["title"], loc="left")
+            _pressure_axis(ax, ylim, labelsize=fs["tick"])
+            if n != ref:
+                rmse, pcc = pl.rmse_and_pcc(da, ref_f)
+                ax.text(0.97, 0.04, f"RMSE {rmse:.2f} {p.var_units}\nPCC {pcc:.2f}", transform=ax.transAxes,
+                        ha="right", va="bottom", fontsize=fs["anno"],
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="0.7", alpha=0.85))
+            if r == 1:
+                QboPlotter._time_ticks(ax, da.time.values, time_every, fs["tick"])
+        anom = pl._field_tag(None, None) != "raw"
+        axes[r, 0].set_ylabel(f"{QBO_VARIABLES[v]['long_name'].capitalize()}\nPressure (hPa)",
+                              fontsize=fs["label"])
+        cbar = fig.colorbar(cs, ax=axes[r, :], ticks=ticks, shrink=0.9, pad=0.01, aspect=15)
+        cbar.ax.tick_params(labelsize=fs["tick"])
+        cbar.set_label(f"{p.var_label}{' anomaly' if anom else ''} ({p.var_units})", fontsize=fs["label"])
+    fig.suptitle(f"QBO 5°S–5°N: U and {'T anomalies' if ta_field == 'qbo_anom' else 'T'} vs {ref}",
+                 fontsize=fs["title"])
+    return fig
 
 
 # ---------------------------------------------------------------------------
@@ -594,7 +771,7 @@ def plot_qbo_timing(qbo_dir, ref: str, sources, timing, *, period: str = PERIOD,
     axes[0].set_yticks(p, [f"{v:g}" for v in p])
     axes[0].minorticks_off()
     axes[0].set_xlabel("Westerly onset (months since start)", fontsize=font_scale)
-    axes[0].set_ylabel("hPa", fontsize=font_scale)
+    axes[0].set_ylabel("Pressure (hPa)", fontsize=font_scale)
     axes[0].set_title("(a) Westerly onset by level", loc="left", fontsize=font_scale)
     for k, (ax, lev) in enumerate(zip(axes[1:], levels_hpa)):
         ax.axhline(0, color="k", linewidth=0.6)
@@ -662,10 +839,9 @@ def plot_t_shear_corr_profiles(qbo_dir, ref: str, sources, *, period: str = PERI
     ax.set_title(fr"({string.ascii_lowercase[fig_id]}) Corr[$T^\prime$, $\partial U/\partial \ln p$] "
                  f"(mean {lo:g}–{hi:g} hPa)", fontsize=font_scale * 1.05, loc="left")
     ax.set_xlabel("Correlation over time", fontsize=font_scale)
-    ax.set_ylabel("hPa", fontsize=font_scale)
+    ax.set_ylabel("Pressure (hPa)", fontsize=font_scale)
     ax.set_xlim(*xlim)
-    ax.set_yscale("log")
-    ax.set_ylim(*ylim)
+    _pressure_axis(ax, ylim)
     ax.grid(True, which="both", alpha=0.25)
     ax.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=font_scale * 0.85, frameon=False)
     return fig
@@ -768,14 +944,9 @@ def plot_thermal_wind_consistency(qbo_dir, ref: str, groups: Mapping[str, Any], 
     err = {s: thermal_wind_errors(qbo_dir, ref, s, slope, period=period) for s in dict.fromkeys(names)}
     lead = np.arange(1, next(iter(err.values()))[0].sizes["time"] + 1)
     color_of = {s: c for (g, members), c in zip(groups.items(), colors) for s in members}
-    ticks = [t for t in (5, 10, 20, 30, 50, 70, 100) if min(ylim) <= t <= max(ylim)]
 
     def pressure_axis(ax):
-        ax.set_yscale("log")
-        ax.set_ylim(*ylim)
-        ax.set_yticks(ticks)
-        ax.set_yticklabels([f"{t:g}" for t in ticks])
-        ax.minorticks_off()
+        _pressure_axis(ax, ylim)
         ax.tick_params(labelsize=fs * 0.9)
 
     fig = plt.figure(figsize=figsize)
