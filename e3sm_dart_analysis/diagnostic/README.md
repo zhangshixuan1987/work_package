@@ -91,11 +91,11 @@ S2S forecast verification is consolidated into two parameterized workflows:
 1. `jupyter/fcst_s2s_pcc/` computes regional PCC/ACC and RMSE, horizontal ACC maps, and plots cached regional skill.
 2. `jupyter/fcst_s2s_tcc/` computes lead-window TCC/RMSE/bias maps, reduces them regionally, and plots cached map or regional products.
 3. Shared experiment, observation, metric, and plotting implementations live in `configs/s2s_config.py` and `util/s2s_*.py`.
-4. `jupyter/fcst_atm_eval/01_compute_and_plot_ens_ts.ipynb` provides cached regional ensemble time series against observations and diagnoses each experiment's initial shock, and `jupyter/fcst_atm_eval/06_compute_and_plot_decay_timescales.ipynb` diagnoses experiment-minus-baseline decay timescales.
+4. `jupyter/fcst_atm_eval/02_compute_and_plot_ens_ts.ipynb` provides cached regional ensemble time series against observations and diagnoses each experiment's initial shock, and `jupyter/fcst_atm_eval/06_compute_and_plot_decay_timescales.ipynb` diagnoses experiment-minus-baseline decay timescales.
 
 The TCC workflow also includes the Dec2011 `da` analysis selection inherited from `6_s2s_skills/`; weekly, biweekly, 15-day, and monthly caches remain separate. The former seasonal and ensemble-slice notebook copies in `analysis_s2s_pcc/` and `analysis_s2s_tcc/` are superseded by notebook parameters. Cached NetCDF products are reused unless `force_compute = True`.
 
-The legacy `cross_correlation/` workflow is consolidated into `jupyter/fcst_lac_eval/06_compute_and_plot_ensemble_cross_correlation.ipynb`, and the generic `ensemble_plot/` notebook is superseded by `jupyter/fcst_atm_eval/01_compute_and_plot_ens_ts.ipynb`, which plots hindcast member time series and spatial extremes with initial-shock diagnostics. The duplicate `fcst_initial_shock/` notebook is superseded by the cached `jupyter/fcst_atm_eval/06_compute_and_plot_decay_timescales.ipynb` workflow.
+The legacy `cross_correlation/` workflow is consolidated into `jupyter/fcst_lac_eval/06_compute_and_plot_ensemble_cross_correlation.ipynb`, and the generic `ensemble_plot/` notebook is superseded by `jupyter/fcst_atm_eval/02_compute_and_plot_ens_ts.ipynb`, which plots hindcast member time series and spatial extremes with initial-shock diagnostics. The duplicate `fcst_initial_shock/` notebook is superseded by the cached `jupyter/fcst_atm_eval/06_compute_and_plot_decay_timescales.ipynb` workflow.
 
 Atmospheric restart stability checking is maintained in `jupyter/analysis_atm_init/04_check_restart_stability.ipynb` with reusable processing in `util/atm_restart_stability.py`. It supersedes the broken one-off `sanity_check/` notebook and caches request-specific range, non-finite, spatial, and transition diagnostics.
 
