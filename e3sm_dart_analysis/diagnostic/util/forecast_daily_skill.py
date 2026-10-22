@@ -20,7 +20,9 @@ and cos-latitude weights for every metric):
 * ``spread``: RMS ensemble spread, sqrt(<var_members>), unbiased member variance;
 * ``spread_corr``: spread * sqrt((N + 1) / N), the finite-ensemble correction, so
   spread_corr / rmse has expectation 1 for a reliable N-member ensemble;
-* ``crps_fair``: fair CRPS (ensemble-size adjusted), area mean.
+* ``crps_fair``: fair CRPS (ensemble-size adjusted), area mean;
+* ``member_mean`` (region, member, day) and ``reference_mean``: regional means
+  of each member and of the reference, for the field time series.
 
 Ensembles larger than ``subset_size`` are also scored on random subsets of that
 size (``*_subset``), to separate initialization effects from averaging more members.
@@ -37,11 +39,11 @@ import xarray as xr
 
 from util.bias_metrics import experiment_registry
 from util.forecast_ensemble_ts import (
-    REFERENCES, read_member_ensemble, read_reference, reference_product, region_masks,
+    REFERENCES, fit_legend, read_member_ensemble, read_reference, reference_product, region_masks,
 )
 from util.model_evaluation import experiment_colors
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2  # 2: regional means of each member and of the reference (field time series)
 PRODUCT = "daily_skill"
 SPREAD_DEFINITION = "rms of unbiased member variance; corrected by sqrt((N+1)/N)"
 AGGREGATION = "24-h forecast-lead bins from 6-hourly member fields"
@@ -266,6 +268,9 @@ def daily_metrics(daily, reference, masks, *, n_subsets=100, subset_size=10, see
     out["spread_ratio_raw"] = out["spread"] / out["rmse"]
     coords = {"region": regions, "day": daily.day.values}
     ds = xr.Dataset({k: (("region", "day"), v) for k, v in out.items()}, coords=coords)
+    ds["member_mean"] = (("region", "member", "day"),
+                         np.stack([_area_mean(members, w[None]) for w in region_weights]))
+    ds["reference_mean"] = (("region", "day"), np.stack([_area_mean(observed, w) for w in region_weights]))
 
     if n > subset_size and n_subsets > 0:
         rng = np.random.default_rng(seed)
@@ -280,7 +285,7 @@ def daily_metrics(daily, reference, masks, *, n_subsets=100, subset_size=10, see
             ratio.append(s / r)
         ds["rmse_subset"] = (("subset", "region", "day"), np.array(rmse))
         ds["spread_ratio_subset"] = (("subset", "region", "day"), np.array(ratio))
-        ds = ds.transpose("region", "subset", "day")
+        ds = ds.transpose("region", "subset", "member", "day")
     ds["n_points"] = (("region", "day"), np.stack([(w > 0).sum(axis=(-2, -1)) for w in region_weights]))
     return ds
 
@@ -448,8 +453,27 @@ _UNIT_LABELS = {"mm day-1": r"mm day$^{-1}$", "mm/day": r"mm day$^{-1}$", "W/m2"
                 "W m-2": r"W m$^{-2}$", "m/s": r"m s$^{-1}$", "m s-1": r"m s$^{-1}$"}
 
 
+def _days_since_label(datasets_by_variable):
+    """"Days since YYYY-MM-DD" from the start of day 1 of the first dataset ("Forecast day" without one)."""
+    ds = next(iter(next(iter(datasets_by_variable.values())).values()))
+    if "day_start" not in ds.coords:
+        return "Forecast day"
+    return f"Days since {pd.Timestamp(ds.day_start.sel(day=ds.day.min()).values):%Y-%m-%d}"
+
+
+def _initial_month(datasets_by_variable):
+    """Month name of the start of day 1 ("January"), or "" without ``day_start``."""
+    ds = next(iter(next(iter(datasets_by_variable.values())).values()))
+    if "day_start" not in ds.coords:
+        return ""
+    return f"{pd.Timestamp(ds.day_start.sel(day=ds.day.min()).values):%B}"
+
+
 def plot_daily_performance(datasets_by_variable, region, *, labels, colors, variables=PANEL_VARIABLES,
-                           max_day=15, title="", fontz=16):
+                           max_day=15, title="", fontz=16, line_width=2.2, line_styles=None, marker="o",
+                           markers=None, marker_size=4, subset_line_width=1.6, subset_line_style="--",
+                           subset_alpha=0.18, reference_line=None, grid_alpha=0.3, panel_size=(7.5, 3.6),
+                           legend_frame=True, legend_ncol=None, legend_edgecolor="#b5b4ae", xlabel=None):
     """Fixed rows x 2 figure: daily ensemble-mean RMSE (left) and spread_corr/RMSE (right).
 
     Panels are labelled "(a) Ensemble-Mean RMSE (PSL)", "(b) Spread/RMSE (PSL)",
@@ -458,9 +482,24 @@ def plot_daily_performance(datasets_by_variable, region, *, labels, colors, vari
     show the mean RMSE of the random equal-size subsets (dashed) and their
     5-95% range (shaded), so every experiment can be compared at the same
     ensemble size. ``fontz`` is the base font size; every label scales from it.
+
+    Line style: ``line_width``, ``marker`` (None: no markers), and ``marker_size``
+    apply to every experiment; ``line_styles`` and ``markers`` ({experiment:
+    value}) override them per experiment. Subsets: ``subset_line_width``,
+    ``subset_line_style``, ``subset_alpha`` (shading; 0 hides it).
+    ``reference_line``: keyword arguments of the spread/RMSE = 1 line.
+    ``panel_size``: (width, height) of one panel in inches.
+    ``xlabel``: None gives "Days since <initial date>" (the start of day 1;
+    day k is the 24 h ending k days after it); any string replaces it.
+    Legend (below the panels): ``legend_frame`` draws a rounded box with edge
+    ``legend_edgecolor``; ``legend_ncol`` columns (None: one row). The subset
+    entry shows the shading behind the subset line, as in the panels.
     """
     variables = [v for v in variables if v in datasets_by_variable]
-    fig, axes = plt.subplots(len(variables), 2, figsize=(15, 3.6 * len(variables)), sharex=True, squeeze=False)
+    line_styles, markers = line_styles or {}, markers or {}
+    reference_line = {"color": "#6f6e69", "lw": 1.2, "ls": "--", **(reference_line or {})}
+    fig, axes = plt.subplots(len(variables), 2, figsize=(2 * panel_size[0], panel_size[1] * len(variables)),
+                             sharex=True, squeeze=False)
     handles = {}
     subset_size = None
     for row, variable in enumerate(variables):
@@ -469,35 +508,285 @@ def plot_daily_performance(datasets_by_variable, region, *, labels, colors, vari
         units = ""
         for experiment, ds in datasets.items():
             sel = ds.sel(region=region).where(ds.day <= max_day, drop=True)
-            line, = ax_rmse.plot(sel.day, sel.rmse, color=colors[experiment], lw=2.2, marker="o", ms=4)
-            ax_ratio.plot(sel.day, sel.spread_ratio, color=colors[experiment], lw=2.2, marker="o", ms=4)
+            style = {"color": colors[experiment], "lw": line_width, "ls": line_styles.get(experiment, "-"),
+                     "marker": markers.get(experiment, marker), "ms": marker_size}
+            line, = ax_rmse.plot(sel.day, sel.rmse, **style)
+            ax_ratio.plot(sel.day, sel.spread_ratio, **style)
             if "rmse_subset" in sel:
                 low, high = sel.rmse_subset.quantile([0.05, 0.95], "subset")
-                ax_rmse.fill_between(sel.day, low, high, color=colors[experiment], alpha=0.18, lw=0)
-                ax_rmse.plot(sel.day, sel.rmse_subset.mean("subset"), color=colors[experiment], lw=1.6, ls="--")
+                if subset_alpha:
+                    ax_rmse.fill_between(sel.day, low, high, color=colors[experiment], alpha=subset_alpha, lw=0)
+                ax_rmse.plot(sel.day, sel.rmse_subset.mean("subset"), color=colors[experiment],
+                             lw=subset_line_width, ls=subset_line_style)
                 subset_size = ds.attrs.get("subset_size", subset_size)
             handles[experiment] = line
             units = ds.attrs.get("units", "")
-        ax_ratio.axhline(1.0, color="#6f6e69", lw=1.2, ls="--")
+        ax_ratio.axhline(1.0, **reference_line)
         ax_rmse.set_title(f"({chr(97 + 2 * row)}) Ensemble-Mean RMSE ({variable})", loc="left",
                           fontsize=fontz * 0.9, color="#2b2b29")
         ax_ratio.set_title(f"({chr(98 + 2 * row)}) Spread/RMSE ({variable})", loc="left",
                            fontsize=fontz * 0.9, color="#2b2b29")
         ax_rmse.set_ylabel(_UNIT_LABELS.get(units, units), fontsize=fontz * 0.8)
         for ax in (ax_rmse, ax_ratio):
-            ax.grid(alpha=0.3)
+            ax.grid(alpha=grid_alpha)
             ax.set_xlim(0.5, max_day + 0.5)
             ax.tick_params(labelsize=fontz * 0.75)
     for ax in axes[-1]:
-        ax.set_xlabel("Forecast day", fontsize=fontz * 0.8)
+        ax.set_xlabel(xlabel or _days_since_label(datasets_by_variable), fontsize=fontz * 0.8)
     legend_handles = [handles[e] for e in handles]
     legend_labels = [labels[e] for e in handles]
     if subset_size is not None:
-        legend_handles.append(plt.Line2D([], [], color="#6f6e69", lw=1.6, ls="--"))
-        legend_labels.append(f"{subset_size}-member subsets (5-95% shaded)")
-    fig.legend(legend_handles, legend_labels, loc="lower center", ncol=int(np.ceil(len(legend_handles) / 2)),
-               frameon=False, fontsize=fontz * 0.85, handlelength=2.5, columnspacing=1.8)
+        subset_line = plt.Line2D([], [], color="#6f6e69", lw=subset_line_width, ls=subset_line_style)
+        legend_handles.append((plt.Rectangle((0, 0), 1, 1, color="#9a9a9a", alpha=min(1, 2 * subset_alpha), lw=0),
+                               subset_line) if subset_alpha else subset_line)
+        legend_labels.append(f"{subset_size}-member subsets" + (" (5-95%)" if subset_alpha else ""))
+    _figure_legend(fig, legend_handles, legend_labels, height=panel_size[1] * len(variables), fontz=fontz,
+                   title=title, ncol=legend_ncol, frame=legend_frame, edgecolor=legend_edgecolor)
+    return fig
+
+
+DAILY_METRIC_NAMES = {"rmse": "Ensemble-Mean RMSE", "spread_ratio": "Spread/RMSE"}
+
+
+def plot_daily_metric(results, region, *, metric, labels, colors, variables=PANEL_VARIABLES, seasons=None,
+                      max_day=15, title="", fontz=16, line_width=2.2, line_styles=None, marker="o",
+                      markers=None, marker_size=4, subset_line_width=1.6, subset_line_style="--",
+                      subset_alpha=0.18, reference_line=None, grid_alpha=0.3, panel_size=(7.5, 3.6),
+                      legend_frame=True, legend_ncol=None, legend_edgecolor="#b5b4ae", xlabel=None,
+                      season_names=None, legend_by="experiment", legend_fontz=None):
+    """One daily metric, one row per variable and one column per season (S0 left, S1 right).
+
+    ``results[season][variable][experiment]`` as returned by
+    ``read_or_process_daily_skill``; ``metric`` is "rmse" (ensemble-mean RMSE,
+    with the equal-size subsets of the larger ensembles as in
+    ``plot_daily_performance``) or "spread_ratio" (spread_corr/RMSE, with the
+    ``reference_line`` at 1). Panels are labelled "(a) PSL (January)", row by
+    row; the metric is on the y axis. ``season_names``: {season: name} for the
+    panel labels; None names each season by the month of its initial date.
+    ``legend_by``: "experiment" lists every experiment (``CTRL10-S0``,
+    ``CTRL10-S1``, ...), one legend row per season with each experiment under
+    its type; "type" lists each type once (``CTRL10``). Experiments run for one
+    season only share a column (DART10-S0 above DART20-S0). The subset entry
+    comes last, in a column of its own after the last experiment. ``legend_fontz``:
+    legend font size (None: 0.85 x ``fontz``); the box scales with it.
+    ``xlabel``: None gives "Days since <initial date>" under each season column.
+    Other style arguments as in ``plot_daily_performance``.
+    """
+    if metric not in DAILY_METRIC_NAMES:
+        raise ValueError(f"metric must be one of {list(DAILY_METRIC_NAMES)}")
+    if legend_by not in ("experiment", "type"):
+        raise ValueError('legend_by must be "experiment" or "type"')
+    seasons = [s for s in (seasons or results) if s in results]
+    variables = [v for v in variables if any(v in results[s] for s in seasons)]
+    line_styles, markers = line_styles or {}, markers or {}
+    reference_line = {"color": "#6f6e69", "lw": 1.2, "ls": "--", **(reference_line or {})}
+    nrows, ncols = len(variables), len(seasons)
+    names = {season: (season_names or {}).get(season) or _initial_month(results[season]) for season in seasons}
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * panel_size[0], nrows * panel_size[1]),
+                             sharex="col", squeeze=False)
+    handles = {}
+    subset_size = None
+    for col, season in enumerate(seasons):
+        for row, variable in enumerate(variables):
+            ax = axes[row, col]
+            units = ""
+            for experiment, ds in results[season].get(variable, {}).items():
+                sel = ds.sel(region=region).where(ds.day <= max_day, drop=True)
+                line, = ax.plot(sel.day, sel[metric], color=colors[experiment], lw=line_width,
+                                ls=line_styles.get(experiment, "-"), marker=markers.get(experiment, marker),
+                                ms=marker_size)
+                if metric == "rmse" and "rmse_subset" in sel:
+                    low, high = sel.rmse_subset.quantile([0.05, 0.95], "subset")
+                    if subset_alpha:
+                        ax.fill_between(sel.day, low, high, color=colors[experiment], alpha=subset_alpha, lw=0)
+                    ax.plot(sel.day, sel.rmse_subset.mean("subset"), color=colors[experiment],
+                            lw=subset_line_width, ls=subset_line_style)
+                    subset_size = ds.attrs.get("subset_size", subset_size)
+                name = labels[experiment] if legend_by == "experiment" else labels[experiment].rsplit("-", 1)[0]
+                handles.setdefault(season if legend_by == "experiment" else "", {}).setdefault(name, line)
+                units = ds.attrs.get("units", "")
+            if metric == "spread_ratio":
+                ax.axhline(1.0, **reference_line)
+                ax.set_ylabel("Spread/RMSE", fontsize=fontz * 0.8)
+            else:
+                ax.set_ylabel(f"RMSE ({_UNIT_LABELS.get(units, units)})" if units else "RMSE",
+                              fontsize=fontz * 0.8)
+            ax.set_title(f"({chr(97 + row * ncols + col)}) {variable} ({names[season]})", loc="left",
+                         fontsize=fontz * 0.9, color="#2b2b29")
+            ax.grid(alpha=grid_alpha)
+            ax.set_xlim(0.5, max_day + 0.5)
+            ax.tick_params(labelsize=fontz * 0.75)
+        axes[-1, col].set_xlabel(xlabel or _days_since_label(results[season]), fontsize=fontz * 0.8)
+    extra = []
+    if subset_size is not None:
+        subset_line = plt.Line2D([], [], color="#6f6e69", lw=subset_line_width, ls=subset_line_style)
+        extra.append((f"{subset_size}-member subsets" + (" (5-95%)" if subset_alpha else ""),
+                      (plt.Rectangle((0, 0), 1, 1, color="#9a9a9a", alpha=min(1, 2 * subset_alpha), lw=0),
+                       subset_line) if subset_alpha else subset_line))
+    _season_legend(fig, handles, extra, height=panel_size[1] * nrows, fontz=fontz, title=title,
+                   ncol=legend_ncol, frame=legend_frame, edgecolor=legend_edgecolor, legend_fontz=legend_fontz,
+                   extra_last=True, pack=True)
+    return fig
+
+
+def _figure_legend(fig, handles, labels, *, height, fontz, title, ncol=None, frame=True, edgecolor="#b5b4ae",
+                   legend_fontz=None):
+    """Boxed legend below the panels (one row unless ``ncol``; filled row by row), title, and layout.
+
+    ``legend_fontz``: legend font size (None: 0.85 x ``fontz``); the box and its spacing scale with it.
+    A legend wider than the figure is shrunk to fit (``fit_legend``).
+    """
+    ncol = ncol or len(handles)
+    rows = int(np.ceil(len(handles) / ncol))
+    # Fill row by row (matplotlib fills legend columns first).
+    order = [i for c in range(ncol) for i in range(c, len(handles), ncol)]
+    legend, legend_fontz = fit_legend(fig, lambda size: fig.legend(
+        [handles[i] for i in order], [labels[i] for i in order],
+        loc="lower center", bbox_to_anchor=(0.5, 0.005), ncol=ncol, fontsize=size,
+        frameon=frame, fancybox=True, framealpha=1, facecolor="white",
+        edgecolor=edgecolor, borderpad=0.6, handlelength=2.6, handletextpad=0.6,
+        columnspacing=1.6), legend_fontz or fontz * 0.85)
+    legend.get_frame().set_linewidth(0.8)
+    bottom = (0.45 + 0.32 * rows) * legend_fontz / 0.85 / 16 / height  # legend band, fraction of the figure height
     if title:
         fig.suptitle(title, fontsize=fontz)
-    fig.tight_layout(rect=(0, 0.075, 1, 0.98 if title else 1))
+    fig.tight_layout(rect=(0, bottom, 1, 0.98 if title else 1))
+
+
+def _season_legend(fig, handles, extra, *, height, fontz, title, ncol=None, frame=True, edgecolor="#b5b4ae",
+                   legend_fontz=None, extra_last=False, pack=False):
+    """Legend with one row per season, each experiment in the column of its type (CTRL10-S1 under CTRL10-S0).
+
+    ``handles``: {group: {name: line}} (one group per season, or a single group
+    of types); ``extra``: [(label, handle)] entries (observations, member range,
+    subsets) placed in the empty slots of the last row, or in a row of their own
+    when they do not fit; ``extra_last=True`` places them after the last
+    experiment instead, stacked in end columns of their own (a lone entry on the
+    last row), so the experiment columns keep their own widths. ``pack=True`` stacks the
+    types missing from some seasons into shared columns, in order (DART10-S0
+    above DART20-S0 when both are S0 only). ``ncol`` None: one column per
+    experiment type, or per packed column (plus the extra columns).
+    """
+    types = list(dict.fromkeys(name.rsplit("-", 1)[0] for group in handles.values() for name in group))
+    blank = (" ", plt.Line2D([], [], alpha=0))  # a non-empty label, so the slot is kept
+    rows = []
+    for group in handles.values():
+        by_type = {name.rsplit("-", 1)[0]: (name, line) for name, line in group.items()}
+        rows.append([by_type.get(kind, blank) for kind in types])
+    if pack and len(rows) > 1:  # stack the partly empty columns, keeping the full ones in place
+        columns = [list(column) for column in zip(*rows)]
+        partial = [k for k, column in enumerate(columns) if any(entry is blank for entry in column)]
+        if partial:
+            entries = [entry for k in partial for entry in columns[k] if entry is not blank]
+            stacked = [entries[i:i + len(rows)] for i in range(0, len(entries), len(rows))]
+            stacked[-1] += [blank] * (len(rows) - len(stacked[-1]))
+            columns = ([c for k, c in enumerate(columns) if k not in partial and k < partial[0]] + stacked
+                       + [c for k, c in enumerate(columns) if k not in partial and k > partial[0]])
+            rows = [list(row) for row in zip(*columns)]
+    free = [k for k, entry in enumerate(rows[-1]) if entry is blank] if rows else []
+    if extra and extra_last and rows:  # extra columns at the end, stacked; a lone entry on the last row
+        depth = len(rows)
+        columns = [list(extra[i:i + depth]) for i in range(0, len(extra), depth)]
+        columns[-1] = [blank] * (depth - len(columns[-1])) + columns[-1]
+        rows = [row + [column[r] for column in columns] for r, row in enumerate(rows)]
+    elif extra and len(extra) <= len(free):  # fill the empty slots of the last season row (no extra row)
+        for k, entry in zip(free, extra):
+            rows[-1][k] = entry
+    elif extra:
+        rows.append(extra)
+    ncol = ncol or max(len(r) for r in rows)
+    entries = []
+    for row in rows:  # pad each row to whole legend rows so every group starts a new row
+        entries += row + [blank] * (-len(row) % ncol)
+    _figure_legend(fig, [h for _, h in entries], [label for label, _ in entries], height=height,
+                   fontz=fontz, title=title, ncol=ncol, frame=frame, edgecolor=edgecolor, legend_fontz=legend_fontz)
+
+
+def plot_daily_timeseries(results, region, *, labels, colors, variables=("TREFHT", "PRECT", "FLUT"),
+                          seasons=None, max_day=15, title="", fontz=16, line_width=2.2, line_styles=None,
+                          marker="o", markers=None, marker_size=4, member_display="range", member_alpha=0.15,
+                          reference_line=None, reference_name=None, grid_alpha=0.3, panel_size=(5.5, 3.6),
+                          legend_frame=True, legend_ncol=None, legend_edgecolor="#b5b4ae", xlabel=None,
+                          legend_by="experiment", season_names=None, show_reference=True, legend_fontz=None):
+    """Regional-mean daily field: ensemble mean of each experiment and the observations.
+
+    ``results[season][variable][experiment]`` as returned by
+    ``read_or_process_daily_skill``; one row per variable and one column per
+    season (``seasons``, default all), on the same 24-h forecast-lead days,
+    gridpoints, and references as ``plot_daily_performance``.
+    ``legend_by``: "experiment" lists every experiment (``CTRL10-S0``,
+    ``CTRL10-S1``, ...), one legend row per season; "type" lists each type once
+    (``CTRL10``), for figures where a type looks the same in every season.
+    ``member_display``: "range" shades the member min-max, "members" draws every
+    member thinly, "none" shows only ensemble means (``member_alpha`` sets the
+    shading/line opacity). ``reference_line``: keyword arguments of the
+    observation line (black by default; ``show_reference=False`` omits it and its
+    legend entry); ``reference_name`` its legend label
+    (None: "Observations"; the products belong in the caption).
+    ``xlabel``: None gives "Days since <initial date>" under each season column.
+    ``season_names``: {season: name} for the panel labels, "(a) TREFHT (January)";
+    None names each season by the month of its initial date.
+    Experiments run for one season only share a legend column (DART10-S0 above
+    DART20-S0); observations and member range come last, stacked in a column
+    of their own (``legend_ncol`` None: one column per experiment column).
+    ``legend_fontz``: legend font size (None: 0.85 x ``fontz``); the box scales with it.
+    Other style arguments as in ``plot_daily_performance``.
+    """
+    if member_display not in ("range", "members", "none"):
+        raise ValueError('member_display must be "range", "members", or "none"')
+    if legend_by not in ("experiment", "type"):
+        raise ValueError('legend_by must be "experiment" or "type"')
+    seasons = [s for s in (seasons or results) if s in results]
+    variables = [v for v in variables if any(v in results[s] for s in seasons)]
+    line_styles, markers = line_styles or {}, markers or {}
+    reference_line = {"color": "black", "lw": line_width, "ls": "-", **(reference_line or {})}
+    nrows, ncols = len(variables), len(seasons)
+    names = {season: (season_names or {}).get(season) or _initial_month(results[season]) for season in seasons}
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * panel_size[0], nrows * panel_size[1]),
+                             sharex="col", squeeze=False)
+    handles, products, observed = {}, {}, None
+    for col, season in enumerate(seasons):
+        for row, variable in enumerate(variables):
+            ax = axes[row, col]
+            datasets = results[season].get(variable, {})
+            units, reference = "", None
+            for experiment, ds in datasets.items():
+                if "member_mean" not in ds:
+                    raise KeyError(f"{experiment} {variable}: cache has no member_mean; rebuild the daily caches")
+                sel = ds.sel(region=region).where(ds.day <= max_day, drop=True)
+                color = colors[experiment]
+                if member_display == "range":
+                    ax.fill_between(sel.day, sel.member_mean.min("member"), sel.member_mean.max("member"),
+                                    color=color, alpha=member_alpha, lw=0)
+                elif member_display == "members":
+                    for member in sel.member.values:
+                        ax.plot(sel.day, sel.member_mean.sel(member=member), color=color, lw=0.6,
+                                alpha=member_alpha)
+                line, = ax.plot(sel.day, sel.member_mean.mean("member"), color=color, lw=line_width,
+                                ls=line_styles.get(experiment, "-"), marker=markers.get(experiment, marker),
+                                ms=marker_size)
+                name = labels[experiment] if legend_by == "experiment" else labels[experiment].rsplit("-", 1)[0]
+                handles.setdefault(season if legend_by == "experiment" else "", {}).setdefault(name, line)
+                if reference is None:
+                    reference = sel.reference_mean
+                    products[variable] = ds.attrs.get("reference", "")
+                units = ds.attrs.get("units", "")
+            if reference is not None and show_reference:
+                observed, = ax.plot(reference.day, reference, zorder=5, **reference_line)
+            ax.set_title(f"({chr(97 + row * ncols + col)}) {variable} ({names[season]})", loc="left",
+                         fontsize=fontz * 0.9, color="#2b2b29")
+            ax.set_ylabel(_UNIT_LABELS.get(units, units), fontsize=fontz * 0.8)
+            ax.grid(alpha=grid_alpha)
+            ax.set_xlim(0.5, max_day + 0.5)
+            ax.tick_params(labelsize=fontz * 0.75)
+        axes[-1, col].set_xlabel(xlabel or _days_since_label(results[season]), fontsize=fontz * 0.8)
+    extra = []
+    if observed is not None:
+        extra.append((reference_name or "Observations", observed))
+    if member_display == "range":
+        extra.append(("Member range",
+                      plt.Rectangle((0, 0), 1, 1, color="#9a9a9a", alpha=min(1, 2 * member_alpha), lw=0)))
+    _season_legend(fig, handles, extra, height=panel_size[1] * nrows, fontz=fontz, title=title,
+                   ncol=legend_ncol, frame=legend_frame, edgecolor=legend_edgecolor, legend_fontz=legend_fontz,
+                   extra_last=True, pack=True)
     return fig

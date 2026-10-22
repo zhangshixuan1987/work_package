@@ -524,11 +524,12 @@ def _ylabel(ds, name):
 
 
 def plot_ensemble_timeseries(datasets, region, *, labels, colors, zoom_days=10,
-                             member_display="members", title=""):
+                             member_display="members", title="", fontz=16):
     """Ensemble mean and reference over the full forecast and the first ``zoom_days``.
 
     ``member_display``: "members" draws every member, "quartiles" shades the
-    25th-75th percentile envelope, "none" shows only ensemble means.
+    25th-75th percentile envelope, "none" shows only ensemble means. ``fontz`` is
+    the base font size (titles 0.9x, axis labels 0.8x, ticks 0.75x, legend 0.7x).
     """
     if member_display not in MEMBER_DISPLAYS:
         raise ValueError(f"member_display must be one of {MEMBER_DISPLAYS}")
@@ -559,15 +560,16 @@ def plot_ensemble_timeseries(datasets, region, *, labels, colors, zoom_days=10,
     for ax in axes:
         if reference is not None:
             ax.plot(reference.lead / 24.0, reference, color="black", lw=1.5, ls="--", label=reference_name)
-        ax.set_xlabel("Lead (days)")
+        ax.set_xlabel("Lead (days)", fontsize=fontz * 0.8)
+        ax.tick_params(labelsize=fontz * 0.75)
         ax.grid(alpha=0.3)
     first = next(iter(datasets.values()))
-    axes[0].set_ylabel(_ylabel(first, "member_mean"))
+    axes[0].set_ylabel(_ylabel(first, "member_mean"), fontsize=fontz * 0.8)
     if zoomed:
         axes[1].set_xlim(0, zoom_days)
-        axes[1].set_title(f"First {zoom_days:g} days")
-    axes[0].legend(fontsize=8, ncol=2)
-    fig.suptitle(title)
+        axes[1].set_title(f"First {zoom_days:g} days", fontsize=fontz * 0.9)
+    axes[0].legend(fontsize=fontz * 0.7, ncol=2)
+    fig.suptitle(title, fontsize=fontz)
     fig.tight_layout()
     return fig
 
@@ -628,8 +630,9 @@ def plot_shock_tendency(datasets_by_variable, region, *, labels, colors, core=()
     for ax in axes[-1]:
         ax.set_xlabel("Lead (days)", fontsize=fontz * 0.8)
     order = [k for k in handles if k not in references] + [k for k in handles if k in references]
-    fig.legend([handles[k] for k in order], order, loc="lower center", ncol=int(np.ceil(len(order) / 2)),
-               frameon=False, fontsize=fontz * 0.85, handlelength=2.5, columnspacing=1.8)
+    fit_legend(fig, lambda size: fig.legend([handles[k] for k in order], order, loc="lower center",
+                                            ncol=int(np.ceil(len(order) / 2)), frameon=False, fontsize=size,
+                                            handlelength=2.5, columnspacing=1.8), fontz * 0.85)
     if title:
         fig.suptitle(title, fontsize=fontz)
     fig.tight_layout(rect=(0, 0.075, 1, 0.98 if title else 1))
@@ -661,12 +664,32 @@ def plot_shock_summary(summary, metrics, *, colors, title="", fontz=16):
         ax.set_title(f"({chr(97 + index_m)}) {metric}", loc="left", fontsize=fontz * 0.9, color="#2b2b29")
         ax.tick_params(labelsize=fontz * 0.75)
         ax.grid(axis="y", alpha=0.3)
-    fig.legend(list(handles.values()), list(handles), loc="lower center", ncol=int(np.ceil(len(handles) / 2)),
-               frameon=False, fontsize=fontz * 0.85)
+    fit_legend(fig, lambda size: fig.legend(list(handles.values()), list(handles), loc="lower center",
+                                            ncol=int(np.ceil(len(handles) / 2)), frameon=False, fontsize=size),
+               fontz * 0.85)
     if title:
         fig.suptitle(title, fontsize=fontz)
     fig.tight_layout(rect=(0, 0.14, 1, 0.95 if title else 1))
     return fig
+
+
+def fit_legend(fig, make, fontsize, *, margin=0.98, steps=6):
+    """Figure legend ``make(fontsize)``, its font shrunk until the box fits within the figure width.
+
+    ``make`` draws the legend at a font size and returns it; a legend that fits
+    is kept as drawn. Returns ``(legend, fontsize)``; spacing set in font units
+    (handle length, padding) shrinks with the font.
+    """
+    legend = make(fontsize)
+    renderer = fig.canvas.get_renderer()
+    for _ in range(steps):
+        width, limit = legend.get_window_extent(renderer).width, margin * fig.bbox.width
+        if width <= limit:
+            break
+        legend.remove()
+        fontsize *= limit / width
+        legend = make(fontsize)
+    return legend, fontsize
 
 
 def results_colors(results):
@@ -677,8 +700,9 @@ def results_colors(results):
 
 def plot_ensemble_ts_figures(results, registries, *, regions, figure_dir, tag, plots=("tendency",),
                              colors=None, core=(), settled_days=(10.0, 30.0), zoom_days=10,
-                             member_display="members", dpi=200, show=True, log=print, fontz=16, title=True):
-    """Draw and save the requested figure kinds; return the paths.
+                             member_display="members", dpi=200, show=True, log=print, fontz=16, title=True,
+                             fmt="pdf"):
+    """Draw and save the requested figure kinds as ``fmt`` files (pdf, png, ...); return the paths.
 
     ``tendency``: one figure per season/region with every variable;
     ``timeseries``: one figure per season/variable/region.
@@ -704,19 +728,19 @@ def plot_ensemble_ts_figures(results, registries, *, regions, figure_dir, tag, p
                 save(plot_shock_tendency(by_variable, region, labels=labels, colors=colors, core=core,
                                          settled_days=settled_days, zoom_days=zoom_days, fontz=fontz,
                                          title=f"Initial-shock tendency: {region} ({season} fc)" if title else ""),
-                     f"shock_tendency_{region}_{season}_fc_{tag}.png")
+                     f"fig_shock_tendency_{region}_{season}_fc_{tag}.{fmt}")
             if "timeseries" in plots:
                 for variable, datasets in by_variable.items():
                     save(plot_ensemble_timeseries(datasets, region, labels=labels, colors=colors,
                                                   zoom_days=zoom_days, member_display=member_display,
-                                                  title=f"{variable} {region} ({season} fc, {tag})"),
-                         f"{variable}_{region}_{season}_fc_{tag}_ensemble_ts.png")
+                                                  fontz=fontz, title=f"{variable} {region} ({season} fc, {tag})"),
+                         f"fig_{variable}_{region}_{season}_fc_{tag}_ensemble_ts.{fmt}")
     return written
 
 
 def plot_shock_summary_figures(summary, *, figure_dir, tag, colors, metrics=None, dpi=200,
-                               show=True, log=print, fontz=16, title=True):
-    """One grouped-bar summary figure per season and region; return the paths."""
+                               show=True, log=print, fontz=16, title=True, fmt="pdf"):
+    """One grouped-bar summary figure per season and region, saved as ``fmt``; return the paths."""
     metrics = list(metrics or SUMMARY_METRICS)
     figure_dir = Path(figure_dir)
     figure_dir.mkdir(parents=True, exist_ok=True)
@@ -724,7 +748,7 @@ def plot_shock_summary_figures(summary, *, figure_dir, tag, colors, metrics=None
     for (season, region), table in summary.groupby(["season", "region"], sort=False):
         fig = plot_shock_summary(table, metrics, colors=colors, fontz=fontz,
                                  title=f"Initial-shock summary: {region} ({season} fc)" if title else "")
-        output = figure_dir / f"shock_summary_{region}_{season}_fc_{tag}.png"
+        output = figure_dir / f"fig_shock_summary_{region}_{season}_fc_{tag}.{fmt}"
         fig.savefig(output, dpi=dpi, bbox_inches="tight")
         written.append(output)
         log(f"[FIGURE] {output}")

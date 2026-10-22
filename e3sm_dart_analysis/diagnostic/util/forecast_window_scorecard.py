@@ -51,8 +51,10 @@ the Andes, and Greenland, where model and ERA5 fields are extrapolations).
 """
 from __future__ import annotations
 
+import multiprocessing
 import os
 import re
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -60,7 +62,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from matplotlib.collections import PolyCollection
-from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap, Normalize
+from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
 
 from configs.s2s_config import LEAD_WINDOWS
 from util.bias_metrics import experiment_registry
@@ -318,11 +320,40 @@ def reference_cache_path(cache_dir, season, variable):
     return Path(cache_dir) / season / f"reference_{variable}_window_means.nc"
 
 
-def _cache_ok(path, settings):
+def above_ground_cache_path(cache_dir, season, level):
+    return Path(cache_dir) / season / f"above_ground_{level}hPa.nc"
+
+
+def _read_cache(path, settings):
+    """The cache at ``path``, loaded, if its recorded settings match ``settings``; else None.
+
+    Each file is opened once. Experiment caches carry the settings on their
+    "members" variable, the others on the file; an unreadable file counts as
+    missing (rebuilt).
+    """
     if not Path(path).is_file():
-        return False
-    with xr.open_dataset(path) as cached:
-        return all(str(cached.attrs.get(k)) == str(v) for k, v in settings.items())
+        return None
+    try:
+        cached = xr.load_dataset(path)
+    except (OSError, ValueError):
+        return None
+    attrs = {**cached["members"].attrs, **cached.attrs} if "members" in cached else cached.attrs
+    return cached if all(str(attrs.get(k)) == str(v) for k, v in settings.items()) else None
+
+
+def _read_caches(requests, workers):
+    """{path: Dataset or None} for ``requests`` {path: settings}, read by ``workers`` processes.
+
+    Reading many cache files is latency-bound on the shared file system, so
+    parallel reads are about 6x faster than one at a time with 8 workers. They
+    must be processes: the netCDF-C library is not thread-safe (concurrent opens
+    from threads crash it).
+    """
+    paths = list(requests)
+    if workers <= 1:
+        return {path: _read_cache(path, requests[path]) for path in paths}
+    with ProcessPoolExecutor(workers, mp_context=multiprocessing.get_context("fork")) as pool:
+        return dict(zip(paths, pool.map(_read_cache, paths, [requests[p] for p in paths])))
 
 
 def _write(ds, path):
@@ -334,7 +365,7 @@ def _write(ds, path):
 
 def build_window_means(cases, variables, *, data_root, reference_root, land_support_dir, cache_dir,
                        clim_years=(2001, 2017), clim_exclude_years=(2012,), min_days=10,
-                       max_members=None, force_compute=False, log=print):
+                       max_members=None, force_compute=False, workers=8, log=print):
     """Reuse or build window means of the references, climatology, and experiments.
 
     Returns ``(window_means, registries, failures)`` with
@@ -343,6 +374,8 @@ def build_window_means(cases, variables, *, data_root, reference_root, land_supp
     lat, lon), ``model`` (experiment, window, lat, lon), the ensemble mean,
     ``members`` (experiment, member, window, lat, lon), NaN past an experiment's
     size, and for pressure-level variables ``above_ground`` (lat, lon).
+    Valid caches of a season are read up front, ``workers`` files at a time;
+    the above-ground masks are cached too.
     """
     years = climatology_years(variables, clim_years, clim_exclude_years)
     window_means, registries, failures = {}, {}, []
@@ -358,15 +391,36 @@ def build_window_means(cases, variables, *, data_root, reference_root, land_supp
         init = pd.Timestamp(f"{period[:4]}-{period[4:6]}-01")
         windows = window_days(init)
         days = pd.DatetimeIndex(sorted({d for w in windows.values() for d in w}))
+        settings = dict(cache_version=CACHE_VERSION, init_date=str(init.date()), min_days=min_days,
+                        clim_years=",".join(map(str, years)))
+        surface_settings = dict(cache_version=CACHE_VERSION, clim_years=",".join(map(str, years)),
+                                months=",".join(str(m) for m in sorted({d.month for d in days})))
+
+        def model_settings(variable, experiment):
+            members = registry[experiment]["nens"] if max_members is None else min(max_members, registry[experiment]["nens"])
+            recorded = {**settings, "ensemble_members": members}
+            if _sampling(variable) == "6hourly_mean":
+                recorded["daily_construction"] = SIX_HOURLY_DAILY
+            return recorded
+
+        # Read every cache the season needs at once (in parallel); None marks one to build.
+        requests = {}
+        if not force_compute:
+            for variable in variables:
+                requests[reference_cache_path(cache_dir, season, variable)] = settings
+                for experiment in experiments:
+                    requests[scorecard_cache_path(cache_dir, season, variable, experiment)] = \
+                        model_settings(variable, experiment)
+            for level in sorted({int(v[1:]) for v in variables if _PRESSURE_LEVEL.fullmatch(v)}):
+                requests[above_ground_cache_path(cache_dir, season, level)] = surface_settings
+        cached = _read_caches(requests, workers) if requests else {}
         surfaces = {}  # level -> above-ground mask, shared by the season's variables
         for variable in variables:
-            settings = dict(cache_version=CACHE_VERSION, init_date=str(init.date()), min_days=min_days,
-                            clim_years=",".join(map(str, years)))
             try:
                 ref_path = reference_cache_path(cache_dir, season, variable)
                 daily_reference = None
-                if not force_compute and _cache_ok(ref_path, settings):
-                    reference = xr.load_dataset(ref_path)
+                reference = cached.get(ref_path)
+                if reference is not None:
                     log(f"[REUSE] {season} {variable} reference")
                 else:
                     daily_reference = read_reference_days(reference_root, variable, days)
@@ -384,19 +438,15 @@ def build_window_means(cases, variables, *, data_root, reference_root, land_supp
                 models = []
                 for experiment in experiments:
                     path = scorecard_cache_path(cache_dir, season, variable, experiment)
-                    members = registry[experiment]["nens"] if max_members is None else min(max_members, registry[experiment]["nens"])
-                    model_settings = {**settings, "ensemble_members": members}
-                    if _sampling(variable) == "6hourly_mean":
-                        model_settings["daily_construction"] = SIX_HOURLY_DAILY
-                    if not force_compute and _cache_ok(path, model_settings):
-                        members = xr.load_dataarray(path)
+                    if cached.get(path) is not None:
+                        members = cached[path]["members"]
                         log(f"[REUSE] {season} {variable} {experiment}")
                     else:
                         daily = read_model_days(registry[experiment], variable, days,
                                                 land_support_dir=land_support_dir,
                                                 max_members=max_members, log=log)
                         members = _window_means(daily, valid, windows, min_days).rename("members")
-                        members.attrs.update(model_settings)
+                        members.attrs.update(model_settings(variable, experiment))
                         _write(members.to_dataset(), path)
                         log(f"[WRITE] {season} {variable} {experiment}")
                     models.append(members.expand_dims(experiment=[experiment]))
@@ -408,7 +458,15 @@ def build_window_means(cases, variables, *, data_root, reference_root, land_supp
                 if _PRESSURE_LEVEL.fullmatch(variable):
                     level = int(variable[1:])
                     if level not in surfaces:
-                        surfaces[level] = above_ground(reference_root, level, days, years)
+                        path = above_ground_cache_path(cache_dir, season, level)
+                        if cached.get(path) is not None:
+                            surfaces[level] = cached[path]["above_ground"].astype(bool)
+                        else:
+                            surfaces[level] = above_ground(reference_root, level, days, years)
+                            mask = surfaces[level].astype("int8").to_dataset()
+                            mask.attrs.update(surface_settings)
+                            _write(mask, path)
+                            log(f"[WRITE] {season} above-ground mask {level} hPa")
                     ds["above_ground"] = surfaces[level].reindex_like(ds.reference, method="nearest", tolerance=0.01)
                 window_means.setdefault(season, {})[variable] = ds
             except Exception as error:  # keep going; report at the end
@@ -526,105 +584,149 @@ _TRIANGLE = {  # cell corners with y growing downward: TL, TR, BR, BL, center
 }
 
 
-def _short(experiment):
-    return experiment.rsplit("-", 1)[0]
+def _group_rows(groups, available, gap):
+    """Row positions (top edges) for the variables of each group, with ``gap`` rows between groups."""
+    rows, spans, y = [], [], 0.0
+    for name, variables in groups.items():
+        present = [v for v in variables if v in available]
+        if not present:
+            continue
+        if rows:
+            y += gap
+        spans.append((name, y, y + len(present)))
+        rows.extend((v, y + i) for i, v in enumerate(present))
+        y += len(present)
+    return rows, spans, y
 
 
-def _triangle_panel(ax, table, metric, rows, columns, cmap, norm, title):
-    """Cells = (row variable, column (season, experiment)); four triangles = windows."""
-    windows = list(WINDOWS)
-    polygons, values = [], []
-    lookup = table.set_index(["variable", "season", "experiment", "window"])[metric]
-    xs = []
-    x = 0.0
-    previous = None
-    for season, experiment in columns:
-        if previous is not None and season != previous:
-            x += 0.5  # gap between seasons
-        xs.append(x)
-        previous = season
-        x += 1
-    for row, variable in enumerate(rows):
-        for (season, experiment), x0 in zip(columns, xs):
-            for index, window in enumerate(windows):
-                polygons.append(_TRIANGLE[index](x0, row))
-                values.append(lookup.get((variable, season, experiment, window), np.nan))
-    values = np.ma.masked_invalid(np.asarray(values, dtype=float))
-    collection = PolyCollection(polygons, array=values, cmap=cmap, norm=norm,
-                                edgecolors="#fcfcfb", linewidths=0.8)
-    collection.cmap.set_bad(_MISSING)
-    ax.add_collection(collection)
-    ax.set_xlim(-0.1, xs[-1] + 1.1)
-    ax.set_ylim(len(rows) + 0.1, -0.1)
-    ax.set_yticks(np.arange(len(rows)) + 0.5,
-                  [f"{v} (land)" if VARIABLES[v]["component"] == "lnd" else v for v in rows])
-    ax.set_xticks(np.asarray(xs) + 0.5, [_short(e) for _, e in columns], rotation=0)
-    for season in dict.fromkeys(s for s, _ in columns):
-        centers = [x0 + 0.5 for (s, _), x0 in zip(columns, xs) if s == season]
-        ax.text(np.mean(centers), -0.25, season, ha="center", va="bottom", fontsize=11, color="#2b2b29")
-    ax.tick_params(length=0)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.set_title(title, fontsize=12, pad=30, color="#2b2b29")
-    return collection, xs
+def plot_window_scorecard_paper(scores, *, region, cases, groups, labels=None, season_names=None, title="",
+                                width=7.2, row_height=0.18, fontsize=7, key_size=0.60):
+    """Every season and variable in one figure: PCC, MSSS, and CRPSS blocks side by side.
 
-
-def _separators(ax, rows, xs):
-    components = [VARIABLES[v]["component"] for v in rows]
-    for row in range(1, len(rows)):
-        if components[row] != components[row - 1]:
-            ax.axhline(row, color="#6f6e69", lw=1.0, xmin=0.0, xmax=1.0)
-
-
-def _window_key(ax):
-    """Legend cell naming the triangle of each window, with labels outside the cell."""
-    for index in range(len(WINDOWS)):
-        ax.add_patch(plt.Polygon(_TRIANGLE[index](0, 0), facecolor="#f0efec", edgecolor="#6f6e69", lw=0.8))
-    places = {0: (0.5, -0.12, "center", "bottom"), 1: (1.08, 0.5, "left", "center"),
-              2: (0.5, 1.12, "center", "top"), 3: (-0.08, 0.5, "right", "center")}
-    for index, window in enumerate(WINDOWS):
-        x, y, ha, va = places[index]
-        ax.text(x, y, window, ha=ha, va=va, fontsize=9, color="#2b2b29")
-    ax.set_xlim(-0.9, 1.9)
-    ax.set_ylim(1.9, -0.9)
-    ax.set_aspect("equal")
-    ax.axis("off")
-    ax.set_title("Lead windows", fontsize=10, color="#2b2b29")
-
-
-def plot_window_scorecard(scores, *, region, cases, variables, title=""):
-    """PCC, MSSS, and CRPSS heat maps; each cell holds four window triangles."""
+    ``cases`` {season: experiments}; inside each block the seasons sit side by
+    side (``season_names`` {season: name} heads them, e.g. "January"; None:
+    the season key), one column per experiment. Rows are the variables of
+    ``groups`` ({"Surface": (...), "Upper air": (...), "Land": (...)}),
+    bracketed and separated by a gap; inside a group, rows of a new
+    pressure-level variable (U, V, T, Q, Z) start below a thin line. Experiment
+    names (``labels`` {experiment: label}, e.g. "CTRL10-S0"; None: the
+    experiment key) sit under the panels, season names above them. Each cell holds the
+    four lead-window triangles (key at the bottom left). ``width`` is
+    the figure width in inches (7.2: double column), ``row_height`` inches
+    per variable row, ``key_size`` the side of the lead-week key in inches;
+    margins and offsets scale with ``fontsize`` (sized at 7 pt), the left
+    margin with the longest variable name. Save as PDF.
+    """
     table = scores[scores["region"] == region]
-    rows = [v for v in variables if v in set(table["variable"])]
-    columns = [(season, e) for season, experiments in cases.items() for e in experiments]
-    width = 2.2 + 0.62 * (len(columns) + 0.5 * (len(cases) - 1))
-    height = 1.6 + 0.62 * len(rows)
-    fig, axes = plt.subplots(1, 4, figsize=(3 * width + 1.8, height),
-                             gridspec_kw={"width_ratios": (width, width, width, 1.8)})
-    pcc_norm = BoundaryNorm(np.linspace(0, 1, 13), _PCC_CMAP.N)  # below 0 -> "under" color
+    rows, spans, n_rows = _group_rows(groups, set(table["variable"]), gap=0.5)
+    present = set(zip(table["season"], table["experiment"]))
+    columns = [(season, e) for season, experiments in cases.items() for e in experiments if (season, e) in present]
+    seasons = list(dict.fromkeys(season for season, _ in columns))
+    season_gap = 0.35  # cell widths between seasons inside a block
+    xs, x = [], 0.0
+    for k, (season, _) in enumerate(columns):
+        if k and season != columns[k - 1][0]:
+            x += season_gap
+        xs.append(x)
+        x += 1
+    span = x
+    lookup = table.set_index(["variable", "season", "experiment", "window"])
     pcc_cmap = _PCC_CMAP.with_extremes(under="#f0efec", bad=_MISSING)
-    coll, xs = _triangle_panel(axes[0], table, "pcc", rows, columns, pcc_cmap, pcc_norm, "Anomaly PCC")
-    _separators(axes[0], rows, xs)
-    fig.colorbar(coll, ax=axes[0], orientation="horizontal", fraction=0.05, pad=0.08, extend="min",
-                 ticks=np.linspace(0, 1, 5), label="PCC (below 0: gray)")
-    # Odd number of 0.2 bins so the middle bin (-0.1, 0.1) is the neutral gray; MSSS <= 1.
+    pcc_norm = BoundaryNorm(np.linspace(0, 1, 13), _PCC_CMAP.N)
+    skill_cmap = _SKILL_CMAP.with_extremes(bad=_MISSING)
     skill_norm = BoundaryNorm(np.arange(-1.1, 1.11, 0.2), 256, extend="min")
     centered = bool(table["mean_bias_removed"].any()) if "mean_bias_removed" in table else False
-    coll, xs = _triangle_panel(axes[1], table, "msss", rows, columns,
-                               _SKILL_CMAP.with_extremes(bad=_MISSING), skill_norm,
-                               "MSSS vs climatology" + (" (mean bias removed)" if centered else ""))
-    _separators(axes[1], rows, xs)
-    axes[1].set_yticklabels([])
-    fig.colorbar(coll, ax=axes[1], orientation="horizontal", fraction=0.05, pad=0.08, extend="min",
-                 ticks=np.arange(-1.0, 1.01, 0.5), label="1 - (RMSE / RMSE$_{clim}$)$^2$ (blue: beats climatology)")
-    coll, xs = _triangle_panel(axes[2], table, "crpss", rows, columns,
-                               _SKILL_CMAP.with_extremes(bad=_MISSING), skill_norm,
-                               "CRPSS vs climatological ensemble")
-    _separators(axes[2], rows, xs)
-    axes[2].set_yticklabels([])
-    fig.colorbar(coll, ax=axes[2], orientation="horizontal", fraction=0.05, pad=0.08, extend="min",
-                 ticks=np.arange(-1.0, 1.01, 0.5), label="1 - CRPS / CRPS$_{clim}$ (blue: beats climatology)")
-    _window_key(axes[3])
-    fig.suptitle(title or f"Biweekly-window scorecard: {region}", fontsize=13, color="#2b2b29")
-    fig.tight_layout()
+    metrics = [("pcc", "Anomaly PCC", pcc_cmap, pcc_norm),
+               ("msss", "MSSS" + (" (mean bias removed)" if centered else ""), skill_cmap, skill_norm),
+               ("crpss", "CRPSS", skill_cmap, skill_norm)]
+    style = {"font.size": fontsize, "axes.titlesize": fontsize + 1, "xtick.labelsize": fontsize - 1,
+             "ytick.labelsize": fontsize, "pdf.fonttype": 42, "ps.fonttype": 42}
+    with plt.rc_context(style):
+        scale = fontsize / 7  # margins below are sized for 7 pt text
+        top = 0.62 * scale  # inches for headings and seasons
+        names = max(len((labels or {}).get(e, e)) for _, e in columns)  # rotated experiment names under the panels
+        bottom = max(0.62 * scale + 0.62 * names * (fontsize - 1) / 72,  # experiment names and colorbars
+                     key_size + 0.62 * scale)  # the window key (with its labels) in the corner left of them
+        height = top + bottom + row_height * n_rows
+        fig = plt.figure(figsize=(width, height))
+        longest = max(len(v) for v, _ in rows)  # variable names left of the rows, group names left of them
+        left = (0.45 * scale + 0.6 * longest * fontsize / 72) / width
+        right, gap = 0.08 / width, 0.12 * scale / width
+        block = (1 - left - right - 2 * gap) / 3
+        y0, y1 = bottom / height, 1 - top / height
+        collections = []
+        for col, (metric, name, cmap, norm) in enumerate(metrics):
+            ax = fig.add_axes([left + col * (block + gap), y0, block, y1 - y0])
+            polygons, values = [], []
+            for variable, y in rows:
+                for (season, experiment), x0 in zip(columns, xs):
+                    for index, window in enumerate(WINDOWS):
+                        polygons.append(_TRIANGLE[index](x0, y))
+                        key = (variable, season, experiment, window)
+                        values.append(lookup[metric].get(key, np.nan) if key in lookup.index else np.nan)
+            collection = PolyCollection(polygons, array=np.ma.masked_invalid(np.asarray(values, float)),
+                                        cmap=cmap, norm=norm, edgecolors="#fcfcfb", linewidths=0.4)
+            ax.add_collection(collection)
+            collections.append(collection)
+            ax.set_xlim(0, span)
+            ax.set_ylim(n_rows, 0)
+            ax.set_xticks(np.asarray(xs) + 0.5, [(labels or {}).get(e, e) for _, e in columns], rotation=90)
+            ax.set_yticks([y + 0.5 for _, y in rows], [v for v, _ in rows] if col == 0 else [])
+            ax.tick_params(length=0, pad=2)
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+            # Season names above the experiment labels, with a rule over their columns.
+            trans = ax.get_xaxis_transform()
+            label_top = 1 + 0.08 * scale / (y1 - y0) / height  # just above the panel, in axes units
+            for season in seasons:
+                spots = [x0 for (s, _), x0 in zip(columns, xs) if s == season]
+                ax.plot([spots[0] + 0.08, spots[-1] + 0.92], [label_top] * 2, color="#2b2b29", lw=0.5,
+                        transform=trans, clip_on=False)
+                ax.text((spots[0] + spots[-1] + 1) / 2, label_top + 0.02 * scale / (y1 - y0) / height,
+                        (season_names or {}).get(season, season), ha="center", va="bottom", transform=trans)
+            ax.set_title(f"({chr(97 + col)}) {name}", fontweight="bold", pad=0.30 * scale * 72)
+            for (v_prev, _), (variable, y) in zip(rows, rows[1:]):
+                same_group = any(a <= y < b and a <= y - 1 < b for _, a, b in spans)
+                if same_group and _PRESSURE_LEVEL.fullmatch(variable) and variable[0] != v_prev[0]:
+                    for season in seasons:
+                        spots = [x0 for (s, _), x0 in zip(columns, xs) if s == season]
+                        ax.plot([spots[0], spots[-1] + 1], [y, y], color="#2b2b29", lw=0.6, clip_on=False)
+        # Group brackets left of the variable names.
+        axes0 = fig.axes[0]
+        trans = axes0.get_yaxis_transform()
+        for name, a, b in spans:
+            x = -(left * width - 0.2 * scale) / (block * width)  # near the figure edge, in block units
+            axes0.plot([x + 0.04, x, x, x + 0.04], [a + 0.1, a + 0.1, b - 0.1, b - 0.1], color="#2b2b29",
+                       lw=0.6, transform=trans, clip_on=False)
+            axes0.text(x - 0.03, (a + b) / 2, name, rotation=90, ha="right", va="center", transform=trans,
+                       fontweight="bold")
+        # Colorbars under the blocks.
+        cb_h, cb_y = 0.09 * scale / height, 0.36 * scale / height
+        cax = fig.add_axes([left + 0.1 * block, cb_y, 0.8 * block, cb_h])
+        fig.colorbar(collections[0], cax=cax, orientation="horizontal", extend="min",
+                     ticks=np.linspace(0, 1, 5 if fontsize <= 8 else 3)).set_label("PCC (below 0: gray)", labelpad=2)
+        cax = fig.add_axes([left + block + gap + 0.1 * block, cb_y, 1.8 * block + gap, cb_h])
+        fig.colorbar(collections[1], cax=cax, orientation="horizontal", extend="min",
+                     ticks=np.arange(-1.0, 1.01, 0.5)).set_label(
+            "MSSS, CRPSS (blue: beats climatology)", labelpad=2)
+        for cax in fig.axes[-2:]:
+            cax.tick_params(length=2, pad=1.5)
+        # Window key in the empty corner below the variable names, its name above it.
+        key_x = 0.55 * left * width - key_size / 2  # inches from the left edge (center in the margin)
+        key_y = bottom / 2 - 0.10 * scale - key_size / 2  # inches from the bottom edge
+        kax = fig.add_axes([key_x / width, key_y / height, key_size / width, key_size / height])
+        for index in range(len(WINDOWS)):
+            kax.add_patch(plt.Polygon(_TRIANGLE[index](0, 0), facecolor="#f0efec", edgecolor="#6f6e69", lw=0.6))
+        places = {0: (0.5, -0.06, "center", "bottom"), 1: (1.06, 0.5, "left", "center"),
+                  2: (0.5, 1.06, "center", "top"), 3: (-0.06, 0.5, "right", "center")}
+        for index, window in enumerate(WINDOWS):
+            x, y, ha, va = places[index]
+            kax.text(x, y, window.replace("week", ""), ha=ha, va=va, fontsize=fontsize - 0.5)
+        kax.text(0.5, -(0.06 + 0.17 * scale) / key_size, "Lead weeks", ha="center", va="bottom", fontsize=fontsize,
+                 fontweight="bold")
+        kax.set_xlim(0, 1)
+        kax.set_ylim(1, 0)
+        kax.axis("off")
+        if title:
+            fig.suptitle(title, fontsize=fontsize + 2, y=1 - 0.05 / height, va="top")
     return fig
