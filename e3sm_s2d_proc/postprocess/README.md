@@ -6,9 +6,9 @@ Archive, transfer, and post-process the bundled hindcast output from
 
 ```
 postprocess/
-  4DEnVarOcn/       per-set drivers (from post_4DEnVarOcn)
-  bruteforce/       per-set drivers (from post_bruteforce)
-  jra55_fosirl/     per-set drivers (from post_fosirl)
+  4DEnVarOcn.v0/    per-set drivers (from post_4DEnVarOcn)
+  BruteForce/       per-set drivers (from post_bruteforce)
+  JRA55_FOSIRL/     per-set drivers (from post_fosirl)
   scripts/          shared ncclimo / ncremap / e3sm_to_cmip templates
   zstash_S2D.sh     zstash create / update / check for one case
   zstash_extract.bash  restore cases from HPSS
@@ -34,7 +34,7 @@ Run in order for each batch of lead dates:
 | `2_run_mov_archive.bash` | Move `archive/<comp>/hist` from `$PSCRATCH` to the CFS simulation directory with `rsync --remove-source-files`. |
 | `3_run_check_clean.bash` | Compare source and destination history files with `cmp` and remove the scratch copies that match; failures go to `post_process_logs/`. |
 
-`jra55_fosirl/` has no `0_run_archive.bash`. `bruteforce/run_rsync.bash` is an alternative copy from `$PSCRATCH` to the
+`JRA55_FOSIRL/` has no `0_run_archive.bash`. `BruteForce/run_rsync.bash` is an alternative copy from `$PSCRATCH` to the
 post-processing root (`--dry-run` supported).
 
 `zstash_S2D.sh` usage:

@@ -35,16 +35,25 @@ hindcast batch. All use 10 members, 2-year forecasts, `custom-7_1x2_nyears`
 
 | Directory | `my_leadref` | Sample batch | Lead dates | `my_refcase1` (atm) / `my_refcase2` (other) | Flags as saved |
 | --- | --- | --- | --- | --- | --- |
-| `4DEnVarOcn/` | `4DEnVarOcn` | 1980-1981 | May, Nov | `assm_anom_ocn_4DEnVar_loc100_v3` / same | initial compile/setup |
-| `bruteforce/` | `BruteForce` | 1990-1995 | Feb, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run, restarts one month after the lead date |
-| `jra55_fosirl/` | `JRA55-FOSIRL` | 2017-2018 | May, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run |
+| `4DEnVarOcn.v0/` | `4DEnVarOcn` | 1980-1981 | May, Nov | `assm_anom_ocn_4DEnVar_loc100_v3` / same | initial compile/setup |
+| `BruteForce/` | `BruteForce` | 1990-1995 | Feb, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run, restarts one month after the lead date |
+| `JRA55_FOSIRL/` | `JRA55-FOSIRL` | 2017-2018 | May, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run |
+| `RTENSO2026/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | initial compile/setup |
 
-`4DEnVarOcn/` and `bruteforce/` use the current driver; their
+`4DEnVarOcn.v0/` and `BruteForce/` use the current driver; their
 `run_e3sm_ens_bundle.sh` differ only in `#SBATCH` account and wall time, and
-share the same case template. `jra55_fosirl/` uses an earlier driver and case
+share the same case template. `JRA55_FOSIRL/` uses an earlier driver and case
 template with the compile/setup, continuation, and run modes but no
 short-spinup phase (`do_short_spinup` and `do_skip_completed_spinup` are not
 used).
+
+`RTENSO2026/` is `BruteForce/` reading the RTENSO2026 initial conditions
+(`/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/`, see
+`../ensemble_init/RTENSO2026/`), which keep one directory per component:
+`YYYYMMDD/atm/`, `ocn/`, and `lnd/`, `rof/`, `ice/`, `cpl/<method>/`. Each batch
+uses one method, `my_ic_method` (`clim`, `obs`, or `hybrid_ic`; in the case
+name), and optionally another sea ice, `my_ice_method` (for example `nsidc`).
+The 2026 dates are added to `my_leadymd` once their `atm/` exists.
 
 To run a new batch, copy the matching set to a working directory, edit
 `my_leadymd` (and `my_restart_ymd` for continuations), the `#SBATCH` account and
@@ -55,7 +64,7 @@ holds reference MPAS stream files; both are shared by the sets.
 
 ## Quick Start
 
-Always run commands from the run-set directory (for example `bruteforce/`)
+Always run commands from the run-set directory (for example `BruteForce/`)
 because `my_workdir` is set from `$PWD`. Choose exactly one workflow stage at a time:
 
 | Stage | `do_compile_setup_only` | `do_continue_setup` | `do_short_spinup` | `do_ensemble_run` |

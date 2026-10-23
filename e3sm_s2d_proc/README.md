@@ -57,7 +57,7 @@ stays unperturbed. See `ensemble_init/README.md`.
 
 The hindcast driver selects the matching source with `my_leadref` and
 `my_refcase1`/`my_refcase2` in `create_and_setup_case.sh`; `hindcast_run/` has a
-sample run workflow for each set (`4DEnVarOcn/`, `bruteforce/`, `jra55_fosirl/`).
+sample run workflow for each set (`4DEnVarOcn.v0/`, `BruteForce/`, `JRA55_FOSIRL/`, `RTENSO2026/`).
 
 ### Spin-up
 
