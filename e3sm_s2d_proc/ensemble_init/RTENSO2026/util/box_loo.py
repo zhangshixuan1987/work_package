@@ -1,8 +1,8 @@
 """Leave-one-out choice of the box size used by the ``obs`` year selection.
 
-Step 1 of the RTENSO2026 workflow (``01_choose_box_size.ipynb``; before the
-search in 02 and the 2015 evaluation in 04): the box size is chosen from the BruteForce archive alone,
-so the 2015 test dates stay independent.
+Section 2 of each RTENSO2026 initial-condition workflow notebook (01-03): the
+box size is chosen from the BruteForce archive alone, so the 2015 test dates
+stay independent.
 
 For a calendar date, each archive year ``y`` in turn is treated as the unknown
 target: the ``obs`` selection (``clim_restart``) picks the year closest to the
@@ -35,6 +35,11 @@ FIELD_SETS = ("observable", "all")     # observable: fields with ERA5; all: ever
 
 def box_label(box) -> str:
     return "points" if box is None else f"{box[0]:g}x{box[1]:g}"
+
+
+def box_from_label(label: str) -> tuple[float, float] | None:
+    """Inverse of ``box_label``."""
+    return None if label == "points" else tuple(float(x) for x in label.split("x"))
 
 
 def _joint(tables: Mapping[str, list[np.ndarray]]) -> np.ndarray:

@@ -337,6 +337,26 @@ class SelectionPlan:
     obs_roots: dict[str, str] = field(default_factory=lambda: _resolve_obs_roots())
     obs_fields: dict[str, dict[str, str]] = field(default_factory=lambda: _resolve_obs_fields())
     label: str = ""               # output subdirectory; defaults to the branch
+    clim_years: list[int] = field(default_factory=list)   # climatology (mean, spread); [] = candidate years
+
+    def __post_init__(self):
+        if not self.clim_years:
+            self.clim_years = list(self.candidate_years)
+
+    @property
+    def years(self) -> list[int]:
+        """Every archive year read: the candidate and climatology years."""
+        return sorted(set(self.candidate_years) | set(self.clim_years))
+
+    @property
+    def clim_rows(self) -> list[int]:
+        """Rows of the climatology years in ``years``."""
+        return [self.years.index(y) for y in self.clim_years]
+
+    @property
+    def candidate_rows(self) -> list[int]:
+        """Rows of the candidate years in ``years``."""
+        return [self.years.index(y) for y in self.candidate_years]
 
     @property
     def mmdd(self) -> str:
@@ -376,9 +396,18 @@ def make_plan(
     exclude_years: Iterable[int] = (),
     exclude_target_year: bool = True,
     label: str | None = None,
+    clim_first_year: int | None = None,
+    clim_last_year: int | None = None,
 ) -> SelectionPlan:
     """Candidate years (all components available) and output directory
     ``<out_root>/YYYYMMDD/<label>`` (``label`` defaults to the branch).
+
+    The candidate years searched are ``first_year``-``last_year`` without
+    ``exclude_years``. The climatology (the mean and interannual spread that
+    standardize every field, model and observed) uses the available years
+    ``clim_first_year``-``clim_last_year``; with both ``None`` it is the
+    candidate years. The target year is left out of both when
+    ``exclude_target_year``.
 
     If ``obs_root`` / ``era5_root`` or ``obs_fields`` are ``None`` (or omitted
     for a component), the default ERA5 setup is used automatically.
@@ -433,6 +462,13 @@ def make_plan(
         found = set(available_years(src_root, src_prefix, comp, mmdd))
         years = found if years is None else years & found
     years = sorted(years)
+    clim_years = []
+    if clim_first_year is not None or clim_last_year is not None:
+        clim_years = [y for y in years if (clim_first_year is None or y >= clim_first_year)
+                      and (clim_last_year is None or y <= clim_last_year)
+                      and not (exclude_target_year and y == target_year)]
+        if len(clim_years) < 3:
+            raise ValueError(f"Need at least three climatology years for {mmdd}; found {clim_years}")
     if first_year is not None:
         years = [y for y in years if y >= first_year]
     if last_year is not None:
@@ -458,6 +494,7 @@ def make_plan(
         obs_roots=resolved_roots,
         obs_fields=resolved_fields,
         label=label or branch,
+        clim_years=clim_years,
     )
 
 
@@ -517,11 +554,11 @@ def load_key_fields(
 ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     """Key fields as ``{name: (values[n_years, n_points], weights)}``.
 
-    ``years`` defaults to the plan's candidate years. With ``cache_dir``,
+    ``years`` defaults to the plan's ``years`` (candidate and climatology years). With ``cache_dir``,
     fields for every year read are kept (as float32) in
     ``<cache_dir>/<component>_<MM-DD>.npz`` and reused.
     """
-    years = list(plan.candidate_years if years is None else years)
+    years = list(plan.years if years is None else years)
     names = list(KEY_FIELDS[component])
     cache = Path(cache_dir) / f"{component}_{plan.mmdd}.npz" if cache_dir else None
     stored: dict[int, list[np.ndarray]] = {}
@@ -783,13 +820,15 @@ def field_distance(
     target: np.ndarray | None = None,
     obs_years: np.ndarray | None = None,
     obs_target: np.ndarray | None = None,
+    ref: Sequence[int] | None = None,
 ) -> np.ndarray:
-    """Distance d_f of each candidate year (row of ``values``) from a target.
+    """Distance d_f of each year (row of ``values``) from a target.
 
     No target: the climatology (``t = 0``). ``target``: a model state at the
-    same points (standardized with the candidate-year mean and spread).
-    ``obs_years``/``obs_target``: observed values for the candidate years and
-    the target date (standardized with their own mean and spread).
+    same points (standardized with the climatological mean and spread).
+    ``obs_years``/``obs_target``: observed values for the same years and
+    the target date (standardized with their own climatological mean and spread).
+    ``ref`` are the rows that form the climatology (default: all rows).
     """
     valid = np.all(np.isfinite(values), axis=0)
     if target is not None:
@@ -801,11 +840,13 @@ def field_distance(
     if wsum <= 0:
         return np.zeros(values.shape[0])
 
+    rows = slice(None) if ref is None else list(ref)
+
     def standardize(v, t=None):
         v = np.where(valid, v, 0.0)
-        mean = v.mean(axis=0)
+        mean = v[rows].mean(axis=0)
         anom = v - mean
-        spread = np.sqrt((w * (anom ** 2).mean(axis=0)).sum() / wsum)
+        spread = np.sqrt((w * (anom[rows] ** 2).mean(axis=0)).sum() / wsum)
         if spread <= 0:
             return np.zeros_like(anom), None if t is None else np.zeros(v.shape[1])
         zt = None if t is None else (np.where(valid, t, 0.0) - mean) / spread
@@ -857,21 +898,22 @@ def compute_distances(
     """
     table = pd.DataFrame(index=pd.Index(plan.candidate_years, name="year"))
     used = []
+    ref, cand = plan.clim_rows, plan.candidate_rows
     for comp in plan.components:
         obs_comp_fields = plan.obs_fields_for(comp)
         if comp not in KEY_FIELDS or (plan.branch == "obs" and not obs_comp_fields):
             continue
-        model = load_key_fields(plan, comp, cache_dir, log=log)
+        model = load_key_fields(plan, comp, cache_dir, years=plan.years, log=log)
         cols = []
         if plan.branch == "clim":
             lat, lon = _model_points(plan, comp, cache_dir)
             for name, (values, weight) in model.items():
-                d2 = [field_distance(*_apply_box(values, weight, lat, lon, box, offset=off)[:2]) ** 2
+                d2 = [field_distance(*_apply_box(values, weight, lat, lon, box, offset=off)[:2], ref=ref)[cand] ** 2
                       for off in box_offsets(box, box_shifts)]
                 table[f"{comp}: {name}"] = np.sqrt(np.mean(d2, axis=0))
                 cols.append(f"{comp}: {name}")
         else:
-            obs = load_obs_fields(plan, comp, plan.candidate_years + [plan.target_year], cache_dir, log)
+            obs = load_obs_fields(plan, comp, plan.years + [plan.target_year], cache_dir, log)
             points = comparison_points(plan, comp, cache_dir)
             for name in obs_comp_fields:
                 values, weight = model[name]
@@ -882,7 +924,7 @@ def compute_distances(
                 for off in box_offsets(box, box_shifts):
                     vb, wb, o = _apply_box(values, weight, points["lat"], points["lon"], box,
                                            obs=obs[name], offset=off)
-                    d2.append(field_distance(vb, wb, obs_years=o[:-1], obs_target=o[-1]) ** 2)
+                    d2.append(field_distance(vb, wb, obs_years=o[:-1], obs_target=o[-1], ref=ref)[cand] ** 2)
                 table[f"{comp}: {name}"] = np.sqrt(np.mean(d2, axis=0))
                 cols.append(f"{comp}: {name}")
         table[comp] = np.sqrt((table[cols] ** 2).mean(axis=1))
@@ -913,18 +955,63 @@ def distance_to_model_year(
         obs_comp_fields = plan.obs_fields_for(comp)
         if comp not in KEY_FIELDS or (observable_only and not obs_comp_fields):
             continue
-        fields = load_key_fields(plan, comp, cache_dir, years=plan.candidate_years + [target_year], log=log)
+        fields = load_key_fields(plan, comp, cache_dir, years=plan.years + [target_year], log=log)
         lat, lon = _model_points(plan, comp, cache_dir)
         cols = []
         for name, (values, weight) in fields.items():
             if observable_only and name not in obs_comp_fields:
                 continue
             values, weight, _ = _apply_box(values, weight, lat, lon, box)
-            table[f"{comp}: {name}"] = field_distance(values[:-1], weight, target=values[-1])
+            table[f"{comp}: {name}"] = field_distance(values[:-1], weight, target=values[-1],
+                                                      ref=plan.clim_rows)[plan.candidate_rows]
             cols.append(f"{comp}: {name}")
         table[comp] = np.sqrt((table[cols] ** 2).mean(axis=1))
         used.append(comp)
     return _combine(table, used, component_weights)
+
+
+def input_summary(plan: SelectionPlan, cache_dir: Path | None = None, log=print) -> pd.DataFrame:
+    """Read (and cache) the key fields of ``plan`` and summarize them, one row per field and source.
+
+    Model: every archive year read (``plan.years``). Observations (fields with an
+    observed counterpart in the plan's observation set, if available for the
+    target date): the same years and the target date. Columns give the years
+    and points read, the area-weighted climatological mean, and the
+    interannual spread ``S`` over the climatology years.
+    """
+    ref = plan.clim_rows
+    obs_ok = era5_available(plan.target_year, plan.mmdd,
+                            [c for c in plan.components if c in KEY_FIELDS and plan.obs_fields_for(c)],
+                            obs_root=plan.obs_roots, obs_fields=plan.obs_fields)
+    rows = []
+    for comp in plan.components:
+        if comp not in KEY_FIELDS:
+            continue
+        model = load_key_fields(plan, comp, cache_dir, years=plan.years, log=log)
+        points = comparison_points(plan, comp, cache_dir)
+        obs_names = plan.obs_fields_for(comp) if obs_ok else {}
+        obs = load_obs_fields(plan, comp, plan.years + [plan.target_year], cache_dir, log) if obs_names else {}
+        for name, (values, weight) in model.items():
+            sources = [("model", "", values, weight)]
+            if name in obs:
+                wg = weight
+                if comp == "elm":
+                    _, wg = _columns_to_gridcells(values, weight, points["col_grid"], points["lat"].size)
+                sources.append(("observed", obs_names[name], obs[name][:-1], wg))
+            for source, var, v, w in sources:
+                valid = np.all(np.isfinite(v), axis=0) & (w > 0)
+                wv = np.where(valid, w, 0.0)
+                v = np.where(valid, v, 0.0)[ref]
+                mean = v.mean(axis=0)
+                rows.append({
+                    "target_date": plan.target_date, "component": comp, "field": name, "source": source,
+                    "variable": var or "restart", "years read": f"{plan.years[0]}-{plan.years[-1]} ({len(plan.years)})",
+                    "points": int(valid.sum()),
+                    "clim mean": float((wv * mean).sum() / wv.sum()) if wv.sum() > 0 else np.nan,
+                    "spread S": float(np.sqrt((wv * ((v - mean) ** 2).mean(axis=0)).sum() / wv.sum()))
+                    if wv.sum() > 0 else np.nan,
+                })
+    return pd.DataFrame(rows)
 
 
 def select_years(distances: pd.DataFrame, components: Sequence[str], mode: str = "joint") -> dict[str, int]:
@@ -1018,7 +1105,8 @@ def run_selection(
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     """Compute distances, select the year(s), and optionally copy the files."""
     log(f"{plan.target_date} [{plan.branch}]: {len(plan.candidate_years)} candidate years "
-        f"({plan.candidate_years[0]}-{plan.candidate_years[-1]}, excluded {plan.excluded_years})")
+        f"({plan.candidate_years[0]}-{plan.candidate_years[-1]}, excluded {plan.excluded_years}), "
+        f"climatology {plan.clim_years[0]}-{plan.clim_years[-1]} ({len(plan.clim_years)} years)")
     distances = compute_distances(plan, box=box, box_shifts=box_shifts,
                                   component_weights=component_weights, cache_dir=cache_dir, log=log)
     selection = select_years(distances, plan.components, mode)

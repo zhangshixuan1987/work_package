@@ -49,6 +49,10 @@ from clim_restart import (
     summarize_restart,
 )
 
+# Source of the archive restarts (the land, river, and sea-ice states of the BruteForce archive are the
+# JRA55-FOSIRL restarts): names every model state in the figure labels. Notebooks may reset it.
+IC_SOURCE = "JRA55-FOSIRL"
+
 FIELD_UNITS = {
     "NH ice concentration": "fraction",
     "SH ice concentration": "fraction",
@@ -164,13 +168,10 @@ def _cbar(fig, mappable, fontsize: float = BASE_FONTSIZE, skip_ticks: bool = Fal
     cb = fig.colorbar(mappable, **kw)
     edges = getattr(mappable.norm, "boundaries", None)
     if edges is not None:
-        if skip_ticks and len(edges) > 8:
-            cb.set_ticks(edges[::2])
-        else:
-            cb.set_ticks(edges)
-            cb.ax.xaxis.set_major_formatter(
-                FuncFormatter(lambda x, _: f"{int(round(x))}" if np.isclose(x, round(x)) else f"{x:g}")
-            )
+        cb.set_ticks(edges[::2] if skip_ticks and len(edges) > 8 else edges)
+        cb.ax.xaxis.set_major_formatter(
+            FuncFormatter(lambda x, _: f"{int(round(x))}" if np.isclose(x, round(x)) else f"{x:g}")
+        )
     cb.ax.tick_params(labelsize=f["tick"])
     if label:
         cb.set_label(label, fontsize=f["label"])
@@ -259,7 +260,7 @@ def load_test_selections(
     """Load plans, distance tables, and selected years for ``test_dates``.
 
     ``obs_sets`` maps an obs branch name to ``{"root": ..., "fields": ...}``
-    (as in ``02_build_climatology_ic.ipynb``); every branch other than ``clim``
+    (as in ``02_obs_match_ic.ipynb``); every branch other than ``clim``
     is an ``obs`` selection with that set. Without it, the ``obs`` branch uses
     ``obs_root``/``obs_fields``.
     """
@@ -376,9 +377,9 @@ def plot_distance_vs_truth(
 
             ax.scatter(b_dist.loc[other_yrs], t_dist.loc[other_yrs], c="0.65", s=28, alpha=0.8, label="Candidates")
             ax.scatter(b_dist.loc[best_true_yr], t_dist.loc[best_true_yr], c="tab:green", marker="^", s=80, zorder=4,
-                       label=f"Closest to 2015 ({best_true_yr})")
+                       label=f"Closest to {IC_SOURCE} 2015 ({best_true_yr})")
             ax.scatter(b_dist.loc[sel_yr], t_dist.loc[sel_yr], c="tab:red", s=85, zorder=5,
-                       label=f"Selected {branch} ({sel_yr})")
+                       label=f"Selected {branch} ({IC_SOURCE} {sel_yr})")
             for y in (sel_yr, best_true_yr):
                 ax.annotate(str(y), (b_dist.loc[y], t_dist.loc[y]),
                             textcoords="offset points", xytext=(5, 4), fontsize=f["small"])
@@ -392,16 +393,17 @@ def plot_distance_vs_truth(
             ax.tick_params(labelsize=f["tick"])
             ax.grid(True, alpha=0.3)
         for row in range(len(branches)):
-            axes[row, 0].set_ylabel(r"True distance to 2015 ($D_{\mathrm{true}}$, obs fields)", fontsize=f["label"])
+            axes[row, 0].set_ylabel(f"True distance to {IC_SOURCE} 2015\n" + r"($D_{\mathrm{true}}$, obs fields)",
+                                    fontsize=f["label"])
 
     handles = [
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="0.65", markersize=7, label="Candidates"),
-        plt.Line2D([0], [0], marker="^", color="w", markerfacecolor="tab:green", markersize=9, label="Closest to 2015 truth"),
-        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=9, label="Selected candidate year"),
+        plt.Line2D([0], [0], marker="^", color="w", markerfacecolor="tab:green", markersize=9, label=f"Closest to {IC_SOURCE} 2015"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="tab:red", markersize=9, label=f"Selected {IC_SOURCE} year"),
     ]
     fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.985), ncol=3,
                fontsize=f["label"], frameon=True, facecolor="white", edgecolor="0.8")
-    fig.suptitle("Candidate-year selection distance vs. true distance to actual 2015 IC",
+    fig.suptitle(f"Candidate-year selection distance vs. true distance to the {IC_SOURCE} 2015 IC",
                  fontsize=f["suptitle"], fontweight="bold", y=1.02)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     return fig
@@ -462,12 +464,52 @@ def _standardize_series(
     return z, zt, np.where(valid, mean, np.nan), spread, w
 
 
+def _standardize_rows(
+    rows: np.ndarray,
+    ref: Sequence[int],
+    weight: np.ndarray,
+    target: np.ndarray | None = None,
+    valid_mask: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray, float, np.ndarray]:
+    """``_standardize_series`` with the climatology of rows ``ref`` (the climatology years).
+
+    Every row (candidate years and adjusted model states such as ``hybrid_ic``)
+    is standardized with that mean and spread.
+    """
+    _, zt, mean, spread, w = _standardize_series(rows[list(ref)], weight, target, valid_mask)
+    z = (rows - mean) / spread if spread > 0 else np.full_like(rows, np.nan, dtype=np.float64)
+    return z, zt, mean, spread, w
+
+
+def _stack_states(
+    values: np.ndarray,
+    branch_years: Mapping[str, int],
+    year_to_idx: Mapping[int, int],
+    states: Mapping[str, Mapping[str, Mapping[str, np.ndarray]]] | None,
+    component: str,
+    field_name: str,
+) -> tuple[np.ndarray, dict[str, int]]:
+    """Insert the ``states`` rows between the candidate years and the target row of ``values``.
+
+    Returns the new array and the row of each branch (its year's row, or its state's row).
+    """
+    extra = [b for b in branch_years if states and field_name in states.get(b, {}).get(component, {})]
+    row_of = {b: year_to_idx[y] for b, y in branch_years.items() if b not in extra and y in year_to_idx}
+    if extra:
+        n = len(year_to_idx)
+        values = np.vstack([values[:n]] + [np.asarray(states[b][component][field_name])[None, :] for b in extra]
+                           + [values[n:]])
+        row_of.update({b: n + k for k, b in enumerate(extra)})
+    return values, row_of
+
+
 def field_similarity_table(
     plan: SelectionPlan,
     target_year: int,
     branch_years: Mapping[str, int],
     *,
     obs_plans: Mapping[str, SelectionPlan] | None = None,
+    states: Mapping[str, Mapping[str, Mapping[str, np.ndarray]]] | None = None,
     box: tuple[float, float] = (15.0, 30.0),
     cache_dir: Path | None = None,
     log=lambda *_: None,
@@ -475,25 +517,30 @@ def field_similarity_table(
     """Detailed similarity metrics comparing selected years (and observations) against ``target_year``.
 
     ``obs_plans`` maps a ``source`` label to a plan whose observation set is
-    compared with the actual anomaly (default ``{"ERA5": plan}``).
+    compared with the actual anomaly (default ``{"ERA5": plan}``). ``states``
+    maps a branch of ``branch_years`` to an adjusted model state
+    ``{component: {field: values at model points}}`` (such as ``hybrid_ic``),
+    used instead of that branch's year (which then only labels it).
     """
     if obs_plans is None:
         obs_plans = {"ERA5": plan}
-    cand_years = list(plan.candidate_years)
-    year_to_idx = {y: i for i, y in enumerate(cand_years)}
+    years = list(plan.years)            # candidate and climatology years
+    year_to_idx = {y: i for i, y in enumerate(years)}
+    crows = plan.clim_rows      # climatology rows
     rows = []
 
     for comp in plan.components:
         if comp not in KEY_FIELDS:
             continue
-        fields = load_key_fields(plan, comp, cache_dir, years=cand_years + [target_year], log=log)
+        fields = load_key_fields(plan, comp, cache_dir, years=years + [target_year], log=log)
         pts = comparison_points(plan, comp, cache_dir)
         obs_by_source = {
-            label: load_obs_fields(op, comp, cand_years + [target_year], cache_dir, log=log)
+            label: load_obs_fields(op, comp, years + [target_year], cache_dir, log=log)
             for label, op in obs_plans.items() if _has_obs(op, comp, target_year)
         }
 
         for fname, (vals_all, weight_raw) in fields.items():
+            vals_all, row_of = _stack_states(vals_all, branch_years, year_to_idx, states, comp, fname)
             if comp == "elm":
                 vals_grid, w_grid = _columns_to_gridcells(
                     vals_all, weight_raw, pts["col_grid"], pts["lat"].size
@@ -502,16 +549,16 @@ def field_similarity_table(
                 vals_grid, w_grid = vals_all, weight_raw
             lat, lon = pts["lat"], pts["lon"]
 
-            cand_grid, targ_grid = vals_grid[:-1], vals_grid[-1]
-            z_grid, zt_grid, _, _, wg_valid = _standardize_series(cand_grid, w_grid, targ_grid)
+            cand_grid, targ_grid = vals_grid[:-1], vals_grid[-1]     # candidate years, then the states
+            z_grid, zt_grid, _, _, wg_valid = _standardize_rows(cand_grid, crows, w_grid, targ_grid)
 
             box_vals, w_box, _ = _to_boxes(vals_grid, w_grid, lat, lon, box)
-            z_box, zt_box, _, _, wb_valid = _standardize_series(box_vals[:-1], w_box, box_vals[-1])
+            z_box, zt_box, _, _, wb_valid = _standardize_rows(box_vals[:-1], crows, w_box, box_vals[-1])
 
             for branch, y in branch_years.items():
-                if y not in year_to_idx:
+                if branch not in row_of:
                     continue
-                idx = year_to_idx[y]
+                idx = row_of[branch]
                 diff = np.where(wg_valid > 0, cand_grid[idx] - targ_grid, 0.0)
                 wsum_g = float(wg_valid.sum())
                 rows.append({
@@ -536,14 +583,14 @@ def field_similarity_table(
                 o_all = obs[fname]
                 valid_both = np.all(np.isfinite(vals_grid), axis=0) & np.all(np.isfinite(o_all), axis=0)
                 _, zt_g_obs, _, _, wg_o = _standardize_series(
-                    o_all[:-1], w_grid, o_all[-1], valid_mask=valid_both
+                    o_all[crows], w_grid, o_all[-1], valid_mask=valid_both
                 )
                 _, zt_g_mod, _, _, _ = _standardize_series(
-                    cand_grid, w_grid, targ_grid, valid_mask=valid_both
+                    cand_grid[crows], w_grid, targ_grid, valid_mask=valid_both
                 )
                 m_box, wb_o, o_box = _apply_box(vals_grid, w_grid, lat, lon, box, obs=o_all)
-                _, zt_b_mod, _, _, wb_ov = _standardize_series(m_box[:-1], wb_o, m_box[-1])
-                _, zt_b_obs, _, _, _ = _standardize_series(o_box[:-1], wb_o, o_box[-1])
+                _, zt_b_mod, _, _, wb_ov = _standardize_series(m_box[crows], wb_o, m_box[-1])
+                _, zt_b_obs, _, _, _ = _standardize_series(o_box[crows], wb_o, o_box[-1])
 
                 rows.append({
                     "target_date": plan.target_date,
@@ -579,7 +626,7 @@ def plot_field_similarity_bars(
     )
     # Branches (clim first, then obs*) followed by the observation references.
     found = list(dict.fromkeys(sim_df["source"]))
-    branch_src = [b for b in found if b == "clim" or b.startswith("obs")]
+    branch_src = [b for b in found if b in ("clim", "hybrid_ic") or b.startswith("obs")]
     sources = sorted(branch_src, key=lambda b: b != "clim") + [b for b in found if b not in branch_src]
     pivot_d = mean_sim.pivot(index=["component", "field"], columns="source", values="d_box")[sources]
     pivot_r = mean_sim.pivot(index=["component", "field"], columns="source", values="r_box")[sources]
@@ -593,8 +640,10 @@ def plot_field_similarity_bars(
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
     for ax, piv, xlabel, vline in (
-        (axes[0], pivot_d, r"Mean box distance $d_{\mathrm{box}}$ to actual 2015 ($\leftarrow$ smaller is closer)", 1.0),
-        (axes[1], pivot_r, r"Mean box anomaly correlation $r_{\mathrm{box}}$ with actual 2015 (larger is closer $\rightarrow$)", 0.0),
+        (axes[0], pivot_d, r"Mean box distance $d_{\mathrm{box}}$ to " + IC_SOURCE
+         + r" 2015 ($\leftarrow$ smaller is closer)", 1.0),
+        (axes[1], pivot_r, r"Mean box anomaly correlation $r_{\mathrm{box}}$ with " + IC_SOURCE
+         + r" 2015 (larger is closer $\rightarrow$)", 0.0),
     ):
         for k, src in enumerate(sources):
             label = f"{src} IC" if src in branch_src else f"{src} target anomaly"
@@ -610,7 +659,7 @@ def plot_field_similarity_bars(
     handles, leg_labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, leg_labels, loc="upper center", bbox_to_anchor=(0.5, 1.03),
                ncol=min(len(sources), 4), fontsize=f["label"], frameon=True, facecolor="white", edgecolor="0.8")
-    fig.suptitle("Four-season mean similarity to actual 2015 IC by field (2015 sensitivity dates)",
+    fig.suptitle(f"Four-season mean similarity to the {IC_SOURCE} 2015 IC by field (2015 sensitivity dates)",
                  fontsize=f["suptitle"], fontweight="bold", y=1.07)
     return fig
 
@@ -623,8 +672,13 @@ def global_summary_table(
     components: Sequence[str] = ALL_COMPONENTS,
     branches: Sequence[str] | None = None,
     target_year: int = 2015,
+    files: Mapping[tuple[str, str], Mapping[str, Path]] | None = None,
 ) -> pd.DataFrame:
-    """Global integrated quantities comparing actual ``target_year`` against each branch."""
+    """Global integrated quantities comparing actual ``target_year`` against each branch.
+
+    ``files[(branch, date)][component]`` replaces the archive restart of the
+    selected year (for example the written ``hybrid_ic`` restart).
+    """
     if branches is None:
         branches = branches_in(selections)
     rows = []
@@ -635,10 +689,9 @@ def global_summary_table(
             for branch in branches:
                 if (branch, date) in selections:
                     year = selections[(branch, date)][comp]
-                    chosen[branch] = (
-                        year,
-                        summarize_restart(source_file(src_root, src_prefix, comp, year, date[5:]), comp),
-                    )
+                    path = (files or {}).get((branch, date), {}).get(comp) or source_file(
+                        src_root, src_prefix, comp, year, date[5:])
+                    chosen[branch] = (year, summarize_restart(Path(path), comp))
             for name in actual:
                 row = {"target_date": date, "component": comp, "quantity": name, f"actual_{target_year}": actual[name]}
                 for branch, (year, values) in chosen.items():
@@ -661,6 +714,7 @@ def prepare_spatial_field(
     branch_years: Mapping[str, int],
     *,
     obs_plans: Mapping[str, SelectionPlan] | None = None,
+    states: Mapping[str, Mapping[str, Mapping[str, np.ndarray]]] | None = None,
     box: tuple[float, float] = (15.0, 30.0),
     cache_dir: Path | None = None,
     log=lambda *_: None,
@@ -669,13 +723,17 @@ def prepare_spatial_field(
 
     ``obs_plans`` maps a key to a plan whose observed anomaly is added under that
     key (default ``{"era5": plan}``); the keys are listed in ``"obs_refs"``.
+    ``states`` maps a branch to an adjusted model state, as in
+    ``field_similarity_table``.
     """
     if obs_plans is None:
         obs_plans = {"era5": plan}
-    cand_years = list(plan.candidate_years)
-    year_to_idx = {y: i for i, y in enumerate(cand_years)}
-    fields = load_key_fields(plan, component, cache_dir, years=cand_years + [target_year], log=log)
+    years = list(plan.years)            # candidate and climatology years
+    year_to_idx = {y: i for i, y in enumerate(years)}
+    crows = plan.clim_rows      # climatology rows
+    fields = load_key_fields(plan, component, cache_dir, years=years + [target_year], log=log)
     vals_all, weight_raw = fields[field_name]
+    vals_all, row_of = _stack_states(vals_all, branch_years, year_to_idx, states, component, field_name)
     pts = comparison_points(plan, component, cache_dir)
 
     if component == "elm":
@@ -686,8 +744,8 @@ def prepare_spatial_field(
         vals_grid, w_grid = vals_all, weight_raw
     lat, lon = pts["lat"], pts["lon"]
 
-    cand_grid, targ_grid = vals_grid[:-1], vals_grid[-1]
-    z_grid, zt_grid, clim_mean, spread, wg_valid = _standardize_series(cand_grid, w_grid, targ_grid)
+    cand_grid, targ_grid = vals_grid[:-1], vals_grid[-1]     # candidate years, then the states
+    z_grid, zt_grid, clim_mean, spread, wg_valid = _standardize_rows(cand_grid, crows, w_grid, targ_grid)
 
     dlat, dlon = box
     nlat, nlon = int(round(180.0 / dlat)), int(round(360.0 / dlon))
@@ -695,7 +753,7 @@ def prepare_spatial_field(
     lon_edges = np.linspace(0.0, 360.0, nlon + 1)
 
     box_vals, w_box, _ = _to_boxes(vals_grid, w_grid, lat, lon, box)
-    z_box, zt_box, _, _, wb_valid = _standardize_series(box_vals[:-1], w_box, box_vals[-1])
+    z_box, zt_box, _, _, wb_valid = _standardize_rows(box_vals[:-1], crows, w_box, box_vals[-1])
 
     raw = {
         "actual": np.where(wg_valid > 0, targ_grid, np.nan),
@@ -710,7 +768,7 @@ def prepare_spatial_field(
     wsum_g = float(wg_valid.sum())
 
     for branch, y in branch_years.items():
-        idx = year_to_idx[y]
+        idx = row_of[branch]
         raw_b = np.where(wg_valid > 0, cand_grid[idx], np.nan)
         raw[branch] = raw_b
         diff[branch] = raw_b - raw["actual"]
@@ -730,6 +788,16 @@ def prepare_spatial_field(
             "pcc": _weighted_corr(cand_grid[idx], targ_grid, wg_valid),
             "bias": float((wg_valid * df_diff).sum() / wsum_g) if wsum_g > 0 else np.nan,
         }
+        # Against the climatology (the target of the clim selection); the RMS standardized anomaly is
+        # what the selection minimizes (on boxes).
+        anom = np.where(wg_valid > 0, cand_grid[idx] - clim_mean, 0.0)
+        metrics[branch].update({
+            "rmse_clim": _weighted_rms_diff(cand_grid[idx], clim_mean, wg_valid),
+            "pcc_clim": _weighted_corr(cand_grid[idx], clim_mean, wg_valid),
+            "bias_clim": float((wg_valid * anom).sum() / wsum_g) if wsum_g > 0 else np.nan,
+            "zrms_grid": _weighted_rms_diff(z_grid[idx], np.zeros_like(z_grid[idx]), wg_valid),
+            "zrms_box": _weighted_rms_diff(z_box[idx], np.zeros_like(z_box[idx]), wb_valid),
+        })
 
     # Baseline: the candidate-year climatology against actual.
     clim_diff = np.where(wg_valid > 0, clim_mean - targ_grid, 0.0)
@@ -745,15 +813,15 @@ def prepare_spatial_field(
         if field_name not in op.obs_fields_for(component) or not _has_obs(op, component, target_year):
             continue
         obs_refs.append(ref)
-        obs_all = load_obs_fields(op, component, cand_years + [target_year], cache_dir, log=log)[field_name]
+        obs_all = load_obs_fields(op, component, years + [target_year], cache_dir, log=log)[field_name]
         valid_both = np.all(np.isfinite(vals_grid), axis=0) & np.all(np.isfinite(obs_all), axis=0)
-        _, zt_g_obs, _, _, wg_o = _standardize_series(obs_all[:-1], w_grid, obs_all[-1], valid_mask=valid_both)
-        z_g_mod, zt_g_mod, _, _, _ = _standardize_series(cand_grid, w_grid, targ_grid, valid_mask=valid_both)
+        _, zt_g_obs, _, _, wg_o = _standardize_series(obs_all[crows], w_grid, obs_all[-1], valid_mask=valid_both)
+        z_g_mod, zt_g_mod, _, _, _ = _standardize_rows(cand_grid, crows, w_grid, targ_grid, valid_mask=valid_both)
         z_map[ref] = zt_g_obs
 
         m_box, wb_o, o_box = _apply_box(vals_grid, w_grid, lat, lon, box, obs=obs_all)
-        z_b_mod, zt_b_mod, _, _, wb_ov = _standardize_series(m_box[:-1], wb_o, m_box[-1])
-        _, zt_b_obs, _, _, _ = _standardize_series(o_box[:-1], wb_o, o_box[-1])
+        z_b_mod, zt_b_mod, _, _, wb_ov = _standardize_rows(m_box[:-1], crows, wb_o, m_box[-1])
+        _, zt_b_obs, _, _, _ = _standardize_series(o_box[crows], wb_o, o_box[-1])
         box_z[ref] = np.where(wb_ov > 0, zt_b_obs, np.nan).reshape(nlat, nlon)
         box_diff_z[ref] = np.where(wb_ov > 0, zt_b_obs - zt_b_mod, np.nan).reshape(nlat, nlon)
 
@@ -773,7 +841,7 @@ def prepare_spatial_field(
 
         vs_obs[ref] = {"actual": _vs(zt_g_mod, zt_b_mod)}
         for branch, y in branch_years.items():
-            vs_obs[ref][branch] = _vs(z_g_mod[year_to_idx[y]], z_b_mod[year_to_idx[y]])
+            vs_obs[ref][branch] = _vs(z_g_mod[row_of[branch]], z_b_mod[row_of[branch]])
 
     return {
         "component": component,
@@ -781,7 +849,7 @@ def prepare_spatial_field(
         "units": FIELD_UNITS.get(field_name, ""),
         "target_date": plan.target_date,
         "target_year": int(target_year),
-        "clim_years": (int(cand_years[0]), int(cand_years[-1])),
+        "clim_years": (int(plan.clim_years[0]), int(plan.clim_years[-1])),
         "branch_years": {k: int(v) for k, v in branch_years.items()},
         "obs_refs": obs_refs,
         "lat": lat,
@@ -829,19 +897,21 @@ def plot_box_spatial(
 
     date = spatial["target_date"]
     refs = [r for r in spatial.get("obs_refs", ["era5"]) if r in binfo["z"]]
-    if refs:     # the observation is the truth; statistics of the model panels are against it
+    versus = "observed"
+    if refs:     # the observation is the target; the reference (leftmost) and the ICs are scored against it
         metrics = spatial["vs_obs"][refs[0]]
         m = metrics["actual"]
-        panels = [(_obs_title(refs[0], date, spatial.get("component")), binfo["z"][refs[0]]),
-                  (f"{_actual_title(date)}\nvs truth: box PCC={m['r_box']:.2f}, RMSE={m['d_box']:.2f}",
-                   binfo["z"]["actual"])]
+        panels = [(f"{_actual_title(date)}\nvs observed: box PCC={m['r_box']:.2f}, RMSE={m['d_box']:.2f}",
+                   binfo["z"]["actual"]),
+                  (_obs_title(refs[0], date, spatial.get("component")), binfo["z"][refs[0]])]
     else:
-        panels = [(f"Truth: E3SM actual {date} state", binfo["z"]["actual"])]
+        versus = "reference"
+        panels = [(f"{_actual_title(date)}\n(no observation: the target)", binfo["z"]["actual"])]
     for b in byears:
         if b in binfo["z"]:
             m = metrics[b]
             panels.append((f"{_branch_title(b, byears[b], date)}\n"
-                           f"vs truth: box PCC={m['r_box']:.2f}, RMSE={m['d_box']:.2f}",
+                           f"vs {versus}: box PCC={m['r_box']:.2f}, RMSE={m['d_box']:.2f}",
                            binfo["z"][b]))
 
     f = font_sizes(fontsize)
@@ -917,16 +987,19 @@ OBS_DATASETS = {"ERA5-Land/NSIDC": {"elm": "ERA5-Land", "mpassi": "NOAA/NSIDC CD
 def _obs_title(ref: str, date: str, component: str | None = None) -> str:
     name = _ref_name(ref)
     dataset = OBS_DATASETS.get(name, {}).get(component, name)
-    return f"Truth: observed {date} anomaly\n({dataset})"
+    return f"Target: observed {date} anomaly\n({dataset})"
 
 
 def _actual_title(date: str) -> str:
-    return f"Reference: E3SM actual {date} state"
+    return f"Reference: {IC_SOURCE} {date} IC"
 
 
 def _branch_title(branch: str, year: int, date: str | None = None) -> str:
     when = f"{year}{date[4:]}" if date else str(year)
-    return f"Selected initial condition: E3SM {when} state\n(year chosen by matching the observation)"
+    if branch == "hybrid_ic":
+        return f"Initial condition: {IC_SOURCE} {when} IC\n+ observed anomaly (hybrid_ic)"
+    how = "year closest to the climatology" if branch == "clim" else "year chosen by matching the observation"
+    return f"Selected initial condition: {IC_SOURCE} {when} IC\n({how})"
 
 
 def _state_stats(m: dict) -> str:
@@ -938,32 +1011,53 @@ def _state_titles(sp: dict, branch: str, year: int) -> dict:
     """Titles of the state-and-difference panels."""
     date = sp["target_date"]
     y0, y1 = sp.get("clim_years", ("", ""))
-    return {"actual": f"Reference: E3SM actual {date} state",
-            "branch": f"Selected initial condition: E3SM {year}{date[4:]} state",
-            "clim": f"Baseline: E3SM {y0}-{y1} mean for {date[5:]}\n(no year selection)",
-            "diff": "Error: selected initial condition - reference"}
+    return {"actual": _actual_title(date),
+            "branch": (f"Initial condition: {IC_SOURCE} {year}{date[4:]}\n+ observed anomaly (hybrid_ic)"
+                       if branch == "hybrid_ic" else f"Selected initial condition:\n{IC_SOURCE} {year}{date[4:]} IC"),
+            "clim": f"Baseline: {IC_SOURCE} {y0}-{y1} mean for {date[5:]}\n(no year selection)",
+            "diff": "Error: initial condition - reference"}
 
 
-def _z_stats(m: dict) -> str:
-    """PCC and RMSE of a standardized anomaly against the actual one (grid), plus the box PCC."""
-    return f"vs truth: PCC={m['r_grid']:.2f}, RMSE={m['d_grid']:.2f}, box PCC={m['r_box']:.2f}"
+def _clim_stats(m: dict) -> str:
+    """PCC and RMSE of a field against the climatology."""
+    return f"vs climatology: PCC={m['pcc_clim']:.2f}, RMSE={m['rmse_clim']:.3g}"
+
+
+def _clim_titles(sp: dict) -> dict:
+    """Titles of the state panels when the climatology is the target (``reference="climatology"``)."""
+    date = sp["target_date"]
+    y0, y1 = sp.get("clim_years", ("", ""))
+    return {"actual": f"{_actual_title(date)}\n(for reference only)",
+            "clim": f"Target: {IC_SOURCE} {y0}-{y1}\nmean for {date[5:]} (climatology)",
+            "diff": "Anomaly: initial condition - climatology"}
+
+
+def _zrms(m: dict) -> str:
+    """RMS standardized anomaly at grid points and on boxes (the clim selection distance)."""
+    return f"RMS z={m['zrms_grid']:.2f} (box {m['zrms_box']:.2f})"
+
+
+def _z_stats(m: dict, versus: str = "observed") -> str:
+    """PCC and RMSE of a standardized anomaly against the target (grid), plus the box PCC."""
+    return f"vs {versus}: PCC={m['r_grid']:.2f}, RMSE={m['d_grid']:.2f}, box PCC={m['r_box']:.2f}"
 
 
 def _z_panels(spatial: dict, **_) -> list[tuple[str, np.ndarray]]:
-    """``(title, z)`` panels: the observed anomaly (the truth), the actual model state (the reference), then
-    each selected initial condition; the model panels' statistics are against the observed anomaly."""
+    """``(title, z)`` panels: the actual model state (the reference, leftmost), the observed anomaly (the
+    target), then each initial condition; the model panels' statistics are against the observed anomaly.
+    Fields without an observation compare the initial conditions with the actual state."""
     date, byears, metrics = spatial["target_date"], spatial["branch_years"], spatial["metrics"]
     comp = spatial.get("component")
     refs = [r for r in spatial.get("obs_refs", ["era5"]) if r in spatial["z"]]
-    if refs:     # the observation is the truth; statistics of the model panels are against it
+    if refs:     # the observation is the target; statistics of the model panels are against it
         truth = spatial["vs_obs"][refs[0]]
-        panels = [(_obs_title(refs[0], date, comp), spatial["z"][refs[0]])]
-        panels.append((f"{_actual_title(date)}\n{_z_stats(truth['actual'])}", spatial["z"]["actual"]))
+        panels = [(f"{_actual_title(date)}\n{_z_stats(truth['actual'])}", spatial["z"]["actual"]),
+                  (_obs_title(refs[0], date, comp), spatial["z"][refs[0]])]
         panels += [(f"{_branch_title(b, byears[b], date)}\n{_z_stats(truth[b])}", spatial["z"][b])
                    for b in byears if b in spatial["z"]]
     else:        # no observation for this field: compare with the actual state
-        panels = [(f"Truth: E3SM actual {date} state", spatial["z"]["actual"])]
-        panels += [(f"{_branch_title(b, byears[b], date)}\n{_z_stats(metrics[b])}", spatial["z"][b])
+        panels = [(f"{_actual_title(date)}\n(no observation: the target)", spatial["z"]["actual"])]
+        panels += [(f"{_branch_title(b, byears[b], date)}\n{_z_stats(metrics[b], 'reference')}", spatial["z"][b])
                    for b in byears if b in spatial["z"]]
     return panels
 
@@ -1025,6 +1119,7 @@ def plot_mpassi_spatial(
     vmax: float | None = None,
     diff_lim: float | None = None,
     z_lim: float = 2.5,
+    reference: str = "actual",
     fontsize: float = BASE_FONTSIZE,
     panel_size: tuple[float, float] | None = None,
 ):
@@ -1033,8 +1128,13 @@ def plot_mpassi_spatial(
     ``spatial`` is one ``prepare_spatial_field`` result or several (e.g. the NH
     and SH versions of a field), drawn one row each in their own polar
     projection. ``state_and_diff``: actual, each branch, and each branch minus
-    actual. ``z``: actual, each observation reference, and each branch.
+    actual; with ``reference="climatology"``, actual (for reference only), the
+    candidate-year climatology (the target), each branch against it, and each
+    branch minus the climatology. ``z``: actual, each observation reference,
+    and each branch.
     """
+    if reference not in ("actual", "climatology"):
+        raise ValueError(f"reference must be 'actual' or 'climatology', got {reference!r}")
     ensure_proj_data()
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -1066,14 +1166,29 @@ def plot_mpassi_spatial(
                     float(np.nanpercentile(act[np.isfinite(act)], 99)) if np.any(np.isfinite(act)) else 1.0)
             dl = _diff_limit(sp, 98, 0.5) if diff_lim is None else diff_lim
             titles = {b: _state_titles(sp, b, byears[b]) for b in branches}
-            panels = [(f"{prefix}Reference: E3SM actual {sp['target_date']} state", act, state_cmap, lo, hi, units)]
-            panels += [(f"{prefix}{titles[b]['branch']}\n{_state_stats(metrics[b])}", sp["raw"][b], state_cmap, lo,
-                        hi, units) for b in branches]
-            panels += [(
-                f"{prefix}{titles[b]['diff']}\nbias={metrics[b]['bias']:+.3g}, "
-                f"box PCC={metrics[b]['r_box']:.2f}",
-                sp["diff"][b], diff_cmap, -dl, dl, f"diff ({units})",
-            ) for b in branches]
+            if reference == "climatology":
+                clim, ct = sp["raw"]["climatology"], _clim_titles(sp)
+                anoms = {b: sp["raw"][b] - clim for b in branches}
+                if diff_lim is None:
+                    vals = np.concatenate([np.abs(a[np.isfinite(a)]) for a in anoms.values()] or [np.array([0.5])])
+                    dl = max(float(np.nanpercentile(vals, 98)) if vals.size else 0.5, 1e-3)
+                panels = [(f"{prefix}{ct['actual']}", act, state_cmap, lo, hi, units),
+                          (f"{prefix}{ct['clim']}", clim, state_cmap, lo, hi, units)]
+                panels += [(f"{prefix}{titles[b]['branch']}\n{_clim_stats(metrics[b])}", sp["raw"][b], state_cmap,
+                            lo, hi, units) for b in branches]
+                panels += [(
+                    f"{prefix}{ct['diff']}\nbias={metrics[b]['bias_clim']:+.3g}, {_zrms(metrics[b])}",
+                    anoms[b], diff_cmap, -dl, dl, f"diff ({units})",
+                ) for b in branches]
+            else:
+                panels = [(f"{prefix}{_actual_title(sp['target_date'])}", act, state_cmap, lo, hi, units)]
+                panels += [(f"{prefix}{titles[b]['branch']}\n{_state_stats(metrics[b])}", sp["raw"][b], state_cmap,
+                            lo, hi, units) for b in branches]
+                panels += [(
+                    f"{prefix}{titles[b]['diff']}\nbias={metrics[b]['bias']:+.3g}, "
+                    f"box PCC={metrics[b]['r_box']:.2f}",
+                    sp["diff"][b], diff_cmap, -dl, dl, f"diff ({units})",
+                ) for b in branches]
         elif kind == "z":
             panels = [(f"{prefix}{t}", z, diff_cmap, -z_lim, z_lim, "z (std. anom.)") for t, z in _z_panels(sp)]
         else:
@@ -1123,7 +1238,7 @@ def plot_mpassi_spatial(
                       label=f"{r_name} ({r_units})")
             if diff_axes and diff_coll is not None:
                 _cbar(fig, diff_coll, fontsize, ax=diff_axes, orientation="horizontal",
-                      fraction=0.045, pad=0.05, aspect=18, shrink=0.88, skip_ticks=False,
+                      fraction=0.045, pad=0.05, aspect=18, shrink=0.88, skip_ticks=True,
                       label=f"diff ({r_units})")
         elif kind == "z" and len(rows) == 1 and state_axes:
             _cbar(fig, last_coll, fontsize, ax=state_axes, orientation="horizontal",
@@ -1152,16 +1267,26 @@ def plot_mpassi_four_seasons(
     descriptors: Mapping[str, object],
     *,
     branches: Sequence[str] | None = None,
+    states: Mapping[str, Mapping[str, Mapping[str, Mapping[str, np.ndarray]]]] | None = None,
     box: tuple[float, float] = (15.0, 30.0),
     cache_dir: Path | None = None,
     cmap: str | None = None,
     vmin: float = 0.0,
     vmax: float = 1.0,
     diff_lim: float = 0.4,
+    reference: str = "actual",
     fontsize: float = BASE_FONTSIZE,
     panel_size: tuple[float, float] | None = None,
 ):
-    """Four-season comparison of MPAS-Seaice state and each branch's difference using ``mosaic``."""
+    """Four-season comparison of MPAS-Seaice state and each branch's difference using ``mosaic``.
+
+    Columns: actual, then each branch minus actual. With ``reference="climatology"``:
+    actual (for reference only), the candidate-year climatology (the target), then
+    each branch minus the climatology. ``states[date]`` maps a branch to an
+    adjusted model state, as in ``field_similarity_table``.
+    """
+    if reference not in ("actual", "climatology"):
+        raise ValueError(f"reference must be 'actual' or 'climatology', got {reference!r}")
     ensure_proj_data()
     import cartopy.crs as ccrs
     import matplotlib.path as mpath
@@ -1177,7 +1302,7 @@ def plot_mpassi_four_seasons(
     hemi = "NH" if field_name.startswith("NH") else "SH"
     extent = [-180, 180, 45, 90] if hemi == "NH" else [-180, 180, -90, -45]
     desc = descriptors[hemi]
-    ncol = 1 + len(branches)
+    ncol = (2 if reference == "climatology" else 1) + len(branches)
     f = font_sizes(fontsize)
     pw, ph = _panel(panel_size, (3.85, 3.3), fontsize)
     fig, axes = plt.subplots(
@@ -1188,16 +1313,26 @@ def plot_mpassi_four_seasons(
         byears = {b: selections[(b, date)]["mpassi"] for b in branches if (b, date) in selections}
         sp = prepare_spatial_field(
             _date_plan(plans, date), "mpassi", field_name, 2015, byears, obs_plans={},
-            box=box, cache_dir=cache_dir, log=lambda *_: None,
+            states=(states or {}).get(date), box=box, cache_dir=cache_dir, log=lambda *_: None,
         )
-        panels = [(f"{date}: Actual 2015", sp["raw"]["actual"], cmap, vmin, vmax)]
+        if reference == "climatology":
+            y0, y1 = sp["clim_years"]
+            panels = [(f"{date}: {IC_SOURCE} 2015\n(for reference only)", sp["raw"]["actual"], cmap, vmin, vmax),
+                      (f"Target: {IC_SOURCE} {y0}-{y1} mean\n(climatology)", sp["raw"]["climatology"], cmap,
+                       vmin, vmax)]
+        else:
+            panels = [(f"{date}: {IC_SOURCE} 2015", sp["raw"]["actual"], cmap, vmin, vmax)]
         for b in branches:
             if b not in byears:
                 panels.append(None)
                 continue
             m = sp["metrics"][b]
-            panels.append((f"{b} ({byears[b]}) - 2015\n{_state_stats(m)}",
-                           sp["diff"][b], DIFF_CMAP, -diff_lim, diff_lim))
+            if reference == "climatology":
+                panels.append((f"{b}: {IC_SOURCE} {byears[b]} - climatology\n{_clim_stats(m)}\n{_zrms(m)}",
+                               sp["raw"][b] - sp["raw"]["climatology"], DIFF_CMAP, -diff_lim, diff_lim))
+            else:
+                panels.append((f"{b}: {IC_SOURCE} {byears[b]} - 2015\n{_state_stats(m)}",
+                               sp["diff"][b], DIFF_CMAP, -diff_lim, diff_lim))
         for col, panel in enumerate(panels):
             ax = axes[row, col]
             if panel is None:
@@ -1212,8 +1347,9 @@ def plot_mpassi_four_seasons(
             ax.set_boundary(circle_path, transform=ax.transAxes)
             ax.set_title(title, fontsize=f["title"])
             if row == len(test_dates) - 1:
-                lbl = "concentration" if col == 0 else "difference"
-                _cbar(fig, coll, fontsize, ax=ax, orientation="horizontal", fraction=0.05, pad=0.04, label=lbl)
+                lbl = "difference" if cm == DIFF_CMAP else "concentration"
+                _cbar(fig, coll, fontsize, ax=ax, orientation="horizontal", fraction=0.05, pad=0.04, label=lbl,
+                      skip_ticks=cm == DIFF_CMAP)
     fig.suptitle(f"MPAS-Seaice {field_name}: 4-season comparison across 2015 dates",
                  fontsize=f["suptitle"], fontweight="bold")
     return fig
@@ -1313,16 +1449,21 @@ def plot_elm_spatial(
     diff_percent: bool = True,
     z_lim: float = 3.0,
     z_levels: Sequence[float] | None = None,
+    reference: str = "actual",
     fontsize: float = BASE_FONTSIZE,
     panel_size: tuple[float, float] | None = None,
 ):
     """Plot ELM fields on the native ``grid1d`` land mesh using ``mosaic.polypcolor``.
 
-    ``state_and_diff``: one row with actual, each branch, the candidate-year
-    climatology, and each branch minus actual. ``z``: actual, each observation
-    reference, and each branch. ``spatial`` may be a list of fields, drawn one
-    row each in a single figure.
+    ``state_and_diff``: one row with the candidate-year climatology, actual,
+    each branch, and each branch minus actual; with
+    ``reference="climatology"``, actual (for reference only), the climatology
+    (the target), each branch against it, and each branch minus the
+    climatology. ``z``: actual, each observation reference, and each branch.
+    ``spatial`` may be a list of fields, drawn one row each in a single figure.
     """
+    if reference not in ("actual", "climatology"):
+        raise ValueError(f"reference must be 'actual' or 'climatology', got {reference!r}")
     ensure_proj_data()
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -1375,13 +1516,40 @@ def plot_elm_spatial(
             titles = {b: _state_titles(sp, b, by[b]) for b in branches}
             clim_title = _state_titles(sp, "", 0)["clim"]
             clim_full = f"{clim_title}\n{_state_stats(met['climatology'])}"
-            ref_title = f"Reference: E3SM actual {sp['target_date']} state"
+            ref_title = _actual_title(sp["target_date"])
 
-            # Baseline climatology in column 1
-            panels = [(f"[{fn}]\n{clim_full}" if len(spatials) > 1 else clim_full,
-                       sp["raw"]["climatology"], cm, lo, hi, label, levels)]
-            # Reference in column 2
-            panels.append((ref_title, act, cm, lo, hi, label, levels))
+            if reference == "climatology":
+                # Reference (for reference only), target climatology, selected IC, anomaly from the target.
+                ct = _clim_titles(sp)
+                clim = sp["raw"]["climatology"]
+                panels = [(f"[{fn}]\n{ct['actual']}" if len(spatials) > 1 else ct["actual"],
+                           act, cm, lo, hi, label, levels),
+                          (ct["clim"], clim, cm, lo, hi, label, levels)]
+                panels += [(f"{titles[b]['branch']}\n{_clim_stats(met[b])}", sp["raw"][b], cm, lo, hi, label,
+                            levels) for b in branches]
+                for b in branches:
+                    m, raw_b = met[b], sp["raw"][b]
+                    if diff_percent:
+                        pct_levels = DIFF_PCT_LEVELS.get(fn, [-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, 100])
+                        mean_c, mean_b = float(np.nanmean(clim)), float(np.nanmean(raw_b))
+                        bias_str = (f"bias={100.0 * (mean_b - mean_c) / mean_c:+.1f}%" if abs(mean_c) > 1e-4
+                                    else f"bias={m['bias_clim']:+.2g}")
+                        panels.append((f"{ct['diff']}\n{bias_str}, {_zrms(m)}", _compute_diff_percent(fn, raw_b, clim),
+                                       diff_cmap, -float(pct_levels[-1]), float(pct_levels[-1]), "diff (%)",
+                                       pct_levels))
+                    else:
+                        d = raw_b - clim
+                        dlc = diff_lim if diff_lim is not None else max(
+                            float(np.nanpercentile(np.abs(d[np.isfinite(d)]), 97)) if np.isfinite(d).any() else 1.0,
+                            1e-3)
+                        panels.append((f"{ct['diff']}\nbias={m['bias_clim']:+.3g}, {_zrms(m)}", d, diff_cmap,
+                                       -dlc, dlc, f"diff ({units})", None))
+                rows.append(panels)
+                continue
+
+            # Reference in column 1, baseline climatology in column 2
+            panels = [(f"[{fn}]\n{ref_title}" if len(spatials) > 1 else ref_title, act, cm, lo, hi, label, levels),
+                      (clim_full, sp["raw"]["climatology"], cm, lo, hi, label, levels)]
             # Selected initial condition(s) in column 3
             panels += [(f"{titles[b]['branch']}\n{_state_stats(met[b])}", sp["raw"][b], cm, lo, hi, label, levels)
                        for b in branches]
@@ -1446,7 +1614,7 @@ def plot_elm_spatial(
                 diff_label = "diff (%)" if diff_percent else f"diff ({units})"
                 _cbar(
                     fig, diff_coll, fontsize, ax=diff_axes, orientation="horizontal",
-                    fraction=0.045, pad=0.05, aspect=18, shrink=0.88, skip_ticks=False,
+                    fraction=0.045, pad=0.05, aspect=18, shrink=0.88, skip_ticks=True,
                     label=diff_label,
                 )
         what = "key fields" if len(spatials) > 1 else f"{fname} ({spatial['units']})"
@@ -1501,6 +1669,7 @@ def plot_elm_four_seasons(
     *,
     branches: Sequence[str] | None = None,
     obs_refs: Mapping[str, str] | None = None,
+    states: Mapping[str, Mapping[str, Mapping[str, Mapping[str, np.ndarray]]]] | None = None,
     box: tuple[float, float] = (15.0, 30.0),
     cache_dir: Path | None = None,
     z_lim: float = 3.0,
@@ -1511,7 +1680,8 @@ def plot_elm_four_seasons(
     """Four-season comparison of ELM standardized anomalies on the native mesh via ``mosaic``.
 
     Columns: actual, each observation reference (``obs_refs`` maps an obs
-    branch to its label; default ERA5), and each branch.
+    branch to its label; default ERA5), and each branch. ``states[date]`` maps
+    a branch to an adjusted model state, as in ``field_similarity_table``.
     """
     ensure_proj_data()
     import cartopy.crs as ccrs
@@ -1526,7 +1696,7 @@ def plot_elm_four_seasons(
         byears = {b: selections[(b, date)]["elm"] for b in branches if (b, date) in selections}
         sp = prepare_spatial_field(
             _date_plan(plans, date), "elm", field_name, 2015, byears,
-            obs_plans=_obs_plans_for(plans, date, obs_refs),
+            obs_plans=_obs_plans_for(plans, date, obs_refs), states=(states or {}).get(date),
             box=box, cache_dir=cache_dir, log=lambda *_: None,
         )
         m = sp["metrics"]

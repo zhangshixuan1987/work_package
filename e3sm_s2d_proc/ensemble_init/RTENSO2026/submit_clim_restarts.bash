@@ -10,7 +10,7 @@
 
 # Select a BruteForce year and copy its land, river, and sea-ice restarts for
 # each RTENSO2026 date and branch (clim: closest to climatology; obs: closest
-# to ERA5). One array task per date runs every branch. Submit from this
+# to the observations, ERA5-Land/NSIDC by default). One array task per date runs every branch. Submit from this
 # directory:
 #   sbatch submit_clim_restarts.bash
 # Logs go to the output root (initial_conditions/logs/), as does the key-field
@@ -22,10 +22,11 @@
 src_root="/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/BruteForce"
 out_root="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions"
 
-# Observation data for land (ELM) and sea ice (MPAS-Seaice).
-# Leave empty ("") to use the default ERA5 setup (/global/cfs/projectdirs/m3522/cmip6/ERA5/e5.oper.an.sfc).
-obs_root_elm=""
-obs_root_mpassi=""
+# Observation data for land (ELM) and sea ice (MPAS-Seaice) used by the obs branch (written to obs/):
+# ERA5-Land and the NOAA/NSIDC CDR, as OBS_SET = "era5land_nsidc" in 02_obs_match_ic.ipynb.
+# Set both to "" for ERA5 (/global/cfs/projectdirs/m3522/cmip6/ERA5/e5.oper.an.sfc).
+obs_root_elm="/global/cfs/cdirs/e3sm/zhan391/data/ERA5_LND"
+obs_root_mpassi="/global/cfs/cdirs/e3sm/zhan391/data/NOAA_NSIDC"
 
 dates=(2015-02-01 2015-05-01 2015-08-01 2015-11-01
        2026-02-01 2026-05-01 2026-08-01 2026-11-01)

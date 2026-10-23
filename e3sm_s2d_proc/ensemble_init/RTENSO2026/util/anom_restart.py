@@ -1,4 +1,4 @@
-"""Climatology plus observed anomaly ("clim_anom") restarts for RTENSO2026.
+"""Climatology plus observed anomaly ("hybrid_ic") restarts for RTENSO2026.
 
 The ``clim`` branch of ``clim_restart`` selects the BruteForce year closest to
 the candidate-year climatology. This module starts from that restart (the
@@ -7,7 +7,7 @@ fields, so the state is the model climatology plus the observed anomaly:
 
     target_i = xbar_i + a_i,      a_i = z_i * s_i,      z_i = (o_T,i - obar_i) / so_i
 
-with ``xbar`` / ``obar`` the model / observed means over the candidate years at
+with ``xbar`` / ``obar`` the model / observed means over the climatology years at
 point ``i`` (ELM grid cell or MPAS-Seaice cell), ``o_T`` the observed value on
 the target date, and ``s_i`` / ``so_i`` the model / observed interannual
 standard deviations at the point (``scale="point"``, the default): the observed
@@ -51,7 +51,7 @@ shift decays to zero below 2.89 m (the bottom of ERA5 stl4/swvl4) with e-folding
 ``ratio_bounds``); ``shift`` fields get ``target - base`` added. A ratio cannot
 create snow or sea ice where the base has none, so those points keep the base
 state (reported as ``frac unreachable``). With ``envelope=True`` the new value
-of each column / cell is kept within the range of the candidate years at that
+of each column / cell is kept within the range of the archive years read at that
 point (ELM has no porosity in its restart, so this is the bound that keeps soil
 water physical). Only soil and crop columns (``cols1d_ityplun`` 1, 2) of ELM
 are changed; glacier, lake, wetland, and urban columns keep the base state.
@@ -132,7 +132,7 @@ class AnomalySettings:
     scale: str = "point"                         # "point", "field", or "none"
     z_max: float = 3.0                           # |anomaly| <= z_max model std devs at each point
     anom_box: tuple[float, float] | None = None  # smooth the anomaly over lat-lon boxes
-    envelope: bool = True                        # keep each point within the candidate-year range
+    envelope: bool = True                        # keep each point within the range of the years read
     ratio_bounds: tuple[float, float] = (0.25, 4.0)
     soil_temp_layers: int = 3                    # soil layers shifted by the surface increment (stepwise only)
     continuous_profile: bool = True              # smooth soil increments in depth (False: one value per layer group)
@@ -168,19 +168,23 @@ def compute_increments(
     base_years: Mapping[str, int],
     settings: AnomalySettings | None = None,
     *,
+    reference_year: int | None = None,
     cache_dir: Path | None = None,
     log=print,
 ) -> tuple[dict[str, dict], pd.DataFrame]:
     """Per-point factors / shifts that turn the base restart into clim + anomaly.
 
-    ``plan`` must be an ``obs`` plan (observations and candidate years);
+    ``plan`` must be an ``obs`` plan (observations, candidate and climatology years);
     ``base_years`` gives the base year per component (the ``clim`` selection).
 
     Returns ``(increments, stats)``: ``increments[comp][field]`` holds the
     rule, the per-point ``factor`` (ratio) or ``shift`` and the new key-field
     values ``new`` (model points: ELM columns, MPAS-Seaice cells); ``stats``
     summarizes each field (anomaly scale, RMS target anomaly, achieved
-    correlation and RMS ratio of the realized anomaly, clipping).
+    correlation and RMS ratio of the realized anomaly, clipping). With
+    ``reference_year`` (an archive year that is not read otherwise, e.g. the
+    target year 2015), its anomaly from the model climatology is added to the
+    maps as ``"reference anomaly"``, for comparison.
     """
     settings = settings or AnomalySettings()
     increments: dict[str, dict] = {}
@@ -189,11 +193,13 @@ def compute_increments(
         names = [f for f in settings.fields.get(comp, []) if f in plan.obs_fields_for(comp)]
         if not names:
             continue
-        years = plan.candidate_years
-        if base_years[comp] not in years:
+        years, ref = plan.years, plan.clim_rows       # rows read; climatology rows
+        if base_years[comp] not in plan.candidate_years:
             raise ValueError(f"Base year {base_years[comp]} for {comp} is not a candidate year")
         ib = years.index(base_years[comp])
-        model = load_key_fields(plan, comp, cache_dir, log=log)
+        model = load_key_fields(plan, comp, cache_dir, years=years, log=log)
+        reference = (load_key_fields(plan, comp, cache_dir, years=[int(reference_year)], log=log)
+                     if reference_year is not None else {})
         obs = load_obs_fields(plan, comp, years + [plan.target_year], cache_dir, log)
         points = comparison_points(plan, comp, cache_dir)
         soil = _elm_soil_mask(plan, base_years[comp]) if comp == "elm" else None
@@ -213,10 +219,10 @@ def compute_increments(
             Xg = np.where(valid, Xg, 0.0)
             O = np.where(valid, O, 0.0)
 
-            clim = Xg.mean(axis=0)
-            a_obs = O[-1] - O[:-1].mean(axis=0)
-            s_mod, s_obs = Xg.std(axis=0), O[:-1].std(axis=0)
-            S_mod, S_obs = _spread(Xg, wv), _spread(O[:-1], wv)
+            clim = Xg[ref].mean(axis=0)
+            a_obs = O[-1] - O[ref].mean(axis=0)
+            s_mod, s_obs = Xg[ref].std(axis=0), O[ref].std(axis=0)
+            S_mod, S_obs = _spread(Xg[ref], wv), _spread(O[ref], wv)
             if settings.scale == "point":
                 ok = s_obs > 1e-3 * S_obs
                 z = np.where(ok, a_obs / np.where(ok, s_obs, 1.0), 0.0)
@@ -275,6 +281,12 @@ def compute_increments(
                 "base anomaly": np.where(valid, base_g - clim, np.nan),
                 "realized anomaly": np.where(valid, realized, np.nan),
             }
+            if name in reference:
+                R = reference[name][0]
+                Rg = (_columns_to_gridcells(R, np.where(soil, w, 0.0), col_grid, points["lat"].size)[0]
+                      if comp == "elm" else R)[0]
+                increments[comp][name]["maps"]["reference anomaly"] = np.where(valid & np.isfinite(Rg),
+                                                                               Rg - clim, np.nan)
             rows.append({
                 "component": comp, "field": name, "rule": rule, "base year": base_years[comp],
                 "anomaly scale S_model/S_obs": scale,
@@ -317,8 +329,8 @@ def _soil_water_factors(base: np.ndarray, r_top: np.ndarray, r_sub: np.ndarray,
     """Per-layer factors (ncol, 15) for soil water that vary smoothly in depth.
 
     f_j = A (1 - phi_j) + B phi_j with A, B solved per column so that the totals over layers 1-3 and 4+
-    change by ``r_top`` and ``r_sub`` (the key-field ratios). Falls back to the stepwise factors where the
-    system is degenerate, and clips to ``bounds``.
+    change by ``r_top`` and ``r_sub`` (the key-field ratios), within ``bounds``. Falls back to the stepwise
+    factors where the system is degenerate or the bounds would move the totals off their targets.
     """
     phi = _ramp(ELM_SOIL_NODES[1])                       # surface value at the centre of layers 1-3
     top, sub = slice(0, 3), slice(3, None)
@@ -330,10 +342,13 @@ def _soil_water_factors(base: np.ndarray, r_top: np.ndarray, r_sub: np.ndarray,
     det_s = np.where(ok, det, 1.0)
     a = np.where(ok, (r_top * b1 * q2 - q1 * r_sub * b2) / det_s, 1.0)
     b = np.where(ok, (p1 * r_sub * b2 - p2 * r_top * b1) / det_s, 1.0)
-    f = a[:, None] * (1 - phi) + b[:, None] * phi
-    step = np.concatenate([np.repeat(r_top[:, None], 3, axis=1), np.repeat(r_sub[:, None], 12, axis=1)], axis=1)
-    f = np.where(ok[:, None], f, step)
-    return np.clip(f, *bounds)
+    f = np.clip(a[:, None] * (1 - phi) + b[:, None] * phi, *bounds)
+    step = np.clip(np.concatenate([np.repeat(r_top[:, None], 3, axis=1), np.repeat(r_sub[:, None], 12, axis=1)],
+                                  axis=1), *bounds)
+    # Clipping the smooth profile moves the layer totals off their targets: use the stepwise factors there.
+    hit = ((np.abs((base[:, top] * f[:, top]).sum(1) - r_top * b1) <= 1e-6 * np.maximum(r_top * b1, EPS))
+           & (np.abs((base[:, sub] * f[:, sub]).sum(1) - r_sub * b2) <= 1e-6 * np.maximum(r_sub * b2, EPS)))
+    return np.where((ok & hit)[:, None], f, step)
 
 
 def _soil_temp_shifts(d_top: np.ndarray, d_sub: np.ndarray, decay: float) -> np.ndarray:
@@ -449,7 +464,7 @@ def write_anomaly_restarts(
                     _apply_elm(ds, increments[comp], settings)
                 elif comp == "mpassi":
                     _apply_mpassi(ds, increments[comp])
-                ds.setncattr("rtenso2026_clim_anom",
+                ds.setncattr("rtenso2026_hybrid_ic",
                              f"base year {year} + observed anomaly on {plan.target_date} "
                              f"({', '.join(increments[comp])})")
         os.replace(tmp, dst)
@@ -488,13 +503,13 @@ def state_distance(
     """Distance d_f of arbitrary model states from the observed or a model target.
 
     ``states[label][comp][field]`` holds key-field values at model points (as
-    from ``read_key_fields``). Standardization uses the candidate years, as in
+    from ``read_key_fields``). Standardization uses the climatology years, as in
     ``clim_restart.compute_distances`` (``target="obs"``) or
     ``distance_to_model_year`` (``target=<year>``), so the numbers compare
     directly with those tables. Only the observable fields are scored.
     """
     rows = {label: {} for label in states}
-    years = plan.candidate_years
+    years, ref = plan.years, plan.clim_rows       # rows read; climatology rows
     for comp in plan.components:
         names = list(plan.obs_fields_for(comp))
         if comp not in KEY_FIELDS or not names:
@@ -521,12 +536,12 @@ def state_distance(
             w = np.where(valid, wb, 0.0)
             agg = np.where(valid, agg, 0.0)
             ny = len(years)
-            mean = agg[:ny].mean(axis=0)
-            S = _spread(agg[:ny], w)
+            mean = agg[ref].mean(axis=0)
+            S = _spread(agg[ref], w)
             if target == "obs":
                 o = np.where(valid, o, 0.0)
-                obar = o[:-1].mean(axis=0)
-                S_o = _spread(o[:-1], w)
+                obar = o[ref].mean(axis=0)
+                S_o = _spread(o[ref], w)
                 zt = (o[-1] - obar) / S_o if S_o > 0 else np.zeros_like(obar)
             else:
                 zt = (agg[-1] - mean) / S if S > 0 else np.zeros_like(mean)
@@ -587,7 +602,7 @@ def soil_profiles(
     Model soil water is converted to volumetric water content, (liquid + ice) / (1000 kg m-3 * dz), on the
     standard ELM soil layers, so it compares directly with ERA5 ``swvl``. Region means use soil and crop
     columns weighted by ``cols1d_wtxy * cos(lat)``; observations use the ELM grid cells of the region,
-    weighted by the same columns. Climatologies use the plan's candidate years.
+    weighted by the same columns. Climatologies use the plan's climatology years.
 
     Returns ``{"model": {state: {"theta"|"tsoi": (nreg, nlayers)}}, "obs": {state: {...: (nreg, 4)}},
     "depth": layer nodes, "interfaces", "obs_levels", "regions"}`` with states ``clim``, ``base``, ``new``
@@ -618,7 +633,7 @@ def soil_profiles(
             out[key] = num / np.where(den > 0, den, np.nan)
         return out
 
-    years = list(plan.candidate_years)
+    years = list(plan.clim_years)
     clim = []
     t0 = time.time()
     for n, y in enumerate(years):

@@ -32,9 +32,9 @@ def main():
     p.add_argument("--components", nargs="+", default=list(ALL_COMPONENTS), choices=ALL_COMPONENTS)
     p.add_argument("--mode", default="joint", choices=["joint", "per_component"])
     p.add_argument("--box", type=float, nargs=2, default=[15.0, 30.0], metavar=("DLAT", "DLON"),
-                   help="compare means over DLAT x DLON degree boxes (default 15 30, from 01_choose_box_size.ipynb; 0 0 = model points)")
+                   help="compare means over DLAT x DLON degree boxes (default 15 30, the leave-one-out choice of the workflow notebooks; 0 0 = model points)")
     p.add_argument("--box-shifts", type=int, default=4, choices=[1, 2, 4],
-                   help="average the distance over this many placements of the box edges (default 4, from 01_choose_box_size.ipynb)")
+                   help="average the distance over this many placements of the box edges (default 4, as in the workflow notebooks)")
     p.add_argument("--component-weights", nargs="*", default=[], metavar="COMP=W",
                    help="weights a_c in the joint distance, e.g. mpassi=2 (default 1 each)")
     p.add_argument("--src-root", default=SRC_ROOT, help="model initial-condition archive (read-only)")
@@ -47,8 +47,11 @@ def main():
     p.add_argument("--out-root", default=OUT_ROOT, help="files go to <out-root>/YYYYMMDD/<branch>/")
     p.add_argument("--src-prefix", default="20251024_s2d_spinup")
     p.add_argument("--out-prefix", default="20251024_s2d_spinup")
-    p.add_argument("--first-year", type=int)
-    p.add_argument("--last-year", type=int)
+    p.add_argument("--first-year", type=int, help="first candidate year searched")
+    p.add_argument("--last-year", type=int, help="last candidate year searched")
+    p.add_argument("--clim-first-year", type=int,
+                   help="first climatology year (mean and spread; default: the candidate years)")
+    p.add_argument("--clim-last-year", type=int, help="last climatology year")
     p.add_argument("--exclude-years", type=int, nargs="*", default=[])
     p.add_argument("--keep-target-year", action="store_true",
                    help="allow the target year itself as a candidate (excluded by default)")
@@ -67,6 +70,7 @@ def main():
             args.date, args.src_root, args.out_root, obs_root=obs_root, branch=args.branch,
             components=args.components, src_prefix=args.src_prefix, out_prefix=args.out_prefix,
             first_year=args.first_year, last_year=args.last_year,
+            clim_first_year=args.clim_first_year, clim_last_year=args.clim_last_year,
             exclude_years=args.exclude_years, exclude_target_year=not args.keep_target_year,
         )
     except FileNotFoundError as err:      # e.g. ERA5 not yet available for an obs date
