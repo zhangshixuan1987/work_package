@@ -28,18 +28,22 @@ experiment-specific; review them before submitting.
 
 ### Initial-condition methods
 
-`ensemble_init/` holds three established initial-condition sets, each a
-self-contained working directory driven by its own `submit_all_year.bash`, plus
-one set in preparation:
+`ensemble_init/` holds three established initial-condition sets and the new
+`Reanalysis/` set, each a self-contained working directory driven by its own
+`submit_all_year.bash`, plus one set in preparation:
 
-- `jra55_fosirl/`: ocean, sea-ice, land, river, and coupler state from the
+- `JRA55_FOSIRL/`: ocean, sea-ice, land, river, and coupler state from the
   matching JRA55-forced (FOSI) restart.
-- `bruteforce/luke_cfsr/`: same restart, with the MPAS-Ocean state replaced by
-  Luke Van Roekel's CFSRv2 analysis (`bruteforce/ben_kirtman/` is the earlier
+- `BruteForce/luke_cfsr/`: same restart, with the MPAS-Ocean state replaced by
+  Luke Van Roekel's CFSRv2 analysis (`BruteForce/ben_kirtman/` is the earlier
   brute-force generator).
-- `4DEnVarOcn/`: all components from the 4DEnVar coupled assimilation
-  (May/November, 1980-2015).
-- `rtenso2026/` (in preparation): 2026 hindcast initial conditions for
+- `Reanalysis/`: same restart, with the MPAS-Ocean state replaced by Luke Van
+  Roekel's calendar-date CFSR ocean ICs (`mpas_<YYYYMMDD>.cfsr.ic.nc`; 2015 and
+  2026 so far). On hold until the full input data are ready.
+- `4DEnVarOcn.v1/`: all components from the 4DEnVar coupled assimilation
+  (May, 1980-1995); `4DEnVarOcn.v0/` keeps the earlier anomaly-assimilation
+  setup (May/November, 1980-2015) as a record.
+- `RTENSO2026/` (in preparation): 2026 hindcast initial conditions for
   Feb/May/Aug/Nov 01. ERA5 atmosphere and CFSR ocean as in the brute-force set
   (prepared by collaborators); sea-ice, land, and river restarts from a
   BruteForce year closest to the same-date climatology (`clim`) or to the ERA5

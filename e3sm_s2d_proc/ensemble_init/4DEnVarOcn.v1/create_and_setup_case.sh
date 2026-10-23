@@ -82,10 +82,9 @@ export my_ocncase3="20251024_s2d_spinup.mpaso.rst.%s_00000.cfsrv2.nc"
 
 #4DEnVar ocean/land/atmosphere initial-condition files
 export my_daroot="/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/4DEnVar_ICs_SHIPF"
-export my_dacase="assm_anom_ocn_4DEnVar_loc100_v3"
+export my_dacase="assm_full_ocn_4DEnVar_loc_m100_v3"
 export my_daocn="${my_dacase}.mpaso.rst.%s_00000_new.nc"
 export my_dalnd="${my_dacase}.elm.r.%s-00000.nc"
-export my_daeam_1980s="WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_4DEnVar.eam.i.%s-01800.nc"
 export my_daeam="${my_dacase}.eam.i.%s-00000.nc"
 
 export my_dart_code="/global/homes/z/zhan391/code/DART"

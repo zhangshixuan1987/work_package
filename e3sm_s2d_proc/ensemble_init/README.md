@@ -5,17 +5,61 @@ initial-condition set:
 
 | Directory | `workflow_mode` | Non-atmosphere state |
 | --- | --- | --- |
-| `jra55_fosirl/` | `jra55-fosirl` | Ocean, ice, land, river, and coupler state from the matching JRA55-forced (FOSI) restart. |
-| `bruteforce/luke_cfsr/` | `bruteforce-cfsr` | Same restart, with the MPAS-Ocean state replaced by Luke Van Roekel's CFSRv2 analysis. |
-| `4DEnVarOcn/` | `4denvar-ocn` | 4DEnVar atmosphere, ocean, land, river, sea-ice, coupler, and atmosphere-restart files (May/November 1980-2015, selected from the matching decade directory). |
+| `JRA55_FOSIRL/` | `jra55-fosirl` | Ocean, ice, land, river, and coupler state from the matching JRA55-forced (FOSI) restart. |
+| `BruteForce/luke_cfsr/` | `bruteforce-cfsr` | Same restart, with the MPAS-Ocean state replaced by Luke Van Roekel's CFSRv2 analysis (`20251024_s2d_spinup.mpaso.rst.<model date>.cfsrv2.nc`). |
+| `Reanalysis/` | `reanalysis-cfsr` | Same restart, with the MPAS-Ocean state replaced by Luke Van Roekel's calendar-date CFSR ocean ICs (`mpas_<YYYYMMDD>.cfsr.ic.nc`). |
+| `4DEnVarOcn.v1/` | `4denvar-ocn` | 4DEnVar atmosphere, ocean, land, river, sea-ice, coupler, and atmosphere-restart files (`assm_full_ocn_4DEnVar_loc_m100_v3`, May 1980-1995, selected from the matching decade directory). |
 
-`gen_ensemble_s2d_init.sh` and `create_and_setup_case.sh` are identical across
-the three sets; `submit_all_year.bash` (and, for 4DEnVarOcn,
-`process_diag.eami.sh`) carry the set-specific settings.
+`gen_ensemble_s2d_init.sh` and `create_and_setup_case.sh` are identical in
+`JRA55_FOSIRL/`, `BruteForce/luke_cfsr/`, and `Reanalysis/`; `4DEnVarOcn.v1/`
+has its own copies set up for the `assm_full` 4DEnVar sources.
+`submit_all_year.bash` (and, for 4DEnVarOcn, `process_diag.eami.sh`) carry the
+set-specific settings.
 
-`bruteforce/ben_kirtman/` is the earlier brute-force generator, kept for
-reference. `bfb_test/` checks that the generator reproduces established
-initial conditions bit-for-bit with `cprnc`.
+`Reanalysis/` is **on hold** until its inputs are complete: the spin-up
+restarts in `my_fosdir1` (`/global/cfs/cdirs/e3sm/lvroekel/archive/rest`) are
+no longer at that path, 2026 has no spin-up restarts or ERA5 atmosphere ICs,
+and the sea-ice files are not yet on the `IcoswISC30E3r5` mesh. The scripts
+pass syntax and preflight path checks but have not generated any output.
+
+`Reanalysis/` reads `v3.LR.S2D.ENSINT/Reanalysis_ICs/mpas_<YYYYMMDD>.cfsr.ic.nc`
+(2015 Feb/May/Aug/Nov and 2026 Feb/May/Aug so far) through `my_ocndir4` and
+`my_ocncase4` (`my_ocnopt=LukeVanRoekel3`) and writes to
+`v3.LR.S2D.ENSINT/Reanalysis/`. As in `BruteForce/luke_cfsr/`, the ocean file is
+appended onto the matching spin-up `mpaso.rst` (`ncks -A`), and the land, river,
+sea-ice, and coupler restarts come from the spin-up model year
+(`year - 1980 + 353`).
+
+Reanalysis-based sea ice is under development. Setting `ice="NSIDCv6"` in the
+`Reanalysis/submit_all_year.bash` settings (`my_iceopt`) replaces the spin-up
+`mpassi.rst` with
+`v3.LR.S2D.ENSINT/Reanalysis_ICs/mpassi.EC30to60E2r2.iceArea_from_NSIDCv6_spunup.<YYYYMMDD>.nc`
+(`my_icedir`, `my_icecase`). It is off by default: the current files are on
+the `EC30to60E2r2` mesh (236,853 cells), not `IcoswISC30E3r5` (465,044 cells),
+and the generator stops when the sea-ice and ocean meshes differ. Update
+`my_icecase` once the `IcoswISC30E3r5` files are available.
+
+`BruteForce/ben_kirtman/` is the earlier brute-force generator, kept for
+reference.
+
+`4DEnVarOcn.v0/` is the earlier 4DEnVar setup, kept unchanged as a record. It
+read the `assm_anom_ocn_4DEnVar_loc100_v3` assimilation (May/November
+1980-2015, with `WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_4DEnVar` atmosphere ICs
+before 1990) and produced 72 dates. Those sources and outputs now live under
+`v3.LR.S2D.ENSINT/4DEnVar_ICs_SHIPF.OLD/` and `v3.LR.S2D.ENSINT/4DEnVarOcn.OLD/`;
+the scripts still point at the current `4DEnVar_ICs_SHIPF/` and
+`4DEnVarOcn/` paths, so re-running them requires repointing `my_daroot` and
+the output directory first.
+
+| | `4DEnVarOcn.v0/` | `4DEnVarOcn.v1/` (current) |
+| --- | --- | --- |
+| Assimilation case | `assm_anom_ocn_4DEnVar_loc100_v3` | `assm_full_ocn_4DEnVar_loc_m100_v3` |
+| Dates | May, Nov 01, 1980-2015 (72) | May 01, 1980-1995 (16) |
+| Sources | `4DEnVar_ICs_SHIPF.OLD/` | `4DEnVar_ICs_SHIPF/` |
+| Output | `4DEnVarOcn.OLD/` | `4DEnVarOcn/` |
+
+`BFB_TEST/` checks that the generator reproduces established initial
+conditions bit-for-bit with `cprnc`.
 
 ## Output
 
@@ -26,7 +70,8 @@ Generated initial conditions are under
 | --- | --- |
 | `BruteForce` | Feb, May, Aug, Nov 01, 1980-2018 (156 dates) |
 | `JRA55-FOSIRL` | Feb, May, Aug, Nov 01, 1980-02 to 2019-05 (157 dates) |
-| `4DEnVarOcn` | May, Nov 01, 1980-2015 (72 dates) |
+| `4DEnVarOcn` | May 01, 1980-1995 (16 dates) |
+| `Reanalysis` | none yet (on hold; 2015 and 2026 ocean ICs available) |
 
 Each date directory holds the hindcast inputs for one initialization, for
 example in `BruteForce/` (20 files):
@@ -43,7 +88,7 @@ example in `BruteForce/` (20 files):
 
 ## In preparation
 
-`rtenso2026/` is in preparation: initial conditions for the 2026 hindcasts
+`RTENSO2026/` is in preparation: initial conditions for the 2026 hindcasts
 (Feb, May, Aug, and Nov 01; the same 2015 dates test the sensitivity), with
 ERA5 atmosphere and CFSR ocean from collaborators (as in the brute-force set),
 sea-ice, land, and river restarts taken here from a BruteForce year closest

@@ -246,11 +246,7 @@ elif is_da_runcase "${BASE_RUNCASE_LC}"; then
   BASE_BCYREF2="${START_DATE:0:4}"
   BASE_REPLACE_OCN=false
   BASE_ATMICFIL="${my_eami_template}"
-  if (( 10#${START_DATE:0:4} < 1990 )); then
-    DART_ATMICFIL="${BASE_BCDIR}/$(printf "${my_daeam_1980s}" "${START_DATE}")"
-  else
-    DART_ATMICFIL="${BASE_BCDIR}/$(printf "${my_daeam}" "${START_DATE}")"
-  fi
+  DART_ATMICFIL="${BASE_BCDIR}/$(printf "${my_daeam}" "${START_DATE}")"
   DA_PROVIDES_RESTARTS=true
   DART_CASE="${BASE_BCNAM}"
 

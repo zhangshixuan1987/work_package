@@ -20,13 +20,15 @@ set -o pipefail
 # dates sequentially when it is already inside an interactive Slurm allocation.
 # Use --run or --submit to override that automatic choice.
 # ==============================================================================
-# Options: "jra55-fosirl", "bruteforce-cfsr", or "4denvar-ocn"
+# Options: "jra55-fosirl", "bruteforce-cfsr", "reanalysis-cfsr", or "4denvar-ocn"
 workflow_mode="bruteforce-cfsr"
 script_dir="${PWD}"
 
 # Default forcing and atmosphere selections; the mode mapping may override them.
 fosi="JRA55"
 atm="ERA5-Tang2"
+# Optional sea-ice replacement for reanalysis-cfsr (in development): "" or "NSIDCv6"
+ice=""
 
 # Component/output selections associated with each workflow mode.
 mode=${IC_MODE:-${workflow_mode}}
@@ -40,19 +42,25 @@ case "${mode}" in
     atm="ERA5-Tang2"
     ocn="LukeVanRoekel2"
     ;;
+  reanalysis-cfsr)
+    group="Reanalysis"
+    atm="ERA5-Tang2"
+    ocn="LukeVanRoekel3"
+    ;;
   4denvar-ocn)
     group="4DEnVarOcn"
     atm="4DEnVarOcn"
     ocn="4DEnVarOcn"
     ;;
   *)
-    echo "ERROR: workflow_mode must be jra55-fosirl, bruteforce-cfsr, or 4denvar-ocn; got '${mode}'" >&2
+    echo "ERROR: workflow_mode must be jra55-fosirl, bruteforce-cfsr, reanalysis-cfsr, or 4denvar-ocn; got '${mode}'" >&2
     exit 2
     ;;
 esac
 
 # JRA55/BruteForce example: 1980-2018 with months=(2 8)
 # 4DEnVar availability:     1980-2015 with months=(5 11)
+# Reanalysis ocean ICs:     2015 with months=(2 5 8 11); 2026 with months=(2 5 8)
 #start_year=1980
 #end_year=2018
 #months=(2 8)
@@ -97,7 +105,7 @@ esac
 }
 
 validate_settings() {
-  [[ ${mode} == jra55-fosirl || ${mode} == bruteforce-cfsr || ${mode} == 4denvar-ocn ]] || usage
+  [[ ${mode} == jra55-fosirl || ${mode} == bruteforce-cfsr || ${mode} == reanalysis-cfsr || ${mode} == 4denvar-ocn ]] || usage
   [[ ${start_year} =~ ^[0-9]{4}$ && ${end_year} =~ ^[0-9]{4}$ ]] || {
     echo "ERROR: start_year and end_year must be four-digit years" >&2
     exit 2
@@ -286,6 +294,14 @@ source "${script_dir}/create_and_setup_case.sh"
         ocean_name=$(printf "${my_ocncase3}" "${restart_date}")
         check_readable "${my_ocndir3}/${ocean_name}"
         output_dir="${my_runpath}/BruteForce/${calendar_date}-00000"
+      elif [[ ${mode} == reanalysis-cfsr ]]; then
+        ocean_name=$(printf "${my_ocncase4}" "${calendar_date//-/}")
+        check_readable "${my_ocndir4}/${ocean_name}"
+        if [[ -n ${ice} ]]; then
+          ice_ymd=${calendar_date//-/}
+          check_readable "${my_icedir}/$(printf "${my_icecase}" "${ice_ymd}")"
+        fi
+        output_dir="${my_runpath}/Reanalysis/${calendar_date}-00000"
       elif [[ ${mode} == jra55-fosirl ]]; then
         output_dir="${my_runpath}/JRA55-FOSIRL/${calendar_date}-00000"
       fi
@@ -331,6 +347,7 @@ run_task() {
   export my_fosopt="${fosi}"
   export my_eamopt="${atm}"
   export my_ocnopt="${ocn}"
+  export my_iceopt="${ice}"
   export my_overwrite="${overwrite_existing}"
 
   if [[ ${DRY_RUN:-false} == true ]]; then

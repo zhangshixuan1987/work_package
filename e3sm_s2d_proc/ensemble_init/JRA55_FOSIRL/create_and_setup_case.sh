@@ -22,6 +22,7 @@ export my_runcase="${my_runcase:-JRA55-FOSIRL}"
 export my_fosopt="${my_fosopt:-JRA55}"
 export my_eamopt="${my_eamopt:-ERA5-Tang2}"
 export my_ocnopt="${my_ocnopt:-}"
+export my_iceopt="${my_iceopt:-}"
 export my_overwrite="${my_overwrite:-false}"
 
 export my_e3sm_topo="/global/cfs/cdirs/e3sm/inputdata/atm/cam/topo/USGS-gtopo30_ne30np4pg2_x6t-SGH.c20210614.nc"
@@ -79,6 +80,18 @@ export my_ocncase2="20251024_s2d_spinup.mpaso.rst.%s_00000.nc"
 #bruteforce CFSRv2 ocean initial condition files (Luke Van Roekel, 1980-2018)
 export my_ocndir3="/pscratch/sd/l/lvroekel/ics"
 export my_ocncase3="20251024_s2d_spinup.mpaso.rst.%s_00000.cfsrv2.nc"
+
+#reanalysis initial condition files, named by calendar date (YYYYMMDD)
+export my_reanaroot="/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/Reanalysis_ICs"
+
+#reanalysis CFSR ocean initial condition files (Luke Van Roekel)
+export my_ocndir4="${my_reanaroot}"
+export my_ocncase4="mpas_%s.cfsr.ic.nc"
+
+#reanalysis sea-ice initial condition files (NSIDCv6 ice area; in development,
+#currently on the EC30to60E2r2 mesh rather than IcoswISC30E3r5)
+export my_icedir="${my_reanaroot}"
+export my_icecase="mpassi.EC30to60E2r2.iceArea_from_NSIDCv6_spunup.%s.nc"
 
 #4DEnVar ocean/land/atmosphere initial-condition files
 export my_daroot="/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/4DEnVar_ICs_SHIPF"

@@ -2,7 +2,7 @@
 #------------------------------------------------------------------------------
 # Batch system directives
 #------------------------------------------------------------------------------
-#SBATCH  --account=gen0010
+#SBATCH  --account=m4849
 #SBATCH  --constraint=cpu
 #SBATCH  --qos=regular
 #SBATCH  --nodes=4
@@ -21,8 +21,7 @@ set -o pipefail
 # Use --run or --submit to override that automatic choice.
 # ==============================================================================
 # Options: "jra55-fosirl", "bruteforce-cfsr", or "4denvar-ocn"
-workflow_mode="jra55-fosirl"
-script_dir="${IC_WORK_DIR:-${SLURM_SUBMIT_DIR:-${PWD}}}"
+workflow_mode="4denvar-ocn"
 
 # Default forcing and atmosphere selections; the mode mapping may override them.
 fosi="JRA55"
@@ -52,10 +51,10 @@ case "${mode}" in
 esac
 
 # JRA55/BruteForce example: 1980-2018 with months=(2 8)
-# 4DEnVar availability:     1980-2015 with months=(5 11)
-start_year=1980
-end_year=2018
-months=(2 8)
+# 4DEnVar availability:     1980-2015 with months=(5)  # 4DEnVar November ICs are not yet on disk
+start_year=1989
+end_year=1995
+months=(5)  # 4DEnVar November ICs are not yet on disk
 
 # Optional date filters for unavailable inputs. With both lists populated, a
 # date is skipped only when both its year and month match. Leave both empty to
@@ -201,6 +200,7 @@ if [[ ${execution_mode} == run && -z ${SLURM_JOB_ID:-} ]]; then
 fi
 
 # Before either a local run or job submission, validate the complete inventory.
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export my_overwrite="${overwrite_existing}"
 source "${script_dir}/create_and_setup_case.sh"
 
@@ -252,12 +252,7 @@ source "${script_dir}/create_and_setup_case.sh"
             ;;
         esac
         da_dir="${my_daroot}/${da_subdir}"
-        if (( check_year < 1990 )); then
-          da_atmosphere="${da_dir}/$(printf "${my_daeam_1980s}" "${calendar_date}")"
-        else
-          da_atmosphere="${da_dir}/$(printf "${my_daeam}" "${calendar_date}")"
-        fi
-        check_readable "${da_atmosphere}"
+        check_readable "${da_dir}/$(printf "${my_daeam}" "${calendar_date}")"
         check_readable "${da_dir}/$(printf "${my_daocn}" "${calendar_date}")"
         check_readable "${da_dir}/$(printf "${my_dalnd}" "${calendar_date}")"
         check_readable "${da_dir}/${my_dacase}.mosart.r.${calendar_date}-00000.nc"
@@ -330,7 +325,7 @@ run_task() {
   export my_overwrite="${overwrite_existing}"
 
   if [[ ${DRY_RUN:-false} == true ]]; then
-    source ${work_dir}/create_and_setup_case.sh
+    source ./create_and_setup_case.sh
     printf 'mode=%s\ndate=%s\nrun_case=%s\natmosphere=%s\noutput=%s\nocean_option=%s\n' \
       "${mode}" "${my_casedate}" "${my_runcase}" "${my_eam_ic2}" \
       "${my_dart_runpath}" "${my_ocnopt:-<none>}"

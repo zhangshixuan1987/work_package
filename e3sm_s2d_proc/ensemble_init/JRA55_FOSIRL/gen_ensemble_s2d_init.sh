@@ -114,9 +114,9 @@ fi
 [[ ${DART_ENSNUM} =~ ^[0-9]+$ ]] || die "DART_ENSNUM must be an integer, got '${DART_ENSNUM}'"
 [[ ${START_TOD} =~ ^[0-9]+$ ]] || die "START_TOD must be seconds-of-day, got '${START_TOD}'"
 
-# Ocean-analysis replacement is specific to BruteForce. FOSIRL cases retain
-# the ocean restart selected above and do not require my_ocnopt.
-if [[ ${BASE_RUNCASE} == "BruteForce" ]]; then
+# Ocean-analysis replacement is specific to BruteForce and Reanalysis. FOSIRL
+# cases retain the ocean restart selected above and do not require my_ocnopt.
+if [[ ${BASE_RUNCASE} == "BruteForce" || ${BASE_RUNCASE} == "Reanalysis" ]]; then
 if [[ ${my_ocnopt:-} == "BenKirtman" ]];then
 
   #############################################
@@ -197,11 +197,35 @@ elif [[ ${my_ocnopt:-} == "LukeVanRoekel2" ]];then
   BASE_OCNDIR="${my_ocndir3}"
   BASE_OCNDATE=$(printf "%04d" "$MODEL_YEAR")${START_DATE:4}
 
+elif [[ ${my_ocnopt:-} == "LukeVanRoekel3" ]];then
+
+  # CFSR ocean ICs named by calendar date (mpas_YYYYMMDD.cfsr.ic.nc); the
+  # other components still come from the matching spin-up model year.
+  START_YEAR=${START_DATE:0:4}
+  MODEL_YEAR=$((10#${START_YEAR} - 1980 + 353))
+  BASE_OCNNAM="${my_ocncase4}"
+  BASE_OCNDIR="${my_ocndir4}"
+  BASE_OCNDATE=${START_DATE//-/}
+
 else
 
   die "BruteForce: option ${my_ocnopt:-<unset>} for ocean analysis initial condition not in supported list"
 
 fi
+fi
+
+# Optional reanalysis-based sea-ice initial condition (Reanalysis only; still
+# under development). The file replaces the spin-up mpassi restart.
+BASE_REPLACE_ICE=false
+if [[ -n ${my_iceopt:-} ]]; then
+  [[ ${BASE_RUNCASE} == "Reanalysis" ]] || die "my_iceopt=${my_iceopt} is supported only for Reanalysis"
+  if [[ ${my_iceopt} == "NSIDCv6" ]]; then
+    BASE_REPLACE_ICE=true
+    ICE_YMD=${START_DATE//-/}
+    BASE_ICEFIL="${my_icedir}/$(printf "${my_icecase}" "${ICE_YMD}")"
+  else
+    die "option ${my_iceopt} for sea-ice initial condition not in supported list"
+  fi
 fi
 
 DA_PROVIDES_RESTARTS=false
@@ -217,7 +241,7 @@ if [[ ${BASE_RUNCASE_LC} == "jra55-fosirl" || ${BASE_RUNCASE_LC} == "era5-fosirl
   BASE_ATMICFIL="${my_eami_template}"
   DART_ATMICFIL="${my_eam_ic}"
 
-elif [[ ${BASE_RUNCASE_LC} == "bruteforce" ]]; then
+elif [[ ${BASE_RUNCASE_LC} == "bruteforce" || ${BASE_RUNCASE_LC} == "reanalysis" ]]; then
 
   #match ic file for other component 
   BASE_BCNAM="${my_foscase}"
@@ -339,7 +363,9 @@ component_source() {
   local rest_tag=$3
   local ref_date_ext=$4
 
-  if [[ ${DA_PROVIDES_RESTARTS} == true && ${scomp} == "ocn" ]]; then
+  if [[ ${BASE_REPLACE_ICE} == true && ${scomp} == "ice" ]]; then
+    printf '%s\n' "${BASE_ICEFIL}"
+  elif [[ ${DA_PROVIDES_RESTARTS} == true && ${scomp} == "ocn" ]]; then
     printf '%s/%s\n' "${BASE_BCDIR}" "$(printf "${my_daocn}" "${START_DATE}")"
   elif [[ ${DA_PROVIDES_RESTARTS} == true && ${scomp} == "lnd" ]]; then
     printf '%s/%s\n' "${BASE_BCDIR}" "$(printf "${my_dalnd}" "${START_DATE}")"
@@ -383,6 +409,15 @@ if [[ ${GENERATOR_PREFLIGHT_ONLY:-false} == true ]]; then
   exit 0
 fi
 
+if [[ ${BASE_REPLACE_ICE} == true ]]; then
+  # The sea-ice file must be on the same MPAS mesh as the ocean restart.
+  ocn_source=$(component_source ocn mpaso mpaso.rst "${REF_DATE}_${REF_TOD}")
+  ocn_ncells=$(ncdump -h "${ocn_source}" | awk '$1 == "nCells" {print $3; exit}')
+  ice_ncells=$(ncdump -h "${BASE_ICEFIL}" | awk '$1 == "nCells" {print $3; exit}')
+  [[ -n ${ice_ncells} && ${ice_ncells} == "${ocn_ncells}" ]] || \
+    die "sea-ice file mesh (nCells=${ice_ncells:-?}) does not match the ocean restart (nCells=${ocn_ncells:-?}): ${BASE_ICEFIL}"
+fi
+
 if [[ -d "${DART_RUNDIR}" ]]; then
   shopt -s nullglob dotglob
   existing_outputs=("${DART_RUNDIR}"/*)
@@ -419,7 +454,7 @@ for scomp in lnd rof ocn ice drv; do
   if [[ ${scomp} == "ocn" || ${scomp} == "ice" ]]; then
     ${COPY} "${REF_FILENAME}" "${INITIAL_FILENAME}.tmp" || exit 16
     ncks -O --hdr_pad=10000 "${INITIAL_FILENAME}.tmp" "${INITIAL_FILENAME}"
-    ncrename -v xtime,xtime.orig "${INITIAL_FILENAME}"
+    ncrename -v .xtime,xtime.orig "${INITIAL_FILENAME}"
     rm -rvf "${INITIAL_FILENAME}.tmp"
     echo "${START_DATE}_${START_HOUR}:00:00" > "rpointer.${scomp}"
   else
