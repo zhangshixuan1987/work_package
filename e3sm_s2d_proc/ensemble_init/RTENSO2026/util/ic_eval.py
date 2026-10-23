@@ -809,6 +809,7 @@ def prepare_spatial_field(
 
     obs_refs = []
     vs_obs = {}     # {ref: {"actual" | branch: metrics against the observed anomaly}}
+    obs_target = {}     # {ref: observed anomaly in model units}
     for ref, op in obs_plans.items():
         if field_name not in op.obs_fields_for(component) or not _has_obs(op, component, target_year):
             continue
@@ -816,8 +817,20 @@ def prepare_spatial_field(
         obs_all = load_obs_fields(op, component, years + [target_year], cache_dir, log=log)[field_name]
         valid_both = np.all(np.isfinite(vals_grid), axis=0) & np.all(np.isfinite(obs_all), axis=0)
         _, zt_g_obs, _, _, wg_o = _standardize_series(obs_all[crows], w_grid, obs_all[-1], valid_mask=valid_both)
-        z_g_mod, zt_g_mod, _, _, _ = _standardize_rows(cand_grid, crows, w_grid, targ_grid, valid_mask=valid_both)
+        z_g_mod, zt_g_mod, mean_g_mod, spread_g_mod, _ = _standardize_rows(cand_grid, crows, w_grid, targ_grid,
+                                                                           valid_mask=valid_both)
         z_map[ref] = zt_g_obs
+        # The observed anomaly in model units: model climatology + t * model spread (same points).
+        obs_target[ref] = mean_g_mod + zt_g_obs * spread_g_mod
+        wsum_o = float(wg_o.sum())
+
+        def _phys(x):
+            d = np.where(wg_o > 0, x - obs_target[ref], 0.0)
+            t = np.where(wg_o > 0, obs_target[ref], 0.0)
+            return {"rmse": _weighted_rms_diff(x, obs_target[ref], wg_o),
+                    "pcc": _weighted_corr(x, obs_target[ref], wg_o),
+                    "bias": float((wg_o * d).sum() / wsum_o) if wsum_o > 0 else np.nan,
+                    "target_mean": float((wg_o * t).sum() / wsum_o) if wsum_o > 0 else np.nan}
 
         m_box, wb_o, o_box = _apply_box(vals_grid, w_grid, lat, lon, box, obs=obs_all)
         z_b_mod, zt_b_mod, _, _, wb_ov = _standardize_rows(m_box[:-1], crows, wb_o, m_box[-1])
@@ -839,9 +852,10 @@ def prepare_spatial_field(
             return {"d_box": _weighted_rms_diff(zb, zt_b_obs, wb_ov), "r_box": _weighted_corr(zb, zt_b_obs, wb_ov),
                     "d_grid": _weighted_rms_diff(zg, zt_g_obs, wg_o), "r_grid": _weighted_corr(zg, zt_g_obs, wg_o)}
 
-        vs_obs[ref] = {"actual": _vs(zt_g_mod, zt_b_mod)}
+        vs_obs[ref] = {"actual": {**_vs(zt_g_mod, zt_b_mod), **_phys(targ_grid)}}
         for branch, y in branch_years.items():
-            vs_obs[ref][branch] = _vs(z_g_mod[row_of[branch]], z_b_mod[row_of[branch]])
+            vs_obs[ref][branch] = {**_vs(z_g_mod[row_of[branch]], z_b_mod[row_of[branch]]),
+                                   **_phys(cand_grid[row_of[branch]])}
 
     return {
         "component": component,
@@ -862,6 +876,7 @@ def prepare_spatial_field(
         "z": z_map,
         "metrics": metrics,
         "vs_obs": vs_obs,
+        "obs_target": obs_target,
         "box": {
             "dlat": dlat,
             "dlon": dlon,
@@ -1281,8 +1296,9 @@ def plot_mpassi_four_seasons(
     """Four-season comparison of MPAS-Seaice state and each branch's difference using ``mosaic``.
 
     Columns: actual, then each branch minus actual. With ``reference="climatology"``:
-    actual (for reference only), the candidate-year climatology (the target), then
-    each branch minus the climatology. ``states[date]`` maps a branch to an
+    actual (for reference only), the candidate-year climatology (the target), each
+    branch, and each branch minus the climatology (the columns of ``plot_elm_spatial``).
+    ``states[date]`` maps a branch to an
     adjusted model state, as in ``field_similarity_table``.
     """
     if reference not in ("actual", "climatology"):
@@ -1302,7 +1318,7 @@ def plot_mpassi_four_seasons(
     hemi = "NH" if field_name.startswith("NH") else "SH"
     extent = [-180, 180, 45, 90] if hemi == "NH" else [-180, 180, -90, -45]
     desc = descriptors[hemi]
-    ncol = (2 if reference == "climatology" else 1) + len(branches)
+    ncol = 2 + 2 * len(branches) if reference == "climatology" else 1 + len(branches)
     f = font_sizes(fontsize)
     pw, ph = _panel(panel_size, (3.85, 3.3), fontsize)
     fig, axes = plt.subplots(
@@ -1320,19 +1336,20 @@ def plot_mpassi_four_seasons(
             panels = [(f"{date}: {IC_SOURCE} 2015\n(for reference only)", sp["raw"]["actual"], cmap, vmin, vmax),
                       (f"Target: {IC_SOURCE} {y0}-{y1} mean\n(climatology)", sp["raw"]["climatology"], cmap,
                        vmin, vmax)]
+            # Same columns as plot_elm_spatial: each initial condition, then its anomaly from the climatology.
+            panels += [(f"{b}: {IC_SOURCE} {byears[b]} IC\n{_clim_stats(sp['metrics'][b])}",
+                        sp["raw"][b], cmap, vmin, vmax) if b in byears else None
+                       for b in branches]
+            panels += [(f"{b}: {IC_SOURCE} {byears[b]} - climatology\n"
+                        f"bias={sp['metrics'][b]['bias_clim']:+.3g}, {_zrms(sp['metrics'][b])}",
+                        sp["raw"][b] - sp["raw"]["climatology"], DIFF_CMAP, -diff_lim, diff_lim)
+                       if b in byears else None
+                       for b in branches]
         else:
             panels = [(f"{date}: {IC_SOURCE} 2015", sp["raw"]["actual"], cmap, vmin, vmax)]
-        for b in branches:
-            if b not in byears:
-                panels.append(None)
-                continue
-            m = sp["metrics"][b]
-            if reference == "climatology":
-                panels.append((f"{b}: {IC_SOURCE} {byears[b]} - climatology\n{_clim_stats(m)}\n{_zrms(m)}",
-                               sp["raw"][b] - sp["raw"]["climatology"], DIFF_CMAP, -diff_lim, diff_lim))
-            else:
-                panels.append((f"{b}: {IC_SOURCE} {byears[b]} - 2015\n{_state_stats(m)}",
-                               sp["diff"][b], DIFF_CMAP, -diff_lim, diff_lim))
+            panels += [(f"{b}: {IC_SOURCE} {byears[b]} - 2015\n{_state_stats(sp['metrics'][b])}",
+                        sp["diff"][b], DIFF_CMAP, -diff_lim, diff_lim) if b in byears else None
+                       for b in branches]
         for col, panel in enumerate(panels):
             ax = axes[row, col]
             if panel is None:
@@ -1459,11 +1476,14 @@ def plot_elm_spatial(
     each branch, and each branch minus actual; with
     ``reference="climatology"``, actual (for reference only), the climatology
     (the target), each branch against it, and each branch minus the
-    climatology. ``z``: actual, each observation reference, and each branch.
-    ``spatial`` may be a list of fields, drawn one row each in a single figure.
+    climatology. With ``reference="observation"``: actual, the observed anomaly
+    in model units (climatology + t * spread, the target of the obs selection),
+    each branch against it, and each branch minus it. ``z``: actual, each
+    observation reference, and each branch. ``spatial`` may be a list of fields,
+    drawn one row each in a single figure.
     """
-    if reference not in ("actual", "climatology"):
-        raise ValueError(f"reference must be 'actual' or 'climatology', got {reference!r}")
+    if reference not in ("actual", "climatology", "observation"):
+        raise ValueError(f"reference must be 'actual', 'climatology', or 'observation', got {reference!r}")
     ensure_proj_data()
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -1544,6 +1564,41 @@ def plot_elm_spatial(
                             1e-3)
                         panels.append((f"{ct['diff']}\nbias={m['bias_clim']:+.3g}, {_zrms(m)}", d, diff_cmap,
                                        -dlc, dlc, f"diff ({units})", None))
+                rows.append(panels)
+                continue
+
+            if reference == "observation":
+                # Reference, observed anomaly in model units (the target), selected IC, IC minus the target.
+                refs = [r for r in sp["obs_refs"] if r in sp["obs_target"]]
+                if not refs:
+                    raise ValueError(f"{fn}: no observation on {sp['target_date']}")
+                ref, (y0, y1) = refs[0], sp["clim_years"]
+                target, vs = sp["obs_target"][ref], sp["vs_obs"][ref]
+                dataset = OBS_DATASETS.get(_ref_name(ref), {}).get("elm", _ref_name(ref))
+                obs_stats = lambda m: f"vs target: PCC={m['pcc']:.2f}, RMSE={m['rmse']:.3g}"
+                panels = [(f"[{fn}]\n{ref_title}\n{obs_stats(vs['actual'])}" if len(spatials) > 1
+                           else f"{ref_title}\n{obs_stats(vs['actual'])}", act, cm, lo, hi, label, levels),
+                          (f"Target: observed anomaly ({dataset})\non the {IC_SOURCE} {y0}-{y1} mean",
+                           target, cm, lo, hi, label, levels)]
+                panels += [(f"{titles[b]['branch']}\n{obs_stats(vs[b])}", sp["raw"][b], cm, lo, hi, label, levels)
+                           for b in branches]
+                for b in branches:
+                    raw_b, m = sp["raw"][b], vs[b]
+                    stats = f"RMS z diff={m['d_grid']:.2f} (box {m['d_box']:.2f})"
+                    if diff_percent:
+                        pct_levels = DIFF_PCT_LEVELS.get(fn, [-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, 100])
+                        bias_str = (f"bias={100.0 * m['bias'] / m['target_mean']:+.1f}%"
+                                    if abs(m["target_mean"]) > 1e-4 else f"bias={m['bias']:+.2g}")
+                        panels.append((f"Error: initial condition - observed target\n{bias_str}, {stats}",
+                                       _compute_diff_percent(fn, raw_b, target), diff_cmap,
+                                       -float(pct_levels[-1]), float(pct_levels[-1]), "diff (%)", pct_levels))
+                    else:
+                        d = raw_b - target
+                        dlo = diff_lim if diff_lim is not None else max(
+                            float(np.nanpercentile(np.abs(d[np.isfinite(d)]), 97)) if np.isfinite(d).any() else 1.0,
+                            1e-3)
+                        panels.append((f"Error: initial condition - observed target\nbias={m['bias']:+.3g}, {stats}",
+                                       d, diff_cmap, -dlo, dlo, f"diff ({units})", None))
                 rows.append(panels)
                 continue
 
