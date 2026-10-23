@@ -83,6 +83,7 @@ from clim_restart import (
     KEY_FIELDS,
     SPVAL_THRESHOLD,
     SelectionPlan,
+    with_coupler,
     _apply_box,
     _columns_to_gridcells,
     _model_points,
@@ -442,17 +443,16 @@ def write_anomaly_restarts(
     overwrite: bool = False,
     log=print,
 ) -> dict:
-    """Copy each base restart to ``plan.out_dir`` and apply the increments.
+    """Copy each base restart to its component directory and apply the increments.
 
-    The river follows the land base year and is copied unchanged. Writes the
-    rpointers and ``anomaly.json`` (plan, base years, settings, stats).
+    The river and the coupler follow the land base year and are copied
+    unchanged. Writes the rpointers and ``anomaly.json`` (plan, base years,
+    settings, stats) to every component directory.
     """
-    out_dir = Path(plan.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     written = {}
-    for comp in plan.components:
-        year = base_years[comp]
+    for comp, year in with_coupler({c: base_years[c] for c in plan.components}).items():
         src, dst = plan.source(comp, year), plan.output(comp)
+        dst.parent.mkdir(parents=True, exist_ok=True)
         if dst.exists() and not overwrite:
             raise FileExistsError(f"{dst} exists; pass overwrite=True to replace it")
         t0 = time.time()
@@ -472,7 +472,7 @@ def write_anomaly_restarts(
             f"({time.time() - t0:.0f} s)")
         info = COMPONENTS[comp]
         pointer = f"./{dst.name}" if info["pointer"] == "file" else f"{plan.target_date}_00:00:00"
-        (out_dir / info["rpointer"]).write_text(pointer + "\n")
+        (dst.parent / info["rpointer"]).write_text(pointer + "\n")
         written[comp] = {"base year": int(year), "source": str(src), "output": str(dst),
                          "fields": list(increments.get(comp, {}))}
 
@@ -483,7 +483,8 @@ def write_anomaly_restarts(
         "restarts": written,
         "stats": json.loads(stats.round(4).to_json(orient="records")),
     }
-    (out_dir / "anomaly.json").write_text(json.dumps(summary, indent=2, default=str))
+    for entry in written.values():
+        (Path(entry["output"]).parent / "anomaly.json").write_text(json.dumps(summary, indent=2, default=str))
     return summary
 
 

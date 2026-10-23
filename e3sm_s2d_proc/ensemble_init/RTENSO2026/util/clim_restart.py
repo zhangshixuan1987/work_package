@@ -90,11 +90,17 @@ SPVAL_THRESHOLD = 1.0e35
 ALL_COMPONENTS = ("elm", "mosart", "mpassi")
 BRANCHES = ("clim", "obs")
 
+# "dir": component directory of <out_root>/YYYYMMDD/<dir>/<method>/, next to atm/ and ocn/.
 COMPONENTS = {
-    "elm": {"stream": "elm.r", "sep": "-", "rpointer": "rpointer.lnd", "pointer": "file"},
-    "mosart": {"stream": "mosart.r", "sep": "-", "rpointer": "rpointer.rof", "pointer": "file"},
-    "mpassi": {"stream": "mpassi.rst", "sep": "_", "rpointer": "rpointer.ice", "pointer": "date"},
+    "elm": {"stream": "elm.r", "sep": "-", "rpointer": "rpointer.lnd", "pointer": "file", "dir": "lnd"},
+    "mosart": {"stream": "mosart.r", "sep": "-", "rpointer": "rpointer.rof", "pointer": "file", "dir": "rof"},
+    "mpassi": {"stream": "mpassi.rst", "sep": "_", "rpointer": "rpointer.ice", "pointer": "date", "dir": "ice"},
+    "cpl": {"stream": "cpl.r", "sep": "-", "rpointer": "rpointer.drv", "pointer": "file", "dir": "cpl"},
 }
+
+# The coupler restart is not a selection component: it is copied unchanged
+# from the land (and river) year, so the driver state matches them.
+COUPLER = "cpl"
 
 # Field name -> (model definition, domain and weight).
 KEY_FIELDS = {
@@ -330,7 +336,7 @@ class SelectionPlan:
     candidate_years: list[int]
     src_root: str
     src_prefix: str
-    out_dir: str
+    out_dir: str                  # <out_root>/YYYYMMDD; outputs in <comp dir>/<label>/
     out_prefix: str
     excluded_years: list[int] = field(default_factory=list)
     era5_root: str = ERA5_ROOT
@@ -375,8 +381,11 @@ class SelectionPlan:
     def source(self, component: str, year: int) -> Path:
         return source_file(self.src_root, self.src_prefix, component, year, self.mmdd)
 
+    def method_dir(self, component: str) -> Path:
+        return Path(self.out_dir) / COMPONENTS[component]["dir"] / (self.label or self.branch)
+
     def output(self, component: str) -> Path:
-        return Path(self.out_dir) / restart_name(self.out_prefix, component, self.target_year, self.mmdd)
+        return self.method_dir(component) / restart_name(self.out_prefix, component, self.target_year, self.mmdd)
 
 
 def make_plan(
@@ -399,8 +408,8 @@ def make_plan(
     clim_first_year: int | None = None,
     clim_last_year: int | None = None,
 ) -> SelectionPlan:
-    """Candidate years (all components available) and output directory
-    ``<out_root>/YYYYMMDD/<label>`` (``label`` defaults to the branch).
+    """Candidate years (all components available) and output directories
+    ``<out_root>/YYYYMMDD/<comp dir>/<label>`` (``label`` defaults to the branch).
 
     The candidate years searched are ``first_year``-``last_year`` without
     ``exclude_years``. The climatology (the mean and interannual spread that
@@ -487,7 +496,7 @@ def make_plan(
         candidate_years=years,
         src_root=str(src_root),
         src_prefix=src_prefix,
-        out_dir=str(out_root / target_date.replace("-", "") / (label or branch)),
+        out_dir=str(out_root / target_date.replace("-", "")),
         out_prefix=out_prefix,
         excluded_years=sorted(excluded),
         era5_root=resolved_roots.get("elm", ERA5_ROOT),
@@ -1031,6 +1040,11 @@ def select_years(distances: pd.DataFrame, components: Sequence[str], mode: str =
     return {c: own.get(c, own.get(FOLLOWS.get(c), joint)) for c in components}
 
 
+def with_coupler(years: Mapping[str, int]) -> dict[str, int]:
+    """``years`` plus the coupler restart, taken from the land year."""
+    return {**years, COUPLER: years["elm"]} if "elm" in years else dict(years)
+
+
 # ---------------------------------------------------------------------------
 # Writing
 # ---------------------------------------------------------------------------
@@ -1047,20 +1061,20 @@ def write_selected_restarts(
     overwrite: bool = False,
     log=print,
 ) -> dict:
-    """Copy each selected restart to the target-date file name and write rpointers.
+    """Copy each selected restart, and the coupler restart of the land year,
+    to the target-date file name and write rpointers.
 
-    ``selection.json`` next to the outputs records the branch, candidate
-    years, selected year per component, and the full distance table.
+    ``selection.json`` in every component directory records the branch,
+    candidate years, selected year per component, and the full distance table.
     """
-    out_dir = Path(plan.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     copied = {}
-    previous = {}
-    if (out_dir / "selection.json").is_file():
-        previous = json.loads((out_dir / "selection.json").read_text()).get("selection", {})
-    for comp, year in selection.items():
+    for comp, year in with_coupler(selection).items():
         src, dst = plan.source(comp, year), plan.output(comp)
         info = COMPONENTS[comp]
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        previous = {}
+        if (dst.parent / "selection.json").is_file():
+            previous = json.loads((dst.parent / "selection.json").read_text()).get("selection", {})
         unchanged = (dst.is_file() and previous.get(comp, {}).get("source") == str(src)
                      and dst.stat().st_size == src.stat().st_size)
         if unchanged:
@@ -1074,7 +1088,7 @@ def write_selected_restarts(
             os.replace(tmp, dst)
             log(f"  {comp}: {src.name} -> {dst} ({time.time() - t0:.0f} s)")
         pointer = f"./{dst.name}" if info["pointer"] == "file" else f"{plan.target_date}_00:00:00"
-        (out_dir / info["rpointer"]).write_text(pointer + "\n")
+        (dst.parent / info["rpointer"]).write_text(pointer + "\n")
         copied[comp] = {"year": int(year), "source": str(src), "output": str(dst)}
 
     summary = {
@@ -1087,7 +1101,8 @@ def write_selected_restarts(
         "fields": [c for c in distances.columns if ": " in c],
         "distances": json.loads(distances.round(4).to_json(orient="index")),
     }
-    (out_dir / "selection.json").write_text(json.dumps(summary, indent=2))
+    for entry in copied.values():
+        (Path(entry["output"]).parent / "selection.json").write_text(json.dumps(summary, indent=2))
     return summary
 
 

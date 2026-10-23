@@ -16,10 +16,10 @@ set -o pipefail
 # Sea-ice (MPAS-SI) initial conditions for RTENSO2026 from the reanalysis-based
 # sea-ice files in Reanalysis_ICs/ (NSIDCv6 ice area, spun up). They do not
 # depend on the land/sea-ice method (clim, obs, hybrid_ic), so one is written
-# per date, as an alternative to the sea ice in each method directory:
+# per date, as an alternative to the method sea ice in ice/<method>/:
 #
-#   <out_root>/YYYYMMDD/ice/20251024_s2d_spinup.mpassi.rst.YYYY-MM-DD_00000.nc
-#   <out_root>/YYYYMMDD/ice/rpointer.ice, ice.json
+#   <out_root>/YYYYMMDD/ice/nsidc/20251024_s2d_spinup.mpassi.rst.YYYY-MM-DD_00000.nc
+#   <out_root>/YYYYMMDD/ice/nsidc/rpointer.ice, ice.json
 #
 # The file must be on the model mesh and hold every variable of a model
 # sea-ice restart (checked against the BruteForce restart of ref_year). The
@@ -40,7 +40,7 @@ set -o pipefail
 out_root="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions"
 dates=(2015-02-01 2015-05-01 2015-08-01 2015-11-01
        2026-02-01 2026-05-01 2026-08-01)
-out_subdir="ice"                      # written to <out_root>/YYYYMMDD/<out_subdir>/
+out_subdir="ice/nsidc"                # written to <out_root>/YYYYMMDD/<out_subdir>/
 
 # Sea-ice initial conditions, named by calendar date (YYYYMMDD).
 ice_dir="/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/Reanalysis_ICs"
