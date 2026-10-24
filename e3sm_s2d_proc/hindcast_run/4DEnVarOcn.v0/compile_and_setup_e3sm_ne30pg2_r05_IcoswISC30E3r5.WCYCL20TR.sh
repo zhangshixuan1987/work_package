@@ -375,20 +375,6 @@ cat << EOF >> user_nl_mosart
  rtmhist_nhtfrq = 0,-24
 EOF
 
-cat << EOF >> user_nl_mpasi
- !add setup for mpasi here if needed
- config_initial_condition_type = 'restart'
-
- !add setup for mpasi here if needed
- config_do_restart = .true.
- config_do_restart_bgc = .true.
- config_do_restart_hbrine = .true.
- config_do_restart_snow_density = .true.
- config_do_restart_snow_grain_radius = .true.
- config_do_restart_zsalinity = .true.
- config_restart_timestamp_name = 'rpointer.ice'
-EOF
-
 }
 
 # =====================================

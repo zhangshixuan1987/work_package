@@ -38,7 +38,7 @@ hindcast batch. All use 10 members, 2-year forecasts, `custom-7_1x2_nyears`
 | `4DEnVarOcn.v0/` | `4DEnVarOcn` | 1980-1981 | May, Nov | `assm_anom_ocn_4DEnVar_loc100_v3` / same | initial compile/setup |
 | `BruteForce/` | `BruteForce` | 1990-1995 | Feb, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run, restarts one month after the lead date |
 | `JRA55_FOSIRL/` | `JRA55-FOSIRL` | 2017-2018 | May, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run |
-| `RTENSO2026/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | initial compile/setup |
+| `RTENSO2026/{clim,obs,hybrid_ic}/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | `clim/`, `obs/`: short-spinup chain; `hybrid_ic/`: initial compile/setup (on hold) |
 
 `4DEnVarOcn.v0/` and `BruteForce/` use the current driver; their
 `run_e3sm_ens_bundle.sh` differ only in `#SBATCH` account and wall time, and
@@ -50,9 +50,12 @@ used).
 `RTENSO2026/` is `BruteForce/` reading the RTENSO2026 initial conditions
 (`/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/`, see
 `../ensemble_init/RTENSO2026/`), which keep one directory per component:
-`YYYYMMDD/atm/`, `ocn/`, and `lnd/`, `rof/`, `ice/`, `cpl/<method>/`. Each batch
-uses one method, `my_ic_method` (`clim`, `obs`, or `hybrid_ic`; in the case
-name), and optionally another sea ice, `my_ice_method` (for example `nsidc`).
+`YYYYMMDD/atm/`, `ocn/`, and `lnd/`, `rof/`, `ice/`, `cpl/<method>/`. It has one
+run set per method, `clim/`, `obs/`, and `hybrid_ic/` (on hold with the
+method, see `../ensemble_init/RTENSO2026/README.md`), identical except for
+`my_ic_method` (also in the case name, so the batches do not collide); run each
+from its own directory. `my_ice_method` optionally takes another sea ice (for
+example `nsidc`).
 The 2026 dates are added to `my_leadymd` once their `atm/` exists.
 
 To run a new batch, copy the matching set to a working directory, edit
@@ -215,7 +218,7 @@ This mode performs:
 * set up all configured lead dates and members
 * copy required restart and rpointer files into each member archive
 * update `user_nl_eam`, `user_nl_elm`, `user_nl_mosart`,
-  `user_nl_mpaso`, and `user_nl_mpasi`
+  `user_nl_mpaso`, and `user_nl_mpassi`
 * patch MPAS-Ocean and MPAS-Seaice stream files
 
 Setup is parallelized with an internal limit of 10 background setup jobs.
@@ -366,7 +369,7 @@ SourceMods/src.mpassi
 The driver also updates MPAS time steps in:
 
 * `user_nl_mpaso`
-* `user_nl_mpasi`
+* `user_nl_mpassi`
 
 When `do_short_spinup=false`, the workflow currently resets these to the
 default values:

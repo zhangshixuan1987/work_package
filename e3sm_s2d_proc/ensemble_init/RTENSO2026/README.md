@@ -53,7 +53,7 @@ archive state, including the 2015 reference, as JRA55-FOSIRL (`IC_SOURCE`).
 | --- | --- | --- |
 | `01_clim_match_ic.ipynb` | climatology-match: the archive year closest to the model climatology | `YYYYMMDD/{lnd,rof,ice,cpl}/clim/` |
 | `02_obs_match_ic.ipynb` | observation-match: the archive year closest to the observed anomaly (`OBS_SET`) | `YYYYMMDD/{lnd,rof,ice,cpl}/obs/` |
-| `03_hybrid_ic.ipynb` | the `clim` year adjusted to the model climatology plus the observed anomaly | `YYYYMMDD/{lnd,rof,ice,cpl}/hybrid_ic/` |
+| `03_hybrid_ic.ipynb` | the `clim` year adjusted to the model climatology plus the observed anomaly (**on hold**, see below) | `YYYYMMDD/{lnd,rof,ice,cpl}/hybrid_ic/` |
 | `04_compare_ic_methods.ipynb` | comparison of the methods from the outputs saved by 01-03 | -- |
 
 ## Land, river, and sea-ice states from a selected year
@@ -75,7 +75,8 @@ observation roots and fields) and in the notebook's saved `config.json`; a
 run with another `OBS_SET` replaces the `obs/` restarts.
 
 `hybrid_ic` (`03_hybrid_ic.ipynb`) instead adjusts the `clim` year
-to the model climatology plus the observed (ERA5-Land/NSIDC) anomaly.
+to the model climatology plus the observed (ERA5-Land/NSIDC) anomaly. It is on
+hold (see "Climatology plus observed anomaly").
 
 The metric below is written with ERA5 variable names; ERA5-Land uses the same
 names (`sd`, `swvl1`-`swvl4`, `stl1`-`stl4`) on a 1-degree grid, and the NSIDC CDR
@@ -201,6 +202,87 @@ removes the edge noise and improves the selection for every box size. The
 default is `box = (15, 30)`, `box_shifts = 4` for both branches. (An earlier
 choice of 30 x 60 was based on the four 2015 dates alone, scored at the
 selection box, with 1980-2018 candidates.)
+
+### Climatology plus observed anomaly (`hybrid_ic`)
+
+**On hold** (2026-10-23) for further exploration of the deep-soil treatment
+(the open points below). Its restarts for the seven dates stay in
+`YYYYMMDD/{lnd,rof,ice,cpl}/hybrid_ic/` for comparison, but are not used for
+hindcasts; `../../hindcast_run/RTENSO2026/hybrid_ic/` is not run.
+
+`util/anom_restart.py` (notebook 03) starts from the `clim` restart and moves
+its key fields to the model climatology plus the observed anomaly, point by
+point: the observed standardized anomaly (ERA5-Land, NSIDC) is given the
+model's own interannual spread (`scale="point"`), capped at 3 model standard
+deviations (`z_max`), and applied as a ratio (snow, soil water, sea ice;
+0.25-4x) or a shift (soil temperature), kept within the range of the archive
+years at each point (`envelope`). Only soil and crop columns change; the
+water table, aquifer, river, and coupler keep the base state.
+
+Deep soil. ERA5-Land soil ends at 2.89 m (`stl4`/`swvl4`); ELM has 15 layers
+to 42 m, with water only to the bedrock (layers 1-10, to 3.8 m, in these
+restarts):
+
+- Soil water: the factor varies linearly in depth from its surface value
+  (centre of layers 1-3) to a deep value at 1.49 m, solved per column so that
+  layers 1-3 and 4+ each reach their target; every layer below 1.49 m gets the
+  deep value. Layers 8-10 (0.8-3.8 m) hold most of the water and change by
+  about +-6% (5-95%, 2015-02-01).
+- Soil temperature: layer 1 gets the surface shift, the thickness-weighted
+  mean of layers 4-10 above 2.89 m gets the subsurface shift (linear in
+  between), and the shift decays below 2.89 m with an e-folding depth of 3 m
+  (`temp_decay_depth`; layer 11 gets 54%, layer 12 19%, layers 14-15 none). 3 m
+  is about the damping depth of the annual temperature cycle,
+  sqrt(2 kappa / omega) = 2.2-3.2 m for a soil thermal diffusivity of
+  0.5-1 x 10^-6 m2 s-1.
+
+Checked in the `hybrid_ic` restarts (soil and crop columns, against the `clim`
+base):
+
+| Date | Layers 8-10 (0.8-3.8 m): \|dT\| > 3 K | 99th percentile \|dT\| | Shift crosses 0 C with the layer's ice unchanged | Layer 11 (3.8-6.3 m) \|dT\| > 3 K |
+| --- | --- | --- | --- | --- |
+| 2015-02-01 | 3.2% of columns (26S-79N) | 5.1-5.4 K | 1.9-3.5% | 0.8% (63-81N) |
+| 2015-08-01 | 0.8-2.3% | 2.9-3.8 K | 0.8-1.4% | 0.2% |
+| 2026-02-01 | 5.6-5.7% | 6.5 K | 3.5-4.6% | 1.6% (63-78N) |
+
+Open points for refining the approach:
+
+- The deep water and temperature anomalies are the 7-289 cm (`swvl2-4`,
+  `stl2-4`) anomaly extended down, so they assume the deep anomaly has the same
+  sign and phase as the root zone. Deep anomalies usually lag and damp the
+  surface ones, and ERA5-Land's deep layers are themselves model-derived
+  (HTESSEL) rather than observed.
+- The temperature shift does not repartition liquid and ice: where it crosses
+  0 C in a layer holding ice (mostly permafrost and seasonally frozen soil, the
+  table above), ELM will melt or freeze the layer in its first steps and the
+  latent heat will pull the temperature back toward the base.
+- Layer 10 (2.3-3.8 m) gets the full deep shift, although it extends below
+  2.89 m, and the water table (`ZWT`, `WA`) is not adjusted to the changed
+  deep water.
+- The `z_max`, ratio bounds, envelope, ramp depth (1.49 m), and decay depth are
+  choices of this workflow, not taken from the literature; the 2015 evaluation
+  in notebooks 03 and 04 is the test of them.
+
+References (not yet checked against the journals; confirm volume and pages
+before citing):
+
+- Anomaly versus full-field initialization: Smith, D. M., R. Eade, and
+  H. Pohlmann, 2013: A comparison of full-field and anomaly initialization for
+  seasonal to decadal climate prediction. *Clim. Dyn.*, 41, 3325-3338.
+  Magnusson, L., et al., 2013: Evaluation of forecast strategies for seasonal
+  and decadal forecasts in presence of systematic model errors. *Clim. Dyn.*,
+  41, 2393-2409. Meehl, G. A., et al., 2014: Decadal climate prediction: an
+  update from the trenches. *Bull. Amer. Meteor. Soc.*, 95, 243-267.
+- Anomalies scaled by the model's own variability: Volpi, D., et al., 2017:
+  Decadal climate prediction with a refined anomaly initialisation approach.
+  *Clim. Dyn.*, 48, 1841-1853.
+- Soil moisture transferred as standardized anomalies: Koster, R. D., et al.,
+  2009: On the nature of soil moisture in land surface models. *J. Climate*,
+  22, 4322-4335. Koster, R. D., et al., 2011: The second phase of the Global
+  Land-Atmosphere Coupling Experiment: soil moisture contributions to
+  subseasonal forecast skill. *J. Hydrometeor.*, 12, 805-822.
+- Damping of temperature waves with depth in soil: Hillel, D., 1998:
+  *Environmental Soil Physics*. Academic Press.
 
 ### Files
 

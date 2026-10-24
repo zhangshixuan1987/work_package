@@ -22,7 +22,7 @@ export my_initopt="YEARLY" #"MONTHLY"
 export my_walltime="24:00:00"
 
 export my_short_archive=true #short archive
-export do_compile_setup_only=true #false
+export do_compile_setup_only=false
 
 # Step 1 of restart: set true to reconfigure cases, then resubmit with do_ensemble_run=true
 # See also block below for restart run configuration setup 
@@ -30,11 +30,11 @@ export do_continue_setup=false #true
 
 # For short spin-up setup, when turned on the phase 1 will do a short-spinup with shorter ocean time step  
 # see also block below for the other setup 
-export do_short_spinup=false # must be false for continuation setup/run
+export do_short_spinup=true # must be false for continuation setup/run
 export do_skip_completed_spinup=true # skip members with complete spinup restart files
 
 # For final simulation stage, when short spinup is turned on this is phase 2  
-export do_ensemble_run=false #true #run simulation
+export do_ensemble_run=true #run simulation
 
 ######################################################
 # restart run configuration
@@ -68,7 +68,7 @@ export my_leadhh=`echo "${my_leadtod}" / 3600 | bc`
 
 # RTENSO2026 initial conditions, one directory per component (../../ensemble_init/RTENSO2026):
 #   <my_refdir>/YYYYMMDD/atm/, ocn/, lnd/<method>/, rof/<method>/, ice/<method>/, cpl/<method>/
-# my_ic_method: land, river, and coupler method (clim, obs, or hybrid_ic), one per batch
+# my_ic_method: land, river, and coupler method; matches this directory (clim/, obs/, hybrid_ic/)
 # my_ice_method: sea-ice method, the same by default or nsidc (ice/nsidc/, make_ice_ic.bash)
 export my_leadref="RTENSO2026"
 export my_ic_method="clim"

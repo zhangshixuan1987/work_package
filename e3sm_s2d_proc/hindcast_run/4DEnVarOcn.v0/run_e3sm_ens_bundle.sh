@@ -583,7 +583,7 @@ EOF
 }
 
 user_mpassi_nl() {
-  local file="user_nl_mpasi"
+  local file="user_nl_mpassi"
   local mpassi_dt="$1"
 
   if [[ ! -f "$file" ]]; then
