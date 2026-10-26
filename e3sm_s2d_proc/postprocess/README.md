@@ -9,16 +9,25 @@ postprocess/
   4DEnVarOcn.v0/    per-set drivers (from post_4DEnVarOcn)
   BruteForce/       per-set drivers (from post_bruteforce)
   JRA55_FOSIRL/     per-set drivers (from post_fosirl)
+  RTENSO2026/       per-set drivers (copied from BruteForce/)
   scripts/          shared ncclimo / ncremap / e3sm_to_cmip templates
   zstash_S2D.sh     zstash create / update / check for one case
   zstash_extract.bash  restore cases from HPSS
 ```
 
 The per-set directories hold the same drivers; they differ in `exp`
-(`..._4DEnVarOcn`, `..._BruteForce`, `..._JRA55_FOSIRL`), source and output
+(`..._4DEnVarOcn`, `..._BruteForce`, `..._JRA55_FOSIRL`,
+`..._RTENSO2026_<ic_method>`), source and output
 roots, lead-date lists, and a few variable lists. Edit the settings block at the
 top of each driver (`exp`, `leads`, `run_dir`, `out_dir`, `work_dir`,
 `max_jobs`) before running. All drivers use E3SM Unified on `pm-cpu`.
+
+`RTENSO2026/` covers the 2015 hindcasts from `../hindcast_run/RTENSO2026/`
+(leads 2015020100, 2015050100, 2015080100, 2015110100; 10 members; 2 years
+including the 1-month short spin-up). One set of drivers serves every IC
+method: `IC_METHOD` (default `clim`) selects
+`WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_${IC_METHOD}`, e.g.
+`IC_METHOD=obs sbatch run_post_atm_mon1.bash`.
 
 Case directories follow the hindcast layout:
 `${run_dir}/${exp}_${YYYYMMDDHH}/EN##/archive/<comp>/hist`.
@@ -34,7 +43,8 @@ Run in order for each batch of lead dates:
 | `2_run_mov_archive.bash` | Move `archive/<comp>/hist` from `$PSCRATCH` to the CFS simulation directory with `rsync --remove-source-files`. |
 | `3_run_check_clean.bash` | Compare source and destination history files with `cmp` and remove the scratch copies that match; failures go to `post_process_logs/`. |
 
-`JRA55_FOSIRL/` has no `0_run_archive.bash`. `BruteForce/run_rsync.bash` is an alternative copy from `$PSCRATCH` to the
+`JRA55_FOSIRL/` has no `0_run_archive.bash`. `BruteForce/run_rsync.bash` (also in
+`RTENSO2026/`) is an alternative copy from `$PSCRATCH` to the
 post-processing root (`--dry-run` supported).
 
 `zstash_S2D.sh` usage:
