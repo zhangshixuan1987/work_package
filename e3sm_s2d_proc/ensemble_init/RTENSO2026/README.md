@@ -292,8 +292,9 @@ before citing):
 | `02_obs_match_ic.ipynb` | Observation-match: the same for the year closest to the observed anomaly (`OBS_SET`: `era5land_nsidc`, default, or `era5`), written to `YYYYMMDD/{lnd,rof,ice,cpl}/obs/` |
 | `03_hybrid_ic.ipynb` | Climatology plus observed anomaly: box size, base (`clim`) year, increments, `YYYYMMDD/{lnd,rof,ice,cpl}/hybrid_ic/` restarts, the same evaluation and maps (with the `clim` and `obs` years for reference), soil profiles, save the outputs |
 | `04_compare_ic_methods.ipynb` | The three methods side by side from the saved outputs. Target: the observed anomaly on every date (joint D; per variable D, RMSE in model units, and anomaly pattern correlation, at box scale and model points), with the JRA55-FOSIRL 2015 IC scored the same way as a reference; then the methods against the JRA55-FOSIRL 2015 IC (distance, field similarity, global totals); a starting point for custom comparisons |
+| `05_reanalysis_seaice_check.ipynb` | The NSIDCv6 spin-up sea-ice files (D. Comeau) beside the JRA55-FOSIRL restart of the same date (2015 dates; 2026 shows the file alone): hemispheric area, extent, and volume by date, and native-mesh maps of concentration, thickness, and snow; figures and tables in `rtenso2026_ic/reanalysis_ice/` |
 | `make_ocn_ic.bash` | Ocean for each date (`YYYYMMDD/ocn/`): CFSR from `Reanalysis_ICs/` onto a BruteForce `mpaso` restart (see "Ocean and sea-ice initial conditions from reanalysis") |
-| `make_ice_ic.bash` | Alternative sea ice for each date (`YYYYMMDD/ice/nsidc/`): the NSIDCv6 file from `Reanalysis_ICs/` (needs the model mesh) |
+| `make_ice_ic.bash` | Alternative sea ice for each date (`YYYYMMDD/ice/nsidc/`): the NSIDCv6 file from `initial_conditions/Reanalysis_ICs/YYYYMMDD/` |
 | `make_atm_ic.bash` | Atmosphere members EN00-EN09 for each date (`YYYYMMDD/atm/`): the BruteForce members of the same date (2015), or Tang's HICCUP file reconstructed and perturbed with DART (2026, once available) (see "Atmosphere initial conditions") |
 | `util/ic_lib.sh` | Shell helpers shared by the three scripts above |
 | `util/eam_ens.sh` | EAM members from one HICCUP file: reconstruction on the `eam.i` template and DART `perturb_single_instance` (adapted from `../BruteForce/luke_cfsr/gen_ensemble_s2d_init.sh`) |
@@ -303,6 +304,7 @@ before citing):
 | `util/box_loo.py` | Leave-one-out box-size test (section 2 of 01-03) |
 | `util/anom_restart.py` | Climatology-plus-anomaly increments (ratio for sea ice, snow, and soil water; shift for soil temperature), writing, state distances, and soil profiles |
 | `util/ic_eval.py` | Similarity evaluation tables, box anomaly plots, and native-mesh `mosaic` plotting for MPAS-Seaice and ELM (archive years or adjusted states) |
+| `util/seaice_check.py` | Reading, totals, and plots of `05_reanalysis_seaice_check.ipynb` |
 | `util/ic_store.py` | Outputs saved by 01-03 for the comparison (settings, years, initial-condition key fields, common score) and their loaders |
 
 Each component has its own directory per method,
@@ -345,10 +347,12 @@ CHECK_ONLY=true ./make_atm_ic.bash   # preflight: source per date, pending dates
 
 ## Ocean and sea-ice initial conditions from reanalysis
 
-Two scripts write the ocean and an alternative sea ice from the
-reanalysis-based files in
-`/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/Reanalysis_ICs/` (named by
-calendar date, YYYYMMDD; 2015 Feb-Nov and 2026 Feb-Aug). Neither depends on
+Two scripts write the ocean and an alternative sea ice from
+reanalysis-based files named by calendar date (YYYYMMDD): the ocean from
+`/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/Reanalysis_ICs/` (2015 Feb-Nov
+and 2026 Feb-Aug), the sea ice from
+`/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/Reanalysis_ICs/YYYYMMDD/`
+(the seven dates through 2026-08-01, remapped to IcoswISC30E3r5 on 2026-10-26). Neither depends on
 the land/sea-ice method, so each writes one set per date, next to the method
 directories; they are separate scripts because the two components come from
 different analyses.
@@ -356,7 +360,7 @@ different analyses.
 | Script | Source | Written to `YYYYMMDD/` |
 | --- | --- | --- |
 | `make_ocn_ic.bash` | CFSR ocean state (`mpas_YYYYMMDD.cfsr.ic.nc`: temperature, salinity, layer thickness, land-ice fields; velocities are zero, as in the BruteForce CFSRv2 restarts) appended onto the BruteForce `mpaso` restart of `template_year` (default 2018) on the same calendar date, which supplies only the fields CFSR does not have (flux accumulators, SSH history, frazil) | `ocn/20251024_s2d_spinup.mpaso.rst.YYYY-MM-DD_00000.nc`, `ocn/rpointer.ocn`, `ocn/ocean.json` |
-| `make_ice_ic.bash` | NSIDCv6 sea ice (`mpassi.*.iceArea_from_NSIDCv6_spunup.YYYYMMDD.nc`), an alternative to each method's sea ice. It must be on the model mesh: the current files are on `EC30to60E2r2` (236,853 cells), not `IcoswISC30E3r5` (465,044), so the preflight stops until they are remapped | `ice/nsidc/20251024_s2d_spinup.mpassi.rst.YYYY-MM-DD_00000.nc`, `ice/nsidc/rpointer.ice`, `ice/nsidc/ice.json` |
+| `make_ice_ic.bash` | NSIDCv6 sea ice (`YYYYMMDD/mpassi.IcoswISC30E3r5.iceArea_from_NSIDCv6_spunup.YYYYMMDD.nc`), an alternative to each method's sea ice; the preflight checks the mesh and restart variables against the BruteForce `mpassi` restart | `ice/nsidc/20251024_s2d_spinup.mpassi.rst.YYYY-MM-DD_00000.nc`, `ice/nsidc/rpointer.ice`, `ice/nsidc/ice.json` |
 
 Both keep the source time as `xtime.orig`, so the model starts from the
 rpointer date (as in `../BruteForce/luke_cfsr/`), check every input and the
@@ -373,6 +377,17 @@ CHECK_ONLY=true ./make_ocn_ic.bash   # preflight: inputs, mesh, protected output
 CHECK_ONLY=true ./make_ice_ic.bash   # likewise for the sea ice
 ./make_ice_ic.bash
 ```
+
+**Sea-ice files not yet used** (2026-10-26). The IcoswISC30E3r5 files pass
+the preflight (mesh and variables), but their ice state does not vary with the
+date: every date has NH ice area 14.0 and SH 0.03 million km2 and NH ice
+volume 3.3 thousand km3. The BruteForce restarts have NH/SH area 14.0/4.7
+(2015-02-01) and 5.6/16.4 (2015-08-01) million km2 and NH volume 14-24
+thousand km3. The earlier EC30to60E2r2 files show the same pattern, so this is
+in the source data, not the remapping. Every file is time-stamped
+`0001-01-07_00:00:00`, and on every date the NH holds a winter-like ice cover (the whole Arctic, Hudson Bay,
+Okhotsk, Baltic) while the SH is almost ice-free (`05_reanalysis_seaice_check.ipynb`). `ice/nsidc/` is not
+written until this is resolved with the file provider.
 
 ## 2015 sensitivity test
 
@@ -421,6 +436,7 @@ directory holds only the source files.
                    input_summary, distances, state_distance, field_similarity,
                    global_summary tables (.csv)
   compare/         figures and tables of 04
+  reanalysis_ice/  figures and tables of 05
 ```
 
 Date directories exist for all eight dates (`20150201`-`20151101` and

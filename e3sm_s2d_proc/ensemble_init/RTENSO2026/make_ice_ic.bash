@@ -21,11 +21,9 @@ set -o pipefail
 #   <out_root>/YYYYMMDD/ice/nsidc/20251024_s2d_spinup.mpassi.rst.YYYY-MM-DD_00000.nc
 #   <out_root>/YYYYMMDD/ice/nsidc/rpointer.ice, ice.json
 #
-# The file must be on the model mesh and hold every variable of a model
-# sea-ice restart (checked against the BruteForce restart of ref_year). The
-# current NSIDCv6 files are on EC30to60E2r2 (236,853 cells), not IcoswISC30E3r5
-# (465,044 cells), so the preflight stops until they are remapped. The ocean is
-# handled separately by make_ocn_ic.bash.
+# The file must be on the model mesh (IcoswISC30E3r5) and hold every variable
+# of a model sea-ice restart (checked against the BruteForce restart of
+# ref_year). The ocean is handled separately by make_ocn_ic.bash.
 #
 # Edit USER SETTINGS, then:
 #   CHECK_ONLY=true ./make_ice_ic.bash   preflight only: inputs, mesh, variables
@@ -42,9 +40,10 @@ dates=(2015-02-01 2015-05-01 2015-08-01 2015-11-01
        2026-02-01 2026-05-01 2026-08-01)
 out_subdir="ice/nsidc"                # written to <out_root>/YYYYMMDD/<out_subdir>/
 
-# Sea-ice initial conditions, named by calendar date (YYYYMMDD).
-ice_dir="/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/Reanalysis_ICs"
-ice_case="mpassi.EC30to60E2r2.iceArea_from_NSIDCv6_spunup.%s.nc"
+# Sea-ice initial conditions, one directory per calendar date (YYYYMMDD; both
+# %s are the date), remapped to IcoswISC30E3r5.
+ice_dir="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/Reanalysis_ICs"
+ice_case="%s/mpassi.IcoswISC30E3r5.iceArea_from_NSIDCv6_spunup.%s.nc"
 ice_label="NSIDCv6"                   # recorded in ice.json and the file attributes
 
 # Model sea-ice restart the files are checked against (mesh and variables).
@@ -74,7 +73,7 @@ fi
 problems=0
 tasks=()
 for date in "${dates[@]}"; do
-  ice_file="${ice_dir}/$(printf "${ice_case}" "${date//-/}")"
+  ice_file="${ice_dir}/$(printf "${ice_case}" "${date//-/}" "${date//-/}")"
   ref_date="${ref_year}${date:4}"
   ref="${src_root}/${ref_date}-00000/${prefix}.mpassi.rst.${ref_date}_00000.nc"
   out="${out_root}/${date//-/}/${out_subdir}/${prefix}.mpassi.rst.${date}_00000.nc"
