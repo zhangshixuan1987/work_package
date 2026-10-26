@@ -126,6 +126,24 @@ def _pcorr(a: np.ndarray, b: np.ndarray, min_n: int = 3) -> float:
     return float(np.sum(a * b) / den) if den > 0 else np.nan
 
 
+def _block_indices(nt: int, block_len: int, rng: np.random.Generator) -> np.ndarray:
+    """Month indices of one moving-block resample (overlapping blocks of ``block_len`` months)."""
+    starts = np.arange(max(1, nt - block_len + 1))
+    nblocks = int(np.ceil(nt / block_len))
+    return np.concatenate([np.arange(s, min(s + block_len, nt)) for s in rng.choice(starts, nblocks)])[:nt]
+
+
+def block_bootstrap_ci(stat, nt: int, *, n_boot: int = 500, block_len: int = 6, seed: int = 0) -> tuple[float, float]:
+    """95% moving-block-bootstrap interval of ``stat(idx)``, ``idx`` the resampled month indices;
+    NaN when the record is not longer than one block (every resample would be the record itself)."""
+    if nt <= block_len:
+        return np.nan, np.nan
+    rng = np.random.default_rng(seed)
+    boot = np.array([stat(_block_indices(nt, block_len, rng)) for _ in range(n_boot)])
+    lo, hi = np.nanpercentile(boot, [2.5, 97.5])
+    return float(lo), float(hi)
+
+
 class QboPlotter:
     """Plot saved QBO sections of one variable (see module docstring)."""
 
@@ -209,11 +227,9 @@ class QboPlotter:
         rng = np.random.default_rng(seed)
         rmse0 = float(np.nanmean([cls.rmse_and_pcc(test, r)[0] for r in refs]))
         pcc0 = float(np.nanmean([cls.rmse_and_pcc(test, r)[1] for r in refs]))
-        starts = np.arange(max(1, nt - block_len + 1))   # moving (overlapping) blocks
-        nblocks = int(np.ceil(nt / block_len))
         boot = np.empty((n_boot, 2))
         for b in range(n_boot):
-            idx = np.concatenate([np.arange(s, min(s + block_len, nt)) for s in rng.choice(starts, nblocks)])[:nt]
+            idx = _block_indices(nt, block_len, rng)
             tb = test.isel(time=idx)
             stats = [cls.rmse_and_pcc(tb, r.isel(time=idx)) for r in refs]
             boot[b] = np.nanmean(stats, axis=0)
@@ -796,7 +812,18 @@ def shear_dlnp(u: xr.DataArray) -> xr.DataArray:
     return xr.DataArray(S, dims=("time", "plev"), coords={"time": u.time, "plev": u.plev}, name="dU_dlnp")
 
 
-def _t_and_shear(qbo_dir, source: str, period: str, ref_t: xr.DataArray | None):
+def detrend_time(x: xr.DataArray) -> xr.DataArray:
+    """``x`` (time, plev) minus its least-squares line over time at each level (NaN-aware)."""
+    y = x.transpose("time", "plev").values
+    t = np.where(np.isfinite(y), np.arange(y.shape[0], dtype=float)[:, None], np.nan)
+    ta, ya = t - np.nanmean(t, 0), y - np.nanmean(y, 0)
+    b = np.nansum(ta * ya, 0) / np.nansum(ta * ta, 0)
+    return xr.DataArray(ya - b * ta, dims=("time", "plev"), coords={"time": x.time, "plev": x.plev}, name=x.name)
+
+
+def _t_and_shear(qbo_dir, source: str, period: str, ref_t: xr.DataArray | None, detrend: bool = False):
+    """T' and dU/dln p of one source; ``detrend`` removes each level's linear trend over time from both
+    (the drift of a run, which T' from the reference climatology keeps)."""
     t = QboPlotter(QboPlotParameter.for_variable("ta", period=period), qbo_dir)
     u = QboPlotter(QboPlotParameter.for_variable("ua", period=period), qbo_dir)
     T = t.load(source).qbo
@@ -804,29 +831,43 @@ def _t_and_shear(qbo_dir, source: str, period: str, ref_t: xr.DataArray | None):
     QboPlotter.check_same_grid(T, U)
     T_anom = t.to_field(T, ref_t if ref_t is not None else T, "qbo_anom",
                         "ref_clim" if ref_t is not None else "own_clim")
-    return T_anom, shear_dlnp(U)
+    S = shear_dlnp(U)
+    return (detrend_time(T_anom), detrend_time(S)) if detrend else (T_anom, S)
 
 
-def t_shear_corr_profile(qbo_dir, source: str, period: str = PERIOD, ref_t: xr.DataArray | None = None):
+def t_shear_corr_profile(qbo_dir, source: str, period: str = PERIOD, ref_t: xr.DataArray | None = None,
+                         detrend: bool = False):
     """corr_t(T'(p), dU/dln p (p)) of one source."""
-    T, S = _t_and_shear(qbo_dir, source, period, ref_t)
+    T, S = _t_and_shear(qbo_dir, source, period, ref_t, detrend)
     r = [_pcorr(T.isel(plev=i).values, S.isel(plev=i).values, min_n=2) for i in range(T.sizes["plev"])]
     return xr.DataArray(r, dims="plev", coords={"plev": T.plev}, name="corr_T_shear")
 
 
+def t_shear_corr_band(qbo_dir, source: str, band_hpa=(10.0, 70.0), *, period: str = PERIOD,
+                      ref_t: xr.DataArray | None = None, detrend: bool = False, n_boot: int = 500,
+                      block_len: int = 6, seed: int = 0) -> tuple[float, float, float]:
+    """Mean over ``band_hpa`` of corr_t(T'(p), dU/dln p (p)) and its 95% block-bootstrap CI (months resampled)."""
+    T, S = _t_and_shear(qbo_dir, source, period, ref_t, detrend)
+    lo, hi = min(band_hpa), max(band_hpa)
+    T, S = (z.sel(plev=slice(lo, hi)).transpose("time", "plev").values for z in (T, S))
+    stat = lambda idx: float(np.nanmean([_pcorr(T[idx, k], S[idx, k], 2) for k in range(T.shape[1])]))
+    nt = T.shape[0]
+    return (stat(np.arange(nt)), *block_bootstrap_ci(stat, nt, n_boot=n_boot, block_len=block_len, seed=seed))
+
+
 def plot_t_shear_corr_profiles(qbo_dir, ref: str, sources, *, period: str = PERIOD, band_hpa=(10.0, 70.0),
                                style_map=None, figsize=(6.8, 7.8), font_scale=12, xlim=(-1, 1), ylim=(100, 1),
-                               fig_id=0, skip_bad=True) -> plt.Figure:
+                               fig_id=0, skip_bad=True, detrend=False) -> plt.Figure:
     """Profiles of corr[T', dU/dln p]; T' are anomalies from the reference monthly climatology.
 
-    The legend gives each profile's mean over ``band_hpa`` (shaded).
+    The legend gives each profile's mean over ``band_hpa`` (shaded); ``detrend`` as in ``_t_and_shear``.
     """
     ref_t = QboPlotter(QboPlotParameter.for_variable("ta", period=period), qbo_dir).load(ref).qbo
     lo, hi = min(band_hpa), max(band_hpa)
     fig, ax = plt.subplots(figsize=figsize)
     for s in [*sources, ref]:
         try:
-            r = t_shear_corr_profile(qbo_dir, s, period, ref_t)
+            r = t_shear_corr_profile(qbo_dir, s, period, ref_t, detrend)
         except Exception as e:
             if not skip_bad:
                 raise
@@ -893,17 +934,31 @@ def plot_t_shear_scatter(qbo_dir, ref: str, sources, *, period: str = PERIOD, la
 # ---------------------------------------------------------------------------
 # Thermal-wind consistency of the temperature errors (paper figure)
 # ---------------------------------------------------------------------------
-def thermal_wind_slope(qbo_dir, refs, *, period: str = PERIOD, layer_hpa=(10.0, 70.0)) -> float:
-    """Regression slope dT'/d(dU/dln p) (K s/m) of the reanalyses, pooled over the (month, level)
-    points of ``layer_hpa`` and averaged over ``refs``; T' from the first reference's climatology."""
+def _reanalysis_t_and_shear(qbo_dir, refs, period: str, layer_hpa) -> list[tuple[np.ndarray, np.ndarray]]:
+    """(T', dU/dln p) of each of ``refs`` in ``layer_hpa`` as (time, plev) arrays; T' from the first
+    reference's monthly climatology."""
     ref_t = QboPlotter(QboPlotParameter.for_variable("ta", period=period), qbo_dir).load(refs[0]).qbo
     lo, hi = min(layer_hpa), max(layer_hpa)
-    slopes = []
-    for r in refs:
-        T, S = _t_and_shear(qbo_dir, r, period, ref_t)
-        slopes.append(np.polyfit(S.sel(plev=slice(lo, hi)).values.ravel(),
-                                 T.sel(plev=slice(lo, hi)).values.ravel(), 1)[0])
-    return float(np.mean(slopes))
+    return [tuple(z.sel(plev=slice(lo, hi)).transpose("time", "plev").values
+                  for z in _t_and_shear(qbo_dir, r, period, ref_t)) for r in refs]
+
+
+def thermal_wind_slope(qbo_dir, refs, *, period: str = PERIOD, layer_hpa=(10.0, 70.0)) -> float:
+    """Regression slope dT'/d(dU/dln p) (K s/m) of the reanalyses, pooled over the (month, level)
+    points of ``layer_hpa`` and averaged over ``refs``; T' from the first reference's climatology.
+    ``period`` names the saved sections, so a long reanalysis record can be used (see
+    ``plot_thermal_wind_consistency``'s ``alpha_period``)."""
+    pairs = _reanalysis_t_and_shear(qbo_dir, refs, period, layer_hpa)
+    return float(np.mean([np.polyfit(S.ravel(), T.ravel(), 1)[0] for T, S in pairs]))
+
+
+def thermal_wind_slope_ci(qbo_dir, refs, *, period: str = PERIOD, layer_hpa=(10.0, 70.0), n_boot: int = 500,
+                          block_len: int = 24, seed: int = 0) -> tuple[float, float]:
+    """95% moving-block-bootstrap CI of ``thermal_wind_slope`` (months resampled; ``refs`` must share the
+    time axis). Blocks of about one QBO cycle keep the cycle's autocorrelation."""
+    pairs = _reanalysis_t_and_shear(qbo_dir, refs, period, layer_hpa)
+    stat = lambda idx: float(np.mean([np.polyfit(S[idx].ravel(), T[idx].ravel(), 1)[0] for T, S in pairs]))
+    return block_bootstrap_ci(stat, pairs[0][0].shape[0], n_boot=n_boot, block_len=block_len, seed=seed)
 
 
 def thermal_wind_errors(qbo_dir, ref: str, source: str, slope: float, *, period: str = PERIOD):
@@ -922,13 +977,23 @@ def plot_thermal_wind_consistency(qbo_dir, ref: str, groups: Mapping[str, Any], 
                                   dt_levels=np.arange(-12, 13, 2), shear_contours=(-8, -4, -2, 2, 4, 8),
                                   figsize=(22.0, 14.0), font_scale=18, linewidth=2.4, markersize=6.0,
                                   legend_fontsize=None, legend_loc=("upper right", "upper left"),
-                                  legend_frame=True, row_heights=(1.0, 1.3)):
+                                  legend_frame=True, row_heights=(1.0, 1.3), alpha_period: str | None = None,
+                                  residual: Literal["structure", "total"] = "structure", n_boot=500, block_len=6,
+                                  alpha_block_len=24, seed=0, floor_line=True):
     """Are the temperature errors of each initial state consistent with its wind errors?
 
     Thermal-wind balance on the equator ties T' to dU/dln p with the slope alpha fitted on the
     reanalyses (``thermal_wind_slope``), so the balanced part of a temperature error is
-    alpha * dS and the residual dT - alpha * dS is the part that the wind errors do not account for
-    (including any mean temperature bias and departures from the fitted balance).
+    alpha * dS and the residual dT - alpha * dS is the part that the wind errors do not account for.
+    alpha is fitted on the ``refs`` sections of ``alpha_period`` (default ``period``; a long record,
+    e.g. "1979-2019", samples many QBO cycles), with a block-bootstrap CI (``alpha_block_len`` months).
+    ``floor`` vs ``ref`` is drawn in the residual panel only with ``floor_line``; its table row is always kept.
+
+    Balance ties the shear to the meridional curvature of T, so a temperature error that is uniform
+    over the tropics (drift, radiative bias, initial shock) has no wind signature and is not a failure
+    of balance. ``residual="structure"`` (default) therefore scores dT - alpha * dS about its mean over
+    ``layer_hpa`` in each month (and fits r and slope of dT on dS on these deviations); the layer mean
+    of the residual is reported separately in the table. ``residual="total"`` keeps it.
 
     ``font_scale`` sets every font size (titles; labels, ticks and legends scaled from it) independently of
     ``figsize`` (inches), so a larger font fills more of the figure. Bottom row: ``linewidth`` of the lines
@@ -943,12 +1008,17 @@ def plot_thermal_wind_consistency(qbo_dir, ref: str, groups: Mapping[str, Any], 
     ``profile_sources``, coloured by group.
     ``groups`` maps a label to its run keys; the first ``len(colors)`` groups are drawn. In (c) a group of one
     run is labelled by that run, a larger group by its label and size.
-    Symbols and alpha are left to the figure caption (alpha is in ``table.attrs["alpha"]``).
-    Returns (figure, per-run table: corr and slope of dT on dS, residual RMS and mean dT over
-    ``layer_hpa`` for months 1-6 and 7-end).
+    Symbols, alpha and the ``residual`` mode are left to the figure caption (alpha is in ``table.attrs["alpha"]``).
+    Returns (figure, table): per run of ``groups`` and ``floor``, over ``layer_hpa``: corr and slope of dT on
+    dS and the residual RMS over all months with 95% block-bootstrap CIs (``n_boot``, ``block_len`` months),
+    the residual RMS for months 1-6 and 7-end, and the layer mean of the residual and of dT in months 1-6.
+    ``table.attrs`` holds alpha, its CI, ``alpha_period`` and ``residual``.
     """
     groups = dict(list(groups.items())[:len(colors)])
-    slope = thermal_wind_slope(qbo_dir, list(refs), period=period, layer_hpa=layer_hpa)
+    alpha_period = alpha_period or period
+    slope = thermal_wind_slope(qbo_dir, list(refs), period=alpha_period, layer_hpa=layer_hpa)
+    slope_ci = thermal_wind_slope_ci(qbo_dir, list(refs), period=alpha_period, layer_hpa=layer_hpa,
+                                     n_boot=n_boot, block_len=alpha_block_len, seed=seed)
     lo, hi = min(layer_hpa), max(layer_hpa)
     fs = font_scale
     names = [*sections, *profile_sources, *(s for v in groups.values() for s in v), *([floor] if floor else [])]
@@ -987,13 +1057,18 @@ def plot_thermal_wind_consistency(qbo_dir, ref: str, groups: Mapping[str, Any], 
     cb.set_label(f"$\\Delta T$ (minus {ref}, K)", fontsize=size["label"])
     cb.ax.tick_params(labelsize=size["tick"])
 
+    def layer(s):
+        """dT, dS and the residual in ``layer_hpa``, about their layer mean with ``residual="structure"``."""
+        parts = [z.sel(plev=slice(lo, hi)) for z in err[s]]
+        return [z - z.mean("plev") for z in parts] if residual == "structure" else parts
+
     # residual vs lead month
     ax, ax2 = sf_bottom.subplots(1, 2)
-    rms = lambda x: np.sqrt((x.sel(plev=slice(lo, hi)) ** 2).mean("plev")).values
-    if floor:
-        ax.plot(lead, rms(err[floor][2]), color="k", linewidth=0.75 * linewidth, label=f"{floor} vs {ref}")
+    rms = lambda s: np.sqrt((layer(s)[2] ** 2).mean("plev")).values
+    if floor and floor_line:
+        ax.plot(lead, rms(floor), color="k", linewidth=0.75 * linewidth, label=f"{floor} vs {ref}")
     for (g, members), c, ls in zip(groups.items(), colors, linestyles):
-        curves = np.array([rms(err[s][2]) for s in members])
+        curves = np.array([rms(s) for s in members])
         ax.fill_between(lead, curves.min(0), curves.max(0), color=c, alpha=0.22, linewidth=0)
         ax.plot(lead, curves.mean(0), color=c, linestyle=ls, linewidth=linewidth,
                 label=members[0] if len(members) == 1 else f"{g} (n={len(members)})")
@@ -1030,14 +1105,23 @@ def plot_thermal_wind_consistency(qbo_dir, ref: str, groups: Mapping[str, Any], 
     ax2.legend(loc=legend_loc[1], **legend_kw)
 
     rows = []
-    for g, members in groups.items():
-        for s in members:
-            dTl, dSl, ul = (z.sel(plev=slice(lo, hi)) for z in err[s])
-            x, y = dSl.values.ravel(), dTl.values.ravel()
-            rows.append({"group": g, "source": s, "r_dT_dS": _pcorr(x, y, 2), "slope_dT_dS": np.polyfit(x, y, 1)[0],
-                         "residual_rms_m1-6": float(np.sqrt((ul.isel(time=slice(0, 6)) ** 2).mean())),
-                         f"residual_rms_m7-{lead[-1]}": float(np.sqrt((ul.isel(time=slice(6, None)) ** 2).mean())),
-                         "mean_dT_m1-6": float(dTl.isel(time=slice(0, 6)).mean())})
+    members = [(g, s) for g, v in groups.items() for s in v] + ([("floor", floor)] if floor else [])
+    for g, s in members:
+        dTl, dSl, ul = (z.transpose("time", "plev").values for z in layer(s))
+        stats = {"r_dT_dS": lambda i: _pcorr(dSl[i].ravel(), dTl[i].ravel(), 2),
+                 "slope_dT_dS": lambda i: np.polyfit(dSl[i].ravel(), dTl[i].ravel(), 1)[0],
+                 "residual_rms": lambda i: np.sqrt(np.nanmean(ul[i] ** 2))}
+        row = {"group": g, "source": s}
+        for name, f in stats.items():
+            row[name] = float(f(np.arange(len(lead))))
+            row[f"{name}_lo"], row[f"{name}_hi"] = block_bootstrap_ci(f, len(lead), n_boot=n_boot,
+                                                                      block_len=block_len, seed=seed)
+        mean_res, mean_dT = (z.sel(plev=slice(lo, hi)).isel(time=slice(0, 6)).mean() for z in (err[s][2], err[s][0]))
+        row.update({"residual_rms_m1-6": float(np.sqrt(np.nanmean(ul[:6] ** 2))),
+                    f"residual_rms_m7-{lead[-1]}": float(np.sqrt(np.nanmean(ul[6:] ** 2))),
+                    "mean_residual_m1-6": float(mean_res), "mean_dT_m1-6": float(mean_dT)})
+        rows.append(row)
     table = pd.DataFrame(rows).set_index("source")
-    table.attrs["alpha"] = slope
+    table.attrs.update(alpha=slope, alpha_lo=slope_ci[0], alpha_hi=slope_ci[1], alpha_period=alpha_period,
+                       residual=residual)
     return fig, table
