@@ -28,6 +28,9 @@ including the 1-month short spin-up). One set of drivers serves every IC
 method: `IC_METHOD` (default `clim`) selects
 `WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_${IC_METHOD}`, e.g.
 `IC_METHOD=obs sbatch run_post_atm_mon1.bash`.
+Before stage 1 moves the history files to CFS, set `RUN_DIR` to read them
+from `$PSCRATCH`, e.g.
+`RUN_DIR=$PSCRATCH/e3sm_project/E3SMv3_S2D IC_METHOD=obs sbatch run_post_atm_mon1.bash`.
 
 Case directories follow the hindcast layout:
 `${run_dir}/${exp}_${YYYYMMDDHH}/EN##/archive/<comp>/hist`.
