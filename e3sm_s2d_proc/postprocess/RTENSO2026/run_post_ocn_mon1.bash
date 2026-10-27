@@ -31,7 +31,7 @@ map="/global/cfs/cdirs/e3sm/diagnostics/maps/map_IcoswISC30E3r5_to_cmip6_180x360
 ic_method="${IC_METHOD:-clim}"   # clim | obs | hybrid_ic
 exp="WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_${ic_method}"
 length=2   # years
-max_jobs=5
+max_jobs="${MAX_JOBS:-5}"
 group="ts"
 comp="ocn"
 grid="180x360_aave"
@@ -132,8 +132,8 @@ do
   echo "mth_end=$mth_end"
 
   # number of complete 12-month periods
-  start_total=$(( yr_srt * 12 + mth_srt ))
-  end_total=$(( yr_end * 12 + mth_end ))
+  start_total=$(( yr_srt * 12 + 10#$mth_srt ))
+  end_total=$(( yr_end * 12 + 10#$mth_end ))
   n_months=$(( end_total - start_total + 1 ))
   ypf=$(( n_months / 12 ))
 
@@ -141,7 +141,7 @@ do
 
   for en in $(seq 0 9); do
     ens="EN$(printf "%02d" "$en")"
-    ttag="$(printf "%04d" "${yr_srt}")$(printf "%02d" "${mth_srt}")-$(printf "%04d" "${yr_end}")$(printf "%02d" "${mth_end}")-$(printf "%04d" "${ypf}")"
+    ttag="$(printf "%04d" "${yr_srt}")$(printf "%02d" "$((10#${mth_srt}))")-$(printf "%04d" "${yr_end}")$(printf "%02d" "$((10#${mth_end}))")-$(printf "%04d" "${ypf}")"
 
     script_dir="${out_dir}/${case}/${ens}/post/scripts"
     mkdir -p "${script_dir}" || exit 1
@@ -224,8 +224,8 @@ do
 
     sed -i "s|^yr_srt=.*|yr_srt=${yr_srt}|g" "$out_script"
     sed -i "s|^yr_end=.*|yr_end=${yr_end}|g" "$out_script"
-    sed -i "s|^mth_srt=.*|mth_srt=${mth_srt}|g" "$out_script"
-    sed -i "s|^mth_end=.*|mth_end=${mth_end}|g" "$out_script"
+    sed -i "s|^mth_srt=.*|mth_srt=$((10#${mth_srt}))|g" "$out_script"
+    sed -i "s|^mth_end=.*|mth_end=$((10#${mth_end}))|g" "$out_script"
     sed -i "s|^diri=.*|diri=${run_dir}|g" "$out_script"
     sed -i "s|^diro=.*|diro=${out_dir}|g" "$out_script"
     sed -i "s|^case=.*|case=${case}|g" "$out_script"
@@ -238,6 +238,16 @@ do
     sed -i "s|^package=.*|package=${package}|g" "$out_script"
     sed -i "s|^plevdata=.*|plevdata=${plevdata}|g" "$out_script"
     sed -i "s|^map=.*|map=${map}|g" "$out_script"
+
+    # ncremap -p mpi needs a Slurm node list; run it serially on login nodes
+    if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+      sed -i "s|ncremap -p mpi |ncremap |g" "$out_script"
+    fi
+
+    # JOB_NBR caps ncclimo splitter parallelism (default: one job per variable)
+    if [[ -n "${JOB_NBR:-}" ]]; then
+      sed -i "s|^--split \\\\$|--split --job_nbr=${JOB_NBR} \\\\|" "$out_script"
+    fi
 
     chmod 755 "$out_script" || exit 1
     echo "working on $out_script"
