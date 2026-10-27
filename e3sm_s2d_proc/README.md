@@ -24,6 +24,7 @@ experiment-specific; review them before submitting.
 | - | `ensemble_pert_analysis/` | Check perturbed EAM initial conditions against the base state: EN00 bit-for-bit check, perturbation statistics, distribution and vertical-spread plots. Independent of the perturbation method. |
 | 4 | `hindcast_run/` | Bundled ensemble hindcast driver (compile once, set up all lead dates x members, run them concurrently in one Slurm allocation), with a sample run workflow for each initial-condition set; see its README. |
 | 5 | `postprocess/` | Per-set archive/transfer stages (st_archive, zstash to HPSS, move to CFS, check and clean) and ncclimo/ncremap time series and climatologies for atmosphere, land, river, ocean, and sea ice; see its README. |
+| 6 | `diagnostic/` | RTENSO2026 2015/16 El Nino case-study notebooks (Nino plumes, anomaly maps and pattern ACC, land/sea-ice IC sensitivity, teleconnections), following the ESP-Lab suite with Reanalysis lead-time climatologies for drift correction; see its README. |
 | - | `control_runs/` | Standalone `run_e3sm` control cases used to test the S2D configuration. |
 
 ### Initial-condition methods
