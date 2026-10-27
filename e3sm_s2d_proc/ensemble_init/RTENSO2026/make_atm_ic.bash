@@ -25,7 +25,8 @@ set -o pipefail
 #   bruteforce  the BruteForce members of the same date, copied unchanged (2015)
 #   hiccup      Tang's HICCUP file: reconstructed on the eam.i template (EN00)
 #               and perturbed with DART for EN01-EN09 (util/eam_ens.sh)
-#   pending     neither yet (2026 until Tang's files exist): reported, skipped
+#   pending     neither yet (2026-11-01 until Tang's file exists): reported, skipped
+# A date whose atm.json exists is done and skipped unless overwrite_existing.
 # The coupler restart is not written here: cpl/<method>/ gets the cpl.r of
 # the land year of each method (util/clim_restart.py).
 #
@@ -78,11 +79,16 @@ member_name() { printf "%s.EN%02d.eam.i.%s-00000.nc" "${atm_case}" "$1" "$2"; }
 problems=0
 tasks=()
 pending=()
+done_dates=()
 need_dart=false
 for date in "${dates[@]}"; do
   bf_dir="${src_root}/${date}-00000"
   hiccup="${hiccup_dir}/$(printf "${hiccup_case}" "${date}")"
   out_dir="${out_root}/${date//-/}/${out_subdir}"
+  # atm.json is written last, so it marks a complete date
+  if [[ -e ${out_dir}/atm.json && ${overwrite_existing} != true ]]; then
+    done_dates+=("${date}"); continue
+  fi
   source_kind=bruteforce
   for i in $(seq 0 "${nmem}"); do
     [[ -r ${bf_dir}/$(member_name "${i}" "${date}") ]] || { source_kind=; break; }
@@ -111,14 +117,17 @@ if (( problems > 0 )); then
   echo "Preflight failed: ${problems} problem(s)." >&2
   exit 1
 fi
+for date in "${done_dates[@]}"; do
+  echo "DONE: ${date}: ${out_root}/${date//-/}/${out_subdir}/atm.json exists (set overwrite_existing=true to redo it)"
+done
 for date in "${pending[@]}"; do
   echo "PENDING: ${date}: no BruteForce members and no $(printf "${hiccup_case}" "${date}") in ${hiccup_dir}"
 done
 if (( ${#tasks[@]} == 0 )); then
-  echo "Nothing to do: every date is pending." >&2
+  echo "Nothing to do: every date is done or pending." >&2
   exit 1
 fi
-echo "Preflight passed: ${#tasks[@]} dates (EN00-EN$(printf "%02d" "${nmem}")), ${#pending[@]} pending."
+echo "Preflight passed: ${#tasks[@]} dates (EN00-EN$(printf "%02d" "${nmem}")), ${#done_dates[@]} done, ${#pending[@]} pending."
 for t in "${tasks[@]}"; do
   IFS='|' read -r date source_kind bf_dir hiccup out_dir <<< "${t}"
   [[ ${source_kind} == bruteforce ]] && from=${bf_dir} || from=$(basename "${hiccup}")

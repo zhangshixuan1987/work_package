@@ -295,7 +295,7 @@ before citing):
 | `05_reanalysis_seaice_check.ipynb` | The NSIDCv6 spin-up sea-ice files (D. Comeau) beside the JRA55-FOSIRL restart of the same date (2015 dates; 2026 shows the file alone): hemispheric area, extent, and volume by date, and native-mesh maps of concentration, thickness, and snow; figures and tables in `rtenso2026_ic/reanalysis_ice/` |
 | `make_ocn_ic.bash` | Ocean for each date (`YYYYMMDD/ocn/`): CFSR from `Reanalysis_ICs/` onto a BruteForce `mpaso` restart (see "Ocean and sea-ice initial conditions from reanalysis") |
 | `make_ice_ic.bash` | Alternative sea ice for each date (`YYYYMMDD/ice/nsidc/`): the NSIDCv6 file from `initial_conditions/Reanalysis_ICs/YYYYMMDD/` |
-| `make_atm_ic.bash` | Atmosphere members EN00-EN09 for each date (`YYYYMMDD/atm/`): the BruteForce members of the same date (2015), or Tang's HICCUP file reconstructed and perturbed with DART (2026, once available) (see "Atmosphere initial conditions") |
+| `make_atm_ic.bash` | Atmosphere members EN00-EN09 for each date (`YYYYMMDD/atm/`): the BruteForce members of the same date (2015), or Tang's HICCUP file reconstructed and perturbed with DART (2026) (see "Atmosphere initial conditions") |
 | `util/ic_lib.sh` | Shell helpers shared by the three scripts above |
 | `util/eam_ens.sh` | EAM members from one HICCUP file: reconstruction on the `eam.i` template and DART `perturb_single_instance` (adapted from `../BruteForce/luke_cfsr/gen_ensemble_s2d_init.sh`) |
 | `submit_clim_restarts.bash` | Slurm array over the eight dates, both selection branches per task (`sbatch submit_clim_restarts.bash`; `DRY_RUN=true bash submit_clim_restarts.bash` prints distances and selections only) |
@@ -337,8 +337,13 @@ first source that exists:
 | pending | neither | reported by the preflight and skipped |
 
 The reconstruction reproduces the BruteForce 2015-02-01 EN00 bit-for-bit
-(`cprnc`). No 2026 HICCUP files exist yet, so the 2026 dates are pending; rerun
-the script once they appear.
+(`cprnc`). Tang's 2026-02-01, 05-01 and 08-01 HICCUP files arrived on
+2026-10-15; they have the same dimensions and variables as the 2015 files, but
+the non-ERA5 fields (aerosols, trace gases) come from a 2005-2014 monthly
+climatology of `v3.LR.amip_bonus_0101` `eam.i` files instead of the restart of
+the same date. 2026-11-01 is pending until its file exists. A date whose
+`atm.json` exists is reported as done and skipped (`overwrite_existing=true`
+redoes it), so rerunning the script only builds the new dates.
 
 ```bash
 CHECK_ONLY=true ./make_atm_ic.bash   # preflight: source per date, pending dates, protected outputs
