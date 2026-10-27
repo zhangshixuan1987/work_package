@@ -306,14 +306,14 @@ def matched_climatology(field, init_month, method="lead_drift", mode="auto"):
     return clim
 
 
-def hindcast_anomaly(case_key, init_month, field, year=CASE_YEAR, method="lead_drift", mode="auto"):
+def hindcast_anomaly(case_prefix, init_month, field, year=CASE_YEAR, method="lead_drift", mode="auto"):
     """Drift-corrected anomalies (member, lead, lat, lon), or None when the case is missing."""
-    ens = open_hindcast(CASES[case_key]["case_prefix"], year, init_month, field)
+    ens = open_hindcast(case_prefix, year, init_month, field)
     if ens is None:
         return None
     clim = matched_climatology(field, init_month, method=method, mode=mode)
     anom = ens - clim
-    anom.attrs = {"units": FIELDS[field]["units"], "case": case_key, "init_month": init_month,
+    anom.attrs = {"units": FIELDS[field]["units"], "case": case_prefix, "init_month": init_month,
                   "climatology_method": clim.attrs.get("climatology_method", "")}
     return anom
 
