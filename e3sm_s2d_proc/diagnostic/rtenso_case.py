@@ -20,6 +20,7 @@ Paths follow ``esp_lab.env_paths``; caches are written with
 from __future__ import annotations
 
 import glob
+from datetime import timedelta
 from pathlib import Path
 
 import cftime
@@ -150,8 +151,16 @@ def open_member(case_prefix, year, init_month, member, field, nlead=NLEAD):
     info = FIELDS[field]
     var = info.get("var", field)
     with xr.open_dataset(path, decode_times=True) as ds:
-        bnds = ds["time_bnds"].values[:, 0]
-        if len(bnds) < nlead or (bnds[0].year, bnds[0].month) != (year, init_month):
+        # Month of each record: EAM and ELM stamp the month end and carry bounds
+        # (time_bnds / time_bounds), so use the bounds midpoint; MPAS-SI has no
+        # bounds and stamps near the month start, so shift by two weeks.
+        bnds_name = ds["time"].attrs.get("bounds")
+        if bnds_name in ds:
+            b = ds[bnds_name].values
+            months = [b0 + (b1 - b0) / 2 for b0, b1 in b]
+        else:
+            months = [t + timedelta(days=14) for t in ds["time"].values]
+        if len(months) < nlead or (months[0].year, months[0].month) != (year, init_month):
             raise ValueError(f"{path} does not start at {year}-{init_month:02d} with {nlead} months")
         da = ds[var].isel(time=slice(0, nlead))
         if "plev" in da.dims:
@@ -343,7 +352,7 @@ def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto"):
         src = da.to_dataset(name=field)
         da = make_regridder(src, model_grid(), method="conservative")(src)[field]
     da = da.drop_vars([c for c in da.coords if c not in ("time", "lat", "lon")])
-    if field == "TS":  # HadISST2 sst is filled over land; keep ocean points (EAM LANDFRAC < 0.5)
+    if field in ("TS", "SICE"):  # HadISST2 sst/sic are filled over land; keep ocean points (EAM LANDFRAC < 0.5)
         da = da.where(land_fraction() < 0.5)
     da.attrs = {"units": FIELDS[field]["units"], "long_name": FIELDS[field]["long_name"], "product": product}
     out = da.to_dataset(name=field)
@@ -380,8 +389,8 @@ def _obs_to_display_units(da, field):
         da = da - 273.15
     elif field == "PSL" and units in ("pa",):
         da = da / 100.0
-    elif field == "SICE" and units in ("%", "percent"):
-        da = da / 100.0
+    elif field == "SICE" and (units in ("%", "percent") or float(da.max()) > 1.5):
+        da = da / 100.0  # HadISST2 sic is in percent although its units say "Fraction"
     da.attrs["units"] = FIELDS[field]["units"]
     return da
 
@@ -481,10 +490,13 @@ def target_season_label(time):
 
 
 def welch_t(a, b, dim="member"):
-    """Welch t statistic and two-sided p value along ``dim``."""
+    """Welch t statistic and two-sided p value along ``dim`` (vectorised, NaN-aware)."""
     from scipy import stats as sstats
-    t, p = xr.apply_ufunc(lambda x, y: sstats.ttest_ind(x, y, axis=-1, equal_var=False, nan_policy="omit"),
-                          a, b, input_core_dims=[[dim], [dim]], output_core_dims=[[], []])
+    na, nb = a.count(dim), b.count(dim)
+    va, vb = a.var(dim, ddof=1) / na, b.var(dim, ddof=1) / nb
+    t = (a.mean(dim) - b.mean(dim)) / np.sqrt(va + vb)
+    dof = (va + vb) ** 2 / (va**2 / (na - 1) + vb**2 / (nb - 1))
+    p = xr.apply_ufunc(lambda tt, df: 2.0 * sstats.t.sf(np.abs(tt), df), t, dof)
     return t, p
 
 
