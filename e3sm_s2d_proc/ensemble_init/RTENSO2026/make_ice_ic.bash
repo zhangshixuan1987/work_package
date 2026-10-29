@@ -27,6 +27,8 @@ set -o pipefail
 #
 # Edit USER SETTINGS, then:
 #   CHECK_ONLY=true ./make_ice_ic.bash   preflight only: inputs, mesh, variables
+#   DATES="2026-02-01 2026-05-01" OVERWRITE=true ./make_ice_ic.bash --run
+#                                        restage a subset of dates over existing restarts
 #   ./make_ice_ic.bash                   execution_mode below (default auto: run here on an
 #                                        interactive node or in a job, submit from a login node)
 #   ./make_ice_ic.bash --run             run here, e.g. on an interactive node
@@ -38,12 +40,13 @@ set -o pipefail
 out_root="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions"
 dates=(2015-02-01 2015-05-01 2015-08-01 2015-11-01
        2026-02-01 2026-05-01 2026-08-01)
+[[ -n ${DATES:-} ]] && read -ra dates <<< "${DATES}"   # DATES="2026-02-01 ..." runs a subset
 out_subdir="ice/nsidc"                # written to <out_root>/YYYYMMDD/<out_subdir>/
 
 # Sea-ice initial conditions, one directory per calendar date (YYYYMMDD; both
 # %s are the date), remapped to IcoswISC30E3r5.
 ice_dir="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/Reanalysis_ICs"
-ice_case="%s/mpassi.IcoswISC30E3r5.iceArea_from_NSIDCv6_spunup.%s.nc"
+ice_case="%s/mpassi.IcoswISC30E3r5.iceArea_from_NSIDCv6_%s_spunup.20261029.nc"
 ice_label="NSIDCv6"                   # recorded in ice.json and the file attributes
 
 # Model sea-ice restart the files are checked against (mesh and variables).
@@ -51,7 +54,7 @@ src_root="/global/cfs/cdirs/e3sm/zhan391/v3.LR.S2D.ENSINT/BruteForce"
 ref_year=2018
 prefix="20251024_s2d_spinup"          # restart prefix (my_refcase2 in the hindcast driver)
 
-overwrite_existing=false              # replace an existing sea-ice restart
+overwrite_existing="${OVERWRITE:-false}"  # replace an existing sea-ice restart
 check_only="${CHECK_ONLY:-false}"     # true: preflight only
 # auto: run here inside a Slurm allocation (interactive node or batch job), submit from a
 # login node; run: always run here; submit: always submit a Slurm job. --run/--submit override it.
