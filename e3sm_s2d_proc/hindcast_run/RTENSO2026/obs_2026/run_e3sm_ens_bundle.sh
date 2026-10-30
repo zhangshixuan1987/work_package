@@ -2,10 +2,10 @@
 #------------------------------------------------------------------------------
 # Batch system directives
 #------------------------------------------------------------------------------
-#SBATCH  --account=gen0010
+#SBATCH  --account=e3sm
 #SBATCH  --constraint=cpu
 #SBATCH  --qos=regular
-#SBATCH  --nodes=280
+#SBATCH  --nodes=270
 #SBATCH  --time=16:00:00
 #SBATCH  --job-name=e3sm_s2d_ensrun
 

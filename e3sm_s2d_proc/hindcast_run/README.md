@@ -31,14 +31,20 @@ create_and_setup_case.sh
 Each subdirectory is a complete, self-contained run workflow for one
 initial-condition set from `../ensemble_init/`, copied from a production
 hindcast batch. All use 10 members, 2-year forecasts, `custom-7_1x2_nyears`
-(7 nodes per member), and a 280-node bundle that runs 40 members at once.
+(7 nodes per member), and a 280-node bundle that runs 40 members at once,
+except the RTENSO2026 2026 sets (`custom-9_1x2_nyears`, a 270-node bundle of
+30 members).
 
 | Directory | `my_leadref` | Sample batch | Lead dates | `my_refcase1` (atm) / `my_refcase2` (other) | Flags as saved |
 | --- | --- | --- | --- | --- | --- |
 | `4DEnVarOcn.v0/` | `4DEnVarOcn` | 1980-1981 | May, Nov | `assm_anom_ocn_4DEnVar_loc100_v3` / same | initial compile/setup |
 | `BruteForce/` | `BruteForce` | 1990-1995 | Feb, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run, restarts one month after the lead date |
 | `JRA55_FOSIRL/` | `JRA55-FOSIRL` | 2017-2018 | May, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run |
-| `RTENSO2026/{clim,obs,hybrid_ic}/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | `clim/`, `obs/`: short-spinup chain; `hybrid_ic/`: initial compile/setup (on hold) |
+| `RTENSO2026/{clim,obs}_2015/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | short-spinup chain, `custom-7_1x2_nyears` |
+| `RTENSO2026/{clim,obs}_2026/` | `RTENSO2026` | 2026 | Feb, May, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | short-spinup chain, `custom-9_1x2_nyears` (270 nodes) |
+| `RTENSO2026/obs_ice_nsidc_2015/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | `obs_2015/` with NSIDCv6 sea ice (`ice/nsidc/`); short-spinup chain |
+| `RTENSO2026/obs_ice_nsidc_2026/` | `RTENSO2026` | 2026 | Feb, May, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | `obs_2026/` with NSIDCv6 sea ice (`ice/nsidc/`); short-spinup chain |
+| `RTENSO2026/hybrid_ic/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | initial compile/setup (on hold) |
 
 `4DEnVarOcn.v0/` and `BruteForce/` use the current driver; their
 `run_e3sm_ens_bundle.sh` differ only in `#SBATCH` account and wall time, and
@@ -51,12 +57,16 @@ used).
 (`/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/`, see
 `../ensemble_init/RTENSO2026/`), which keep one directory per component:
 `YYYYMMDD/atm/`, `ocn/`, and `lnd/`, `rof/`, `ice/`, `cpl/<method>/`. It has one
-run set per method, `clim/`, `obs/`, and `hybrid_ic/` (on hold with the
-method, see `../ensemble_init/RTENSO2026/README.md`), identical except for
-`my_ic_method` (also in the case name, so the batches do not collide); run each
-from its own directory. `my_ice_method` optionally takes another sea ice (for
-example `nsidc`).
-The 2026 dates are added to `my_leadymd` once their `atm/` exists.
+run set per method and year, `clim_2015/`, `clim_2026/`, `obs_2015/`,
+`obs_2026/`, plus `hybrid_ic/` (on hold with the method, see
+`../ensemble_init/RTENSO2026/README.md`). The sets of one year are identical
+except for `my_ic_method` (also in the case name, so the batches do not
+collide); the 2015 and 2026 sets differ in `my_leadymd`/`my_restart_ymd` and
+layout (2015: 4 dates x 10 members x 7 nodes = 280 nodes; 2026: 3 dates x 10
+members x 9 nodes = 270 nodes). Run each from its own directory.
+`my_ice_method` optionally takes another sea ice (for example `nsidc`, as in
+`obs_ice_nsidc_2015/` and `obs_ice_nsidc_2026/`; the case name then ends in
+`_ice_nsidc`).
 
 To run a new batch, copy the matching set to a working directory, edit
 `my_leadymd` (and `my_restart_ymd` for continuations), the `#SBATCH` account and

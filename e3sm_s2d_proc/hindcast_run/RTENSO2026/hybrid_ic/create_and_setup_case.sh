@@ -7,7 +7,7 @@ export my_workdir=${PWD}
 
 # run configuration
 export my_machine=pm-cpu
-export my_project="gen0010"
+export my_project="e3sm"
 export my_jobqueue="regular"
 export my_task_per_node=128 # pm-cpu
 export my_job_nnodes=280    # total nodes (nens x node per ens)
@@ -70,7 +70,7 @@ export my_leadhh=`echo "${my_leadtod}" / 3600 | bc`
 
 # RTENSO2026 initial conditions, one directory per component (../../ensemble_init/RTENSO2026):
 #   <my_refdir>/YYYYMMDD/atm/, ocn/, lnd/<method>/, rof/<method>/, ice/<method>/, cpl/<method>/
-# my_ic_method: land, river, and coupler method; matches this directory (clim/, obs/, hybrid_ic/)
+# my_ic_method: land, river, and coupler method (clim, obs, hybrid_ic); in the directory name
 # my_ice_method: sea-ice method, the same by default or nsidc (ice/nsidc/, make_ice_ic.bash)
 export my_leadref="RTENSO2026"
 export my_ic_method="hybrid_ic"

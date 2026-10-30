@@ -5,12 +5,12 @@ export my_workdir=${PWD}
 
 # run configuration
 export my_machine=pm-cpu
-export my_project="gen0010"
+export my_project="e3sm"
 export my_jobqueue="regular"
 export my_task_per_node=128 # pm-cpu
-export my_job_nnodes=280    # total nodes (nens x node per ens)
-export my_layout="custom-7_1x2_nyears"
-export my_min_nodes_per_sim=7
+export my_job_nnodes=270    # total nodes (nens x node per ens): 3 dates x 10 members x 9 nodes
+export my_layout="custom-9_1x2_nyears"
+export my_min_nodes_per_sim=9
 #export my_layout="custom-28_1x2_nyears"
 #export my_min_nodes_per_sim=28
 
@@ -41,7 +41,7 @@ export do_ensemble_run=true #run simulation
 # only used when do_continue_setup = true 
 # note: restart ymd is corresponding to leadymd
 ######################################################
-export my_restart_ymd=("2015-03-01" "2015-06-01" "2015-09-01" "2015-12-01")
+export my_restart_ymd=("2026-03-01" "2026-06-01" "2026-09-01")
 export my_restart_tod="00000"
 export my_continue_recompile=false #true # recompile because the layout changed
 export my_continue_runopt="nyears"
@@ -61,14 +61,13 @@ export my_runpath="/pscratch/sd/z/zhan391/e3sm_project/E3SMv3_S2D"
 export my_mpaso_dt="00:30:00" # default: "00:30:00"
 export my_mpassi_dt=1800      # default: 1800
 
-# 2026 dates have no atm/ yet (Tang's HICCUP files pending): "2026-02-01" "2026-05-01" "2026-08-01"
-export my_leadymd=("2015-02-01" "2015-05-01" "2015-08-01" "2015-11-01")
+export my_leadymd=("2026-02-01" "2026-05-01" "2026-08-01")
 export my_leadtod="00000"
 export my_leadhh=`echo "${my_leadtod}" / 3600 | bc`
 
 # RTENSO2026 initial conditions, one directory per component (../../ensemble_init/RTENSO2026):
 #   <my_refdir>/YYYYMMDD/atm/, ocn/, lnd/<method>/, rof/<method>/, ice/<method>/, cpl/<method>/
-# my_ic_method: land, river, and coupler method; matches this directory (clim/, obs/, hybrid_ic/)
+# my_ic_method: land, river, and coupler method (clim, obs, hybrid_ic); in the directory name
 # my_ice_method: sea-ice method, the same by default or nsidc (ice/nsidc/, make_ice_ic.bash)
 export my_leadref="RTENSO2026"
 export my_ic_method="clim"
