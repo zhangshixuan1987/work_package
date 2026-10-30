@@ -44,6 +44,8 @@ CASE_YEAR = 2015
 CLIM_YEARS = (1981, 2010)
 OBS_YEARS = (2015, 2017)
 MODEL_PREFIX = "WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5"
+# RTENSO2026 post-processing has its own root; other sets stay under env_paths.raw_model_root().
+RTENSO2026_POST_ROOT = Path("/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process")
 
 # Display name -> case settings. "source" is the s2d_diag folder/file prefix.
 CASES = {
@@ -60,7 +62,7 @@ CASES = {
         "color": "tab:orange",
     },
     # Placeholder: obs ICs with NSIDCv6 sea ice; set init_months once the runs are post-processed.
-    "RTENSO2026-obs-nsidc": {
+    "Reanalysis-NSIDC": {
         "case_prefix": f"{MODEL_PREFIX}_RTENSO2026_obs_ice_nsidc",
         "source": "RTENSO2026_obs_ice_nsidc",
         "init_months": (),
@@ -120,8 +122,12 @@ def save_figure(fig, *parts, dpi=150):
     return path
 
 
+def post_root(case_prefix):
+    return RTENSO2026_POST_ROOT if "_RTENSO2026_" in case_prefix else env_paths.raw_model_root()
+
+
 def case_dir(case_prefix, year, init_month):
-    return env_paths.raw_model_root() / f"{case_prefix}_{year}{init_month:02d}0100"
+    return post_root(case_prefix) / f"{case_prefix}_{year}{init_month:02d}0100"
 
 
 def member_file(case_prefix, year, init_month, member, field):
@@ -429,6 +435,18 @@ def box_mean(da, lonlat):
     return sub.weighted(area_weights(sub["lat"]).fillna(0)).mean(("lat", "lon"))
 
 
+def nino_indices(anom, names):
+    """Nino box means of an SST anomaly, plus "ONI": the 3-month centred running mean
+    of Nino3.4 along lead (hindcasts) or time (observations), as in ESP-Lab sst_index."""
+    out = {name: box_mean(anom, NINO_REGIONS[name]) for name in names if name != "ONI"}
+    if "ONI" in names:
+        nino34 = out["Nino3.4"] if "Nino3.4" in out else box_mean(anom, NINO_REGIONS["Nino3.4"])
+        dim = "lead" if "lead" in nino34.dims else "time"
+        out["ONI"] = nino34.rolling({dim: 3}, center=True, min_periods=1).mean().assign_attrs(
+            long_name="Oceanic Nino Index (3-month running mean of Nino3.4 anomalies)")
+    return xr.Dataset({name: out[name] for name in names})
+
+
 def pattern_acc(fcst, obs, region="Global"):
     """Area-weighted, centered spatial anomaly correlation over a region."""
     f, o = region_subset(fcst, region), region_subset(obs, region)
@@ -510,7 +528,7 @@ def welch_t(a, b, dim="member"):
 __all__ = [
     "CASES", "FIELDS", "REGIONS", "NINO_REGIONS", "REFERENCE", "CASE_YEAR", "CLIM_YEARS", "NENS", "NLEAD",
     "open_hindcast", "leadtime_climatology", "matched_climatology", "nearest_reference_leads",
-    "hindcast_anomaly", "obs_monthly", "obs_anomaly", "match_obs", "box_mean", "pattern_acc", "pattern_rmse",
+    "hindcast_anomaly", "obs_monthly", "obs_anomaly", "match_obs", "box_mean", "nino_indices", "pattern_acc", "pattern_rmse",
     "seasonal_leads", "target_mean", "obs_target_mean", "hemispheric_area", "target_season_label",
     "welch_t", "region_subset", "area_weights",
     "figure_dir", "save_figure", "diag_dir",

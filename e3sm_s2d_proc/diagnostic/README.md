@@ -11,7 +11,7 @@ measures skill over many start years; here one event is followed through 4 start
 | --- | --- | --- | --- |
 | `Reanalysis-CLIM` (`RTENSO2026_clim`) | Feb, May, Aug, Nov | 10 | land/sea-ice/river ICs from the BruteForce year closest to the same-date climatology |
 | `Reanalysis-OBS` (`RTENSO2026_obs`) | Feb, May, Aug, Nov | 10 | land/sea-ice/river ICs from the BruteForce year closest to the ERA5 anomaly |
-| `RTENSO2026-obs-nsidc` (`RTENSO2026_obs_ice_nsidc`) | placeholder | 10 | `Reanalysis-OBS` with NSIDCv6 sea ice; enabled by setting its `init_months` once post-processed |
+| `Reanalysis-NSIDC` (`RTENSO2026_obs_ice_nsidc`) | placeholder | 10 | `Reanalysis-OBS` with NSIDCv6 sea ice; enabled by setting its `init_months` once post-processed |
 | `Reanalysis-FOSIRL` (BruteForce) | Feb, May, Aug, Nov | 10 | the actual 2015 restarts |
 
 All share the ERA5 atmosphere and CFSR ocean ICs. Cases whose `init_months` is empty
@@ -59,6 +59,11 @@ python build_caches.py
 
 Each notebook's run-control block holds `derivation_mode` ("auto" reuses valid caches,
 "rebuild" recomputes, "require" fails on a missing cache) and `CLIM_METHOD`.
+
+Inputs: the RTENSO2026 cases read their time series from
+`/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process` (`rtenso_case.RTENSO2026_POST_ROOT`);
+the Reanalysis (BruteForce) cases read from `RAW_MODEL_ROOT`
+(`/global/cfs/cdirs/e3sm/S2S2D/post_process`).
 
 Outputs:
 
