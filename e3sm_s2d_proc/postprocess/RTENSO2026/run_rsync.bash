@@ -3,7 +3,7 @@
 set -uo pipefail
 
 src_root="/pscratch/sd/z/zhan391/e3sm_project/E3SMv3_S2D"
-dst_root="/global/cfs/cdirs/e3sm/S2S2D/post_process"
+dst_root="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process"
 ic_method="${IC_METHOD:-clim}"   # clim | obs | hybrid_ic
 case="WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_${ic_method}"
 ens=10

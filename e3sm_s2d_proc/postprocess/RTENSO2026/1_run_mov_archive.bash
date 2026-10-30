@@ -11,7 +11,7 @@
 source /global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh
 
 run_dir="/pscratch/sd/z/zhan391/e3sm_project/E3SMv3_S2D"
-out_dir="/global/cfs/cdirs/e3sm/S2S2D/simulation" 
+out_dir="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/simulation" 
 work_dir="/global/cfs/cdirs/e3sm/S2S2D/s2d_diag"
 
 ic_method="${IC_METHOD:-clim}"   # clim | obs | hybrid_ic

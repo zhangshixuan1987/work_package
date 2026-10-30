@@ -40,7 +40,7 @@ esac
 source /global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh
 set -u
 
-hpss_pth="/home/projects/e3sm/www/S2S2D"
+hpss_pth="${HPSS_PTH:-/home/projects/e3sm/www/S2S2D}"
 date_str=$(date +%Y%m%d)
 logfn="zstash_${action}_${date_str}.log"
 

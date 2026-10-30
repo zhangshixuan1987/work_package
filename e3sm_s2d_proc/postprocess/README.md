@@ -31,6 +31,10 @@ method: `IC_METHOD` (default `clim`) selects
 Before stage 1 moves the history files to CFS, set `RUN_DIR` to read them
 from `$PSCRATCH`, e.g.
 `RUN_DIR=$PSCRATCH/e3sm_project/E3SMv3_S2D IC_METHOD=obs sbatch run_post_atm_mon1.bash`.
+RTENSO2026 keeps its own CFS roots: history files in
+`/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/simulation` and post-processed output
+in `/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process`; `2_run_zstash_multi.bash`
+sets `HPSS_PTH` so `zstash_S2D.sh` archives to `/home/projects/e3sm/www/S2S2D/RTENSO2026`.
 
 Case directories follow the hindcast layout:
 `${run_dir}/${exp}_${YYYYMMDDHH}/EN##/archive/<comp>/hist`.
@@ -45,6 +49,10 @@ Run in order for each batch of lead dates:
 | `1_run_zstash_multi.bash` | Archive each case to HPSS with `../zstash_S2D.sh` (copied to `work_dir`). |
 | `2_run_mov_archive.bash` | Move `archive/<comp>/hist` from `$PSCRATCH` to the CFS simulation directory with `rsync --remove-source-files`. |
 | `3_run_check_clean.bash` | Compare source and destination history files with `cmp` and remove the scratch copies that match; failures go to `post_process_logs/`. |
+
+`RTENSO2026/` swaps steps 1 and 2: `1_run_mov_archive.bash` moves the history
+files to CFS first, then `2_run_zstash_multi.bash` archives the cases from
+`RTENSO2026/simulation` to HPSS.
 
 `JRA55_FOSIRL/` has no `0_run_archive.bash`. `BruteForce/run_rsync.bash` (also in
 `RTENSO2026/`) is an alternative copy from `$PSCRATCH` to the
@@ -61,7 +69,8 @@ post-processing root (`--dry-run` supported).
 Each `run_post_<comp>_<freq>.bash` loops over lead dates and members, renders
 `scripts/${group}_${comp}_${freq}_${grid}.bash` into a per-member script, and
 runs up to `max_jobs` at once. Output goes to `out_dir`
-(`/global/cfs/cdirs/e3sm/S2S2D/post_process`).
+(`/global/cfs/cdirs/e3sm/S2S2D/post_process`; `RTENSO2026/` uses
+`/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process`).
 
 | Component | Drivers | Products |
 | --- | --- | --- |

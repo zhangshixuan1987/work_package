@@ -16,8 +16,8 @@ www="/global/cfs/cdirs/e3sm/www/zhan391/E3SMv3_S2D"
 
 #run_dir="/global/cfs/cdirs/e3sm/S2S2D/simulation" 
 #run_dir="/pscratch/sd/z/zhan391/e3sm_project/E3SMv3_S2D" 
-run_dir="${RUN_DIR:-/global/cfs/cdirs/e3sm/S2S2D/simulation}"   # RUN_DIR=$PSCRATCH/e3sm_project/E3SMv3_S2D before stage 1
-out_dir="/global/cfs/cdirs/e3sm/S2S2D/post_process"
+run_dir="${RUN_DIR:-/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/simulation}"   # RUN_DIR=$PSCRATCH/e3sm_project/E3SMv3_S2D before stage 1
+out_dir="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process"
 
 script_src_dir="/global/cfs/cdirs/e3sm/zhan391/s2d_diag/scripts"
 
