@@ -23,7 +23,7 @@ BFB_DATE=2010-05-01 sbatch --array=0-1 bfb_test.sh
 | --- | --- | --- | --- | --- |
 | 0 | `../BruteForce/luke_cfsr/` | `BruteForce` | 20 | 2015-11-01 |
 | 1 | `../JRA55_FOSIRL/` | `JRA55-FOSIRL` | 20 | 2015-11-01 |
-| 2 | `../4DEnVarOcn.v1/` | `4DEnVarOcn` | 23 | 1995-05-01 |
+| 2 | `../4DEnVarOcn/` | `4DEnVarOcn` | 23 | 1995-05-01 |
 
 `BFB_DATE` overrides the date for every task; 4DEnVarOcn exists only for May
 1980-1995.

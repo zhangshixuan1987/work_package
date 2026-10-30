@@ -8,10 +8,10 @@ initial-condition set:
 | `JRA55_FOSIRL/` | `jra55-fosirl` | Ocean, ice, land, river, and coupler state from the matching JRA55-forced (FOSI) restart. |
 | `BruteForce/luke_cfsr/` | `bruteforce-cfsr` | Same restart, with the MPAS-Ocean state replaced by Luke Van Roekel's CFSRv2 analysis (`20251024_s2d_spinup.mpaso.rst.<model date>.cfsrv2.nc`). |
 | `Reanalysis/` | `reanalysis-cfsr` | Same restart, with the MPAS-Ocean state replaced by Luke Van Roekel's calendar-date CFSR ocean ICs (`mpas_<YYYYMMDD>.cfsr.ic.nc`). |
-| `4DEnVarOcn.v1/` | `4denvar-ocn` | 4DEnVar atmosphere, ocean, land, river, sea-ice, coupler, and atmosphere-restart files (`assm_full_ocn_4DEnVar_loc_m100_v3`, May 1980-1995, selected from the matching decade directory). |
+| `4DEnVarOcn/` | `4denvar-ocn` | 4DEnVar atmosphere, ocean, land, river, sea-ice, coupler, and atmosphere-restart files (`assm_full_ocn_4DEnVar_loc_m100_v3`, May 1980-1995, selected from the matching decade directory). |
 
 `gen_ensemble_s2d_init.sh` and `create_and_setup_case.sh` are identical in
-`JRA55_FOSIRL/`, `BruteForce/luke_cfsr/`, and `Reanalysis/`; `4DEnVarOcn.v1/`
+`JRA55_FOSIRL/`, `BruteForce/luke_cfsr/`, and `Reanalysis/`; `4DEnVarOcn/`
 has its own copies set up for the `assm_full` 4DEnVar sources.
 `submit_all_year.bash` (and, for 4DEnVarOcn, `process_diag.eami.sh`) carry the
 set-specific settings.
@@ -42,7 +42,7 @@ and the generator stops when the sea-ice and ocean meshes differ. Update
 `BruteForce/ben_kirtman/` is the earlier brute-force generator, kept for
 reference.
 
-`4DEnVarOcn.v0/` is the earlier 4DEnVar setup, kept unchanged as a record. It
+`4DEnVarOcn.AnomalyDA/` is the earlier 4DEnVar setup, kept unchanged as a record. It
 read the `assm_anom_ocn_4DEnVar_loc100_v3` assimilation (May/November
 1980-2015, with `WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_4DEnVar` atmosphere ICs
 before 1990) and produced 72 dates. Those sources and outputs now live under
@@ -51,7 +51,7 @@ the scripts still point at the current `4DEnVar_ICs_SHIPF/` and
 `4DEnVarOcn/` paths, so re-running them requires repointing `my_daroot` and
 the output directory first.
 
-| | `4DEnVarOcn.v0/` | `4DEnVarOcn.v1/` (current) |
+| | `4DEnVarOcn.AnomalyDA/` | `4DEnVarOcn/` (current) |
 | --- | --- | --- |
 | Assimilation case | `assm_anom_ocn_4DEnVar_loc100_v3` | `assm_full_ocn_4DEnVar_loc_m100_v3` |
 | Dates | May, Nov 01, 1980-2015 (72) | May 01, 1980-1995 (16) |

@@ -37,7 +37,7 @@ except the RTENSO2026 2026 sets (`custom-9_1x2_nyears`, a 270-node bundle of
 
 | Directory | `my_leadref` | Sample batch | Lead dates | `my_refcase1` (atm) / `my_refcase2` (other) | Flags as saved |
 | --- | --- | --- | --- | --- | --- |
-| `4DEnVarOcn.v0/` | `4DEnVarOcn` | 1980-1981 | May, Nov | `assm_anom_ocn_4DEnVar_loc100_v3` / same | initial compile/setup |
+| `4DEnVarOcn.AnomalyDA/` | `4DEnVarOcn` | 1980-1981 | May, Nov | `assm_anom_ocn_4DEnVar_loc100_v3` / same | initial compile/setup |
 | `BruteForce/` | `BruteForce` | 1990-1995 | Feb, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run, restarts one month after the lead date |
 | `JRA55_FOSIRL/` | `JRA55-FOSIRL` | 2017-2018 | May, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | bundled run |
 | `RTENSO2026/{clim,obs}_2015/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | short-spinup chain, `custom-7_1x2_nyears` |
@@ -46,7 +46,7 @@ except the RTENSO2026 2026 sets (`custom-9_1x2_nyears`, a 270-node bundle of
 | `RTENSO2026/obs_ice_nsidc_2026/` | `RTENSO2026` | 2026 | Feb, May, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | `obs_2026/` with NSIDCv6 sea ice (`ice/nsidc/`); short-spinup chain |
 | `RTENSO2026/hybrid_ic/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | initial compile/setup (on hold) |
 
-`4DEnVarOcn.v0/` and `BruteForce/` use the current driver; their
+`4DEnVarOcn.AnomalyDA/` and `BruteForce/` use the current driver; their
 `run_e3sm_ens_bundle.sh` differ only in `#SBATCH` account and wall time, and
 share the same case template. `JRA55_FOSIRL/` uses an earlier driver and case
 template with the compile/setup, continuation, and run modes but no

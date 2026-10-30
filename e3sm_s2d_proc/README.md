@@ -41,8 +41,8 @@ experiment-specific; review them before submitting.
 - `Reanalysis/`: same restart, with the MPAS-Ocean state replaced by Luke Van
   Roekel's calendar-date CFSR ocean ICs (`mpas_<YYYYMMDD>.cfsr.ic.nc`; 2015 and
   2026 so far). On hold until the full input data are ready.
-- `4DEnVarOcn.v1/`: all components from the 4DEnVar coupled assimilation
-  (May, 1980-1995); `4DEnVarOcn.v0/` keeps the earlier anomaly-assimilation
+- `4DEnVarOcn/`: all components from the 4DEnVar coupled assimilation
+  (May, 1980-1995); `4DEnVarOcn.AnomalyDA/` keeps the earlier anomaly-assimilation
   setup (May/November, 1980-2015) as a record.
 - `RTENSO2026/` (in preparation): 2026 hindcast initial conditions for
   Feb/May/Aug/Nov 01. ERA5 atmosphere and CFSR ocean as in the brute-force set
@@ -58,7 +58,7 @@ stays unperturbed. See `ensemble_init/README.md`.
 
 The hindcast driver selects the matching source with `my_leadref` and
 `my_refcase1`/`my_refcase2` in `create_and_setup_case.sh`; `hindcast_run/` has a
-sample run workflow for each set (`4DEnVarOcn.v0/`, `BruteForce/`, `JRA55_FOSIRL/`, `RTENSO2026/`).
+sample run workflow for each set (`4DEnVarOcn.AnomalyDA/`, `BruteForce/`, `JRA55_FOSIRL/`, `RTENSO2026/`).
 
 ### Spin-up
 

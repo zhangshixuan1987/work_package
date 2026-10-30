@@ -26,7 +26,7 @@ test_root="/pscratch/sd/z/zhan391/e3sm_project/bfb_s2d_init/job_${SLURM_ARRAY_JO
 case ${SLURM_ARRAY_TASK_ID} in
   0) set_dir="BruteForce/luke_cfsr"; run_case="BruteForce";   eam_option="ERA5-Tang2"; ocean_option="LukeVanRoekel2"; file_count=20; default_date="2015-11-01" ;;
   1) set_dir="JRA55_FOSIRL";         run_case="JRA55-FOSIRL"; eam_option="ERA5-Tang2"; ocean_option="";               file_count=20; default_date="2015-11-01" ;;
-  2) set_dir="4DEnVarOcn.v1";        run_case="4DEnVarOcn";   eam_option="4DEnVarOcn"; ocean_option="4DEnVarOcn";     file_count=23; default_date="1995-05-01" ;;
+  2) set_dir="4DEnVarOcn";        run_case="4DEnVarOcn";   eam_option="4DEnVarOcn"; ocean_option="4DEnVarOcn";     file_count=23; default_date="1995-05-01" ;;
   *)
     echo "BFB ERROR: unsupported array task ${SLURM_ARRAY_TASK_ID}" >&2
     exit 2
