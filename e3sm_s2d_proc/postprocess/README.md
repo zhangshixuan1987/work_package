@@ -6,7 +6,7 @@ Archive, transfer, and post-process the bundled hindcast output from
 
 ```
 postprocess/
-  4DEnVarOcn.v0/    per-set drivers (from post_4DEnVarOcn)
+  4DEnVarOcn.AnomalyDA/  per-set drivers (from post_4DEnVarOcn)
   BruteForce/       per-set drivers (from post_bruteforce)
   JRA55_FOSIRL/     per-set drivers (from post_fosirl)
   RTENSO2026/       per-set drivers (copied from BruteForce/)
@@ -46,15 +46,15 @@ Run in order for each batch of lead dates:
 | Script | Purpose |
 | --- | --- |
 | `0_run_archive.bash` | Run `case.st_archive` for every member of the selected cases (`CASE_DATE` empty = all, `"1980*"` = one year, or one date); logs to `archive_logs/`. |
-| `1_run_zstash_multi.bash` | Archive each case to HPSS with `../zstash_S2D.sh` (copied to `work_dir`). |
-| `2_run_mov_archive.bash` | Move `archive/<comp>/hist` from `$PSCRATCH` to the CFS simulation directory with `rsync --remove-source-files`. |
+| `1_run_mov_archive.bash` | Move `archive/<comp>/hist` from `$PSCRATCH` to the CFS simulation directory with `rsync --remove-source-files`. |
+| `2_run_zstash_multi.bash` | Archive each case to HPSS with `../zstash_S2D.sh` (copied to `work_dir`). |
 | `3_run_check_clean.bash` | Compare source and destination history files with `cmp` and remove the scratch copies that match; failures go to `post_process_logs/`. |
 
-`RTENSO2026/` swaps steps 1 and 2: `1_run_mov_archive.bash` moves the history
-files to CFS first, then `2_run_zstash_multi.bash` archives the cases from
-`RTENSO2026/simulation` to HPSS.
+`4DEnVarOcn.AnomalyDA/` still runs `1_run_zstash_multi.bash` before
+`2_run_mov_archive.bash`. In `RTENSO2026/`, `2_run_zstash_multi.bash` archives
+the cases from `RTENSO2026/simulation`.
 
-`JRA55_FOSIRL/` has no `0_run_archive.bash`. `BruteForce/run_rsync.bash` (also in
+`BruteForce/run_rsync.bash` (also in
 `RTENSO2026/`) is an alternative copy from `$PSCRATCH` to the
 post-processing root (`--dry-run` supported).
 
