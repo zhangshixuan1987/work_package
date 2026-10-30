@@ -9,11 +9,13 @@ measures skill over many start years; here one event is followed through 4 start
 
 | Experiment | Starts (2015) | Members | Differs by |
 | --- | --- | --- | --- |
-| `RTENSO2026-clim` | Feb, May, Aug, Nov | 10 | land/sea-ice/river ICs from the BruteForce year closest to the same-date climatology |
-| `RTENSO2026-obs` | Feb, May, Aug, Nov | 10 | land/sea-ice/river ICs from the BruteForce year closest to the ERA5 anomaly |
-| `Reanalysis-2015` (BruteForce) | May, Nov | 10 | the actual 2015 restarts |
+| `Reanalysis-CLIM` (`RTENSO2026_clim`) | Feb, May, Aug, Nov | 10 | land/sea-ice/river ICs from the BruteForce year closest to the same-date climatology |
+| `Reanalysis-OBS` (`RTENSO2026_obs`) | Feb, May, Aug, Nov | 10 | land/sea-ice/river ICs from the BruteForce year closest to the ERA5 anomaly |
+| `RTENSO2026-obs-nsidc` (`RTENSO2026_obs_ice_nsidc`) | placeholder | 10 | `Reanalysis-OBS` with NSIDCv6 sea ice; enabled by setting its `init_months` once post-processed |
+| `Reanalysis-FOSIRL` (BruteForce) | Feb, May, Aug, Nov | 10 | the actual 2015 restarts |
 
-All three share the ERA5 atmosphere and CFSR ocean ICs.
+All share the ERA5 atmosphere and CFSR ocean ICs. Cases whose `init_months` is empty
+are placeholders and are dropped from the notebooks.
 
 ## Drift correction
 
@@ -41,7 +43,7 @@ all conservatively regridded to the model 1x1 grid.
 | `build_caches.py` | Build the Reanalysis lead-time climatologies and observation caches ahead of the notebooks (`python build_caches.py [FIELD ...] [--mode rebuild]`). |
 | `1_enso_plume.ipynb` | Nino3.4/3/4/1+2 forecast plumes per start against HadISST2, peak-season summary, ensemble-mean error and spread (after 3a). |
 | `2_anomaly_maps_acc.ipynb` | DJF 2015/16 anomaly maps from every start, and spatial pattern ACC and RMSE by lead season and region, per member and ensemble mean (after 1a/1b). Set `FIELD` to `TS`, `TREFHT`, `PRECT` or `PSL`. |
-| `3_ic_sensitivity.ipynb` | `clim` vs `obs` vs `Reanalysis-2015` differences: land-mean differences with member-based intervals, fraction of land with significant differences by lead, stippled difference maps, and hemispheric sea-ice area against HadISST2. |
+| `3_ic_sensitivity.ipynb` | `Reanalysis-CLIM` vs `Reanalysis-OBS` vs `Reanalysis-FOSIRL` differences: land-mean differences with member-based intervals, fraction of land with significant differences by lead, stippled difference maps, and hemispheric sea-ice area against HadISST2. |
 | `4_teleconnections.ipynb` | DJF 2015/16 teleconnections of `PRECT`/`TREFHT`/`PSL` per degC of Nino3.4 against the observed event and the 1982-2010 observed regression, an inter-member regression, and equatorial Hovmollers of SST and U850 (after 3b). |
 
 ## Running

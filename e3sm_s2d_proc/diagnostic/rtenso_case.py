@@ -47,22 +47,29 @@ MODEL_PREFIX = "WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5"
 
 # Display name -> case settings. "source" is the s2d_diag folder/file prefix.
 CASES = {
-    "RTENSO2026-clim": {
+    "Reanalysis-CLIM": {
         "case_prefix": f"{MODEL_PREFIX}_RTENSO2026_clim",
         "source": "RTENSO2026_clim",
         "init_months": (2, 5, 8, 11),
         "color": "tab:blue",
     },
-    "RTENSO2026-obs": {
+    "Reanalysis-OBS": {
         "case_prefix": f"{MODEL_PREFIX}_RTENSO2026_obs",
         "source": "RTENSO2026_obs",
         "init_months": (2, 5, 8, 11),
         "color": "tab:orange",
     },
-    "Reanalysis-2015": {
+    # Placeholder: obs ICs with NSIDCv6 sea ice; set init_months once the runs are post-processed.
+    "RTENSO2026-obs-nsidc": {
+        "case_prefix": f"{MODEL_PREFIX}_RTENSO2026_obs_ice_nsidc",
+        "source": "RTENSO2026_obs_ice_nsidc",
+        "init_months": (),
+        "color": "tab:red",
+    },
+    "Reanalysis-FOSIRL": {
         "case_prefix": f"{MODEL_PREFIX}_BruteForce",
         "source": "Reanalysis",
-        "init_months": (5, 11),
+        "init_months": (2, 5, 8, 11),
         "color": "tab:green",
     },
 }
