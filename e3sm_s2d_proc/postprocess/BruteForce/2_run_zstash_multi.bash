@@ -10,7 +10,8 @@
 
 source /global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh
 
-run_dir="/pscratch/sd/z/zhan391/e3sm_project/E3SMv3_S2D"
+run1_dir="/pscratch/sd/z/zhan391/e3sm_project/E3SMv3_S2D"
+run2_dir="/global/cfs/cdirs/e3sm/S2S2D/simulation"   # 1_run_mov_archive.bash out_dir
 #work_dir="/global/cfs/cdirs/e3sm/S2S2D/s2d_diag"
 work_dir="/global/cfs/cdirs/e3sm/zhan391/s2d_diag"
 
@@ -91,17 +92,18 @@ chmod +x "${zstash_scp}"
 log_msg "Using zstash script: ${zstash_scp}"
 
 log_msg "Starting post-process workflow"
-log_msg "run_dir=${run_dir}"
+log_msg "run1_dir=${run1_dir}"
+log_msg "run2_dir=${run2_dir}"
 log_msg "work_dir=${work_dir}"
 log_msg "max_jobs=${max_jobs}"
 
 # =========================================================
 # Stage 1:
-# Create zstash archive from run_dir
+# Create zstash archive from run1_dir
 # =========================================================
-log_msg "Starting Stage 1: zstash create from run_dir"
+log_msg "Starting Stage 1: zstash create from run1_dir"
 
-cd "${run_dir}"
+cd "${run1_dir}"
 
 for lead in "${leads[@]}"; do
     case_name="${exp}_${lead}"
@@ -122,8 +124,8 @@ for lead in "${leads[@]}"; do
             log_msg "Stage 1 complete: ${case_name}"
         ) || echo "Stage 1 failed: ${case_name}" >> "${fail_log}" &
     else
-        log_msg "Stage 1 missing directory: ${run_dir}/${case_name}"
-        echo "Stage 1 missing directory: ${run_dir}/${case_name}" >> "${fail_log}"
+        log_msg "Stage 1 missing directory: ${run1_dir}/${case_name}"
+        echo "Stage 1 missing directory: ${run1_dir}/${case_name}" >> "${fail_log}"
     fi
 
 done
@@ -142,11 +144,12 @@ fi
 
 # =========================================================
 # Stage 2:
-# Final verification of the combined archive using zstash check
+# Copy zstash metadata from Stage 1 and continue archive
+# from run2_dir to the same HPSS target
 # =========================================================
-log_msg "Starting Stage 2: final zstash check"
+log_msg "Starting Stage 2: continue zstash archive from run2_dir"
 
-cd "${run_dir}"
+cd "${run2_dir}"
 
 for lead in "${leads[@]}"; do
     case_name="${exp}_${lead}"
@@ -154,23 +157,82 @@ for lead in "${leads[@]}"; do
     if [[ -d "${case_name}" ]]; then
         wait_for_slot
         (
-            log_msg "Stage 2 check start: ${case_name}"
-            "${zstash_scp}" check "${case_name}"
-            log_msg "Stage 2 check complete: ${case_name}"
-        ) || echo "Stage 2 check failed: ${case_name}" >> "${fail_log}" &
+            log_msg "Stage 2 start: ${case_name}"
+
+            mkdir -p "${case_name}/zstash"
+
+            if [[ -f "${case_name}/zstash/index.db" ]]; then
+                log_msg "Existing local zstash metadata found for ${case_name} -> running update"
+                "${zstash_scp}" update "${case_name}"
+            else
+                if [[ -d "${run1_dir}/${case_name}/zstash" ]]; then
+                    log_msg "Copying zstash metadata from Stage 1 for ${case_name}"
+                    cp -rp "${run1_dir}/${case_name}/zstash/"* \
+                        "${case_name}/zstash/" 2>/dev/null || true
+                else
+                    log_msg "Stage 2 warning: missing zstash metadata in ${run1_dir}/${case_name}"
+                fi
+
+                if [[ -f "${case_name}/zstash/index.db" ]]; then
+                    log_msg "Copied zstash metadata found for ${case_name} -> running update"
+                    "${zstash_scp}" update "${case_name}"
+                else
+                    log_msg "No zstash index.db found for ${case_name} -> running create"
+                    "${zstash_scp}" create "${case_name}"
+                fi
+            fi
+
+            log_msg "Stage 2 complete: ${case_name}"
+        ) || echo "Stage 2 failed: ${case_name}" >> "${fail_log}" &
     else
-        log_msg "Stage 2 missing directory: ${run_dir}/${case_name}"
-        echo "Stage 2 missing directory: ${run_dir}/${case_name}" >> "${fail_log}"
+        log_msg "Stage 2 missing directory: ${run2_dir}/${case_name}"
+        echo "Stage 2 missing directory: ${run2_dir}/${case_name}" >> "${fail_log}"
     fi
 done
 
 wait_for_all
 
 if [[ -s "${fail_log}" ]]; then
-    log_msg "Stage 2 completed with check failures. See ${fail_log}"
+    log_msg "Stage 2 completed with failures. See ${fail_log}"
     exit 1
 else
     log_msg "Stage 2 completed successfully."
+fi
+
+# Reset failure log
+: > "${fail_log}"
+
+# =========================================================
+# Stage 3:
+# Final verification of the combined archive using zstash check
+# =========================================================
+log_msg "Starting Stage 3: final zstash check"
+
+cd "${run2_dir}"
+
+for lead in "${leads[@]}"; do
+    case_name="${exp}_${lead}"
+
+    if [[ -d "${case_name}" ]]; then
+        wait_for_slot
+        (
+            log_msg "Stage 3 check start: ${case_name}"
+            "${zstash_scp}" check "${case_name}"
+            log_msg "Stage 3 check complete: ${case_name}"
+        ) || echo "Stage 3 check failed: ${case_name}" >> "${fail_log}" &
+    else
+        log_msg "Stage 3 missing directory: ${run2_dir}/${case_name}"
+        echo "Stage 3 missing directory: ${run2_dir}/${case_name}" >> "${fail_log}"
+    fi
+done
+
+wait_for_all
+
+if [[ -s "${fail_log}" ]]; then
+    log_msg "Stage 3 completed with check failures. See ${fail_log}"
+    exit 1
+else
+    log_msg "Stage 3 completed successfully."
     rm -f "${fail_log}"
 fi
 
