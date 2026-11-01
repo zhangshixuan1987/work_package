@@ -14,7 +14,7 @@ run1_dir="/pscratch/sd/z/zhan391/e3sm_project/E3SMv3_S2D"
 run2_dir="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/simulation"   # 1_run_mov_archive.bash out_dir
 #work_dir="/global/cfs/cdirs/e3sm/S2S2D/s2d_diag"
 work_dir="/global/cfs/cdirs/e3sm/zhan391/s2d_diag"
-export HPSS_PTH="/home/projects/e3sm/www/S2S2D/RTENSO2026"   # read by zstash_S2D.sh
+export HPSS_PTH="/home/projects/e3sm/www/RTENSO2026"   # read by zstash_S2D.sh
 
 ic_method="obs" #"${IC_METHOD:-clim}"   # clim | obs | hybrid_ic
 exp="WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_${ic_method}"

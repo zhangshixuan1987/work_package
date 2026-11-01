@@ -34,7 +34,7 @@ from `$PSCRATCH`, e.g.
 RTENSO2026 keeps its own CFS roots: history files in
 `/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/simulation` and post-processed output
 in `/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process`; `2_run_zstash_multi.bash`
-sets `HPSS_PTH` so `zstash_S2D.sh` archives to `/home/projects/e3sm/www/S2S2D/RTENSO2026`.
+sets `HPSS_PTH` so `zstash_S2D.sh` archives to `/home/projects/e3sm/www/RTENSO2026`.
 
 Case directories follow the hindcast layout:
 `${run_dir}/${exp}_${YYYYMMDDHH}/EN##/archive/<comp>/hist`.
