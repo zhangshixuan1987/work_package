@@ -45,7 +45,7 @@ tpd=1
 vars=temperatureAtSurface,temperatureAt250m,dThreshMLD,salinityAtSurface,salinityAt250m,ssh
 vext=xtime
 
-leads=(2015020100 2015050100 2015080100 2015110100)
+leads=(${LEADS:-2015020100 2015050100 2015080100 2015110100})   # LEADS="2026020100 ..." for other starts
 
 #for lead in 2014050100 2014110100
 for lead in "${leads[@]}"

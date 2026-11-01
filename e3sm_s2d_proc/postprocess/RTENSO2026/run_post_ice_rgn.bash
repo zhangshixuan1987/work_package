@@ -38,7 +38,7 @@ ref_yr=1850
 vars=totalIceArea,totalIceExtent,totalIceVolume,totalSnowVolume,totalKineticEnergy,rmsIceSpeed,averageAlbedo,maximumIceVolume,maximumIcePressure
 vext=xtime
 
-leads=(2015020100 2015050100 2015080100 2015110100)
+leads=(${LEADS:-2015020100 2015050100 2015080100 2015110100})   # LEADS="2026020100 ..." for other starts
 
 for lead in "${leads[@]}"
 #for lead in 1980050100 1980110100 1981050100 1981110100

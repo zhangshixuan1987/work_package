@@ -40,7 +40,7 @@ vars=RIVER_DISCHARGE_OVER_LAND_LIQ
 
 var_xtr=mask,area,areatotal,areatotal2
 
-leads=(2015020100 2015050100 2015080100 2015110100)
+leads=(${LEADS:-2015020100 2015050100 2015080100 2015110100})   # LEADS="2026020100 ..." for other starts
 
 for lead in "${leads[@]}"
 

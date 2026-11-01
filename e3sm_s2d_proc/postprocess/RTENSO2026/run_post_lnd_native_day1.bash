@@ -43,7 +43,7 @@ tpd=1
 vars=H2OSNO
 var_xtr=area,landfrac,landmask,topo
 
-leads=(2015020100 2015050100 2015080100 2015110100)
+leads=(${LEADS:-2015020100 2015050100 2015080100 2015110100})   # LEADS="2026020100 ..." for other starts
 
 for lead in "${leads[@]}"
 #for lead in 1980050100 1980110100 

@@ -51,7 +51,7 @@ vars=timeMonthly_avg_dThreshMLD,timeMonthly_avg_ssh,timeMonthly_avg_oceanHeatCon
 #vext=timeMonthly_avg_daysSinceStartOfSim,xtime_startMonthly,xtime_endMonthly,timeMonthly_avg_volumeCellGlobal,timeMonthly_avg_areaCellGlobal
 vext=xtime_startMonthly,xtime_endMonthly
 
-leads=(2015020100 2015050100 2015080100 2015110100)
+leads=(${LEADS:-2015020100 2015050100 2015080100 2015110100})   # LEADS="2026020100 ..." for other starts
 
 patch_surface_tracer_preproc() {
   local script=$1

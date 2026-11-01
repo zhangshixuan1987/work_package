@@ -50,7 +50,7 @@ else
 fi
 vext=xtime_startMonthly,xtime_endMonthly
 
-leads=(2015020100 2015050100 2015080100 2015110100)
+leads=(${LEADS:-2015020100 2015050100 2015080100 2015110100})   # LEADS="2026020100 ..." for other starts
 
 patch_ice_concentration_preproc() {
   local script=$1
