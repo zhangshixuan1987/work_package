@@ -35,6 +35,13 @@ Observed anomalies are relative to the 1981-2010 monthly climatology: HadISST2 S
 (land-masked, verified 60S-60N), ERA5 `TREFHT`, `PSL`, `U850`, and GPCP v2.3 `PRECT`,
 all conservatively regridded to the model 1x1 grid.
 
+These e3sm_diags time series end in 2022 (HadISST2), 2019 (ERA5) and 2017 (GPCP). For
+later years, such as the 2026 starts, `obs_anomaly(field, years=(2026, 2027))` switches to
+the 1x1 archive products under `/global/cfs/cdirs/e3sm/zhan391/data` (`OBS_ARCHIVE`), which
+then also supply the 1981-2010 climatology: NOAA OISST v2.1 for `TS` (to Sep 2026; Jan-Aug
+climatology 1982-2010), GPCP v2.3 for `PRECT` (to Jun 2026) and NOAA/NSIDC CDR v6 for `SICE`
+(to Sep 2026). There is no archive product yet for `TREFHT`, `PSL` or `U850` after 2019.
+
 ## Files
 
 | File | Purpose |

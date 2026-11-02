@@ -91,6 +91,16 @@ FIELDS = {
     "SICE": {"realm": "ice", "var": "timeMonthly_avg_iceAreaCell", "obs": ("HadISST2", "sic"), "scale": 1.0, "offset": 0.0, "units": "fraction", "long_name": "Sea-ice concentration"},
 }
 
+# Last year of each e3sm_diags obs time series. Past it, obs_product() switches to the
+# archive products below (one file per year on the 1x1 grid, updated to the latest month).
+OBS_LAST_YEAR = {"HadISST2": 2022, "ERA5": 2019, "GPCP_v2.3": 2017}
+OBS_ARCHIVE_ROOT = Path("/global/cfs/cdirs/e3sm/zhan391/data")
+OBS_ARCHIVE = {
+    "TS": ("OISSTv2.1", "NOAA_OISST/1x1/monthly/SST.monthly.*.nc", "SST"),       # 1981-09 on, degC
+    "PRECT": ("GPCP_v2.3", "GPCPv2.3/1x1/monthly/PRECT.monthly.*.nc", "PRECT"),   # mm/day
+    "SICE": ("NSIDCv6", "NOAA_NSIDC/1x1/monthly/ICEFRAC.monthly.*.nc", "ICEFRAC"),  # fraction
+}
+
 # Verification regions [lon0, lon1, lat0, lat1] (0-360 longitudes).
 REGIONS = {
     "Global": [0.0, 360.0, -60.0, 60.0],
@@ -340,9 +350,33 @@ def model_grid():
     return xr.Dataset(coords={"lat": ("lat", lat), "lon": ("lon", lon)})
 
 
+def obs_product(field, years=OBS_YEARS):
+    """(product, file variable, archive glob or None) covering ``years`` for ``field``."""
+    product, obs_field = FIELDS[field]["obs"]
+    if years[1] <= OBS_LAST_YEAR.get(product, years[1]):
+        return product, obs_field, None
+    if field not in OBS_ARCHIVE:
+        raise ValueError(f"no {field} observations after {OBS_LAST_YEAR[product]} ({product}); "
+                         f"archive products cover {sorted(OBS_ARCHIVE)}")
+    product, pattern, obs_field = OBS_ARCHIVE[field]
+    return product, obs_field, str(OBS_ARCHIVE_ROOT / pattern)
+
+
+def _archive_preproc(ds, **kwargs):
+    """ESP-Lab monthly preprocessing that places each month by its time stamp.
+
+    ESP-Lab takes the month from the lower time bound, but the GPCP v2.3 archive's bounds run
+    from the 17th of the previous month, which would shift every month back by one. The archive
+    time stamps (month start for OISST/GPCP, mid-month for NSIDC) name the right month.
+    """
+    ds = ds.drop_vars([v for v in ("time_bnds", "time_bounds") if v in ds.variables])
+    ds["time"].attrs.pop("bounds", None)
+    return dao.preprocessor_monthly(ds, **kwargs)
+
+
 def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto"):
     """Observed monthly values on the model 1x1 grid (time, lat, lon) in display units."""
-    product, obs_field = FIELDS[field]["obs"]
+    product, obs_field, pattern = obs_product(field, years)
     path = diag_dir("observations", "case_study", FIELDS[field]["realm"], field,
                     f"{product}_{field}_monthly_y{years[0]}-{years[1]}_{GRID_TAG}.nc")
     expected = {"cache_version": OBS_CACHE_VERSION, "product": product, "start_year": years[0],
@@ -353,8 +387,13 @@ def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto"):
         raise FileNotFoundError(f"missing or stale observation cache {path}")
 
     # Chunk in time so 0.25-degree ERA5 is regridded a year at a time on shared login nodes.
-    ds = dao.get_monthly_data(obs_dir=str(env_paths.obs_root()), product=product, field=obs_field,
-                              start_year=str(years[0]), end_year=str(years[1]), chunks={"time": 12})
+    if pattern is None:
+        ds = dao.get_monthly_data(obs_dir=str(env_paths.obs_root()), product=product, field=obs_field,
+                                  start_year=str(years[0]), end_year=str(years[1]), chunks={"time": 12})
+    else:
+        ds = dao.get_monthly_data_from_pattern(pattern, field=obs_field, start_year=str(years[0]),
+                                               end_year=str(years[1]), chunks={"time": 12},
+                                               preproc=_archive_preproc)
     da = ds[list(ds.data_vars)[0]]
     if "plev" in da.dims:
         plev = da["plev"]
@@ -365,7 +404,7 @@ def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto"):
         src = da.to_dataset(name=field)
         da = make_regridder(src, model_grid(), method="conservative")(src)[field]
     da = da.drop_vars([c for c in da.coords if c not in ("time", "lat", "lon")])
-    if field in ("TS", "SICE"):  # HadISST2 sst/sic are filled over land; keep ocean points (EAM LANDFRAC < 0.5)
+    if field in ("TS", "SICE"):  # SST/sea ice are filled or missing over land; keep ocean points (EAM LANDFRAC < 0.5)
         da = da.where(land_fraction() < 0.5)
     da.attrs = {"units": FIELDS[field]["units"], "long_name": FIELDS[field]["long_name"], "product": product}
     out = da.to_dataset(name=field)
@@ -375,8 +414,12 @@ def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto"):
 
 
 def obs_anomaly(field, years=OBS_YEARS, clim_years=CLIM_YEARS, mode="auto"):
-    """Observed monthly anomalies from the 1981-2010 monthly climatology, on the model grid."""
-    product = FIELDS[field]["obs"][0]
+    """Observed monthly anomalies from the 1981-2010 monthly climatology, on the model grid.
+
+    Past the e3sm_diags coverage the archive product supplies both the anomaly years and the
+    climatology (OISST starts in 1981-09, so its Jan-Aug climatology is 1982-2010).
+    """
+    product = obs_product(field, (min(clim_years[0], years[0]), max(clim_years[1], years[1])))[0]
     path = diag_dir("observations", "case_study", FIELDS[field]["realm"], field,
                     f"{product}_{field}_anomaly_y{years[0]}-{years[1]}_clim_{clim_years[0]}_{clim_years[1]}_{GRID_TAG}.nc")
     expected = {"cache_version": OBS_CACHE_VERSION, "product": product, "clim_start_year": clim_years[0],
