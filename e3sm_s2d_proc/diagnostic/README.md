@@ -75,7 +75,7 @@ points, so it gives no Nino index.
 
 | File | Purpose |
 | --- | --- |
-| `rtenso_case.py` | Shared helpers: case registry, hindcast loading, lead-time climatologies, observation anomalies, pattern ACC/RMSE, regions. |
+| `util/rtenso_case.py` | Shared helpers, imported by every notebook as `from util import rtenso_case as rc`: case registry, hindcast loading, lead-time climatologies, observation products and anomalies, pattern ACC/RMSE, regions, velocity potential, output paths. |
 | `build_caches.py` | Build the Reanalysis lead-time climatologies and observation caches ahead of the notebooks (`python build_caches.py [FIELD ...] [--mode rebuild]`). |
 | `1_enso_plume.ipynb` | Nino3.4/3/4/1+2/ONI forecast plumes per start against HadISST 1.1, ERSSTv5 and ESA CCI SST with the observed peak period shaded, peak-season summary, ensemble-mean error and spread (after 3a), and a map of the Nino regions. |
 | `2_anomaly_maps_acc.ipynb` | Peak-season (DJF) anomaly maps from every start, and spatial pattern ACC and RMSE by lead season and region, per member and ensemble mean (after 1a/1b); only fully observed seasons are scored. Set `FIELD` to `TS`, `PRECT` (both events), `TREFHT`, `PSL` or `U850` (2015 only). |
@@ -87,7 +87,7 @@ points, so it gives no Nino index.
 ## Running
 
 Use the `e3sm_analysis` kernel (ESP-Lab installed in editable mode) and start Jupyter in
-this directory so `rtenso_case` imports. Build the caches once (about 4 minutes per
+this directory so the `util` package (`util/rtenso_case.py`) imports. Build the caches once (about 4 minutes per
 field and start month; the U850 reads are the slowest):
 
 ```bash
@@ -99,7 +99,7 @@ Each notebook's run-control block holds `derivation_mode` ("auto" reuses valid c
 "rebuild" recomputes, "require" fails on a missing cache) and `CLIM_METHOD`.
 
 Inputs: the RTENSO2026 cases read their time series from
-`/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process` (`rtenso_case.RTENSO2026_POST_ROOT`);
+`/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process` (`rc.RTENSO2026_POST_ROOT`);
 the Reanalysis (BruteForce) cases read from `RAW_MODEL_ROOT`
 (`/global/cfs/cdirs/e3sm/S2S2D/post_process`).
 

@@ -12,7 +12,7 @@ notebooks fast.
 import argparse
 import time
 
-import rtenso_case as rc
+from util import rtenso_case as rc
 
 DEFAULT_FIELDS = ["TS", "PRECT", "TREFHT", "PSL", "U850"]
 
