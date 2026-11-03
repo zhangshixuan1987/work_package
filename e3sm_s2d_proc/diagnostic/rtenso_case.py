@@ -84,6 +84,11 @@ FIELDS = {
     "PRECT": {"realm": "atm", "obs": ("GPCP_v2.3", "PRECT"), "scale": 86400.0 * 1000.0, "offset": 0.0, "units": "mm/day", "long_name": "Precipitation"},
     "PSL": {"realm": "atm", "obs": ("ERA5", "PSL"), "scale": 0.01, "offset": 0.0, "units": "hPa", "long_name": "Sea-level pressure"},
     "U850": {"realm": "atm", "var": "U", "plev": 85000.0, "obs": ("ERA5", "ua"), "scale": 1.0, "offset": 0.0, "units": "m/s", "long_name": "850-hPa zonal wind"},
+    "U200": {"realm": "atm", "var": "U", "plev": 20000.0, "obs": ("ERA5", "ua"), "scale": 1.0, "offset": 0.0, "units": "m/s", "long_name": "200-hPa zonal wind"},
+    "V200": {"realm": "atm", "var": "V", "plev": 20000.0, "obs": ("ERA5", "va"), "scale": 1.0, "offset": 0.0, "units": "m/s", "long_name": "200-hPa meridional wind"},
+    "Z500": {"realm": "atm", "var": "Z3", "plev": 50000.0, "obs": ("ERA5", "zg"), "scale": 1.0, "offset": 0.0, "units": "m", "long_name": "500-hPa geopotential height"},
+    "T925": {"realm": "atm", "var": "T", "plev": 92500.0, "obs": ("ERA5", "ta"), "scale": 1.0, "offset": 0.0, "units": "K", "long_name": "925-hPa temperature"},
+    "FLUT": {"realm": "atm", "obs": ("ERA5", "rlut"), "scale": 1.0, "offset": 0.0, "units": "W/m2", "long_name": "Outgoing longwave radiation"},
     "SOILWATER_10CM": {"realm": "lnd", "obs": None, "scale": 1.0, "offset": 0.0, "units": "kg/m2", "long_name": "Top 10-cm soil water"},
     "H2OSNO": {"realm": "lnd", "obs": None, "scale": 1.0, "offset": 0.0, "units": "mm", "long_name": "Snow water equivalent"},
     "TWS": {"realm": "lnd", "obs": None, "scale": 1.0, "offset": 0.0, "units": "mm", "long_name": "Terrestrial water storage"},
@@ -99,6 +104,22 @@ OBS_ARCHIVE = {
     "TS": ("OISSTv2.1", "NOAA_OISST/1x1/monthly/SST.monthly.*.nc", "SST"),       # 1981-09 on, degC
     "PRECT": ("GPCP_v2.3", "GPCPv2.3/1x1/monthly/PRECT.monthly.*.nc", "PRECT"),   # mm/day
     "SICE": ("NSIDCv6", "NOAA_NSIDC/1x1/monthly/ICEFRAC.monthly.*.nc", "ICEFRAC"),  # fraction
+    "FLUT": ("NOAA_CDR_OLR", "NOAA_CDR/1x1/monthly/FLUT.monthly.*.nc", "FLUT"),     # 1979 on, W m-2
+}
+# Alternative archive products, selected with obs_anomaly(field, product=...).
+OBS_ALT_PRODUCTS = {
+    "TS": {
+        "HadISST1.1": ("HadSST/1x1/monthly/TS.monthly.*.nc", "TS"),              # 1870 on, K
+        "OISSTv2.1": ("NOAA_OISST/1x1/monthly/SST.monthly.*.nc", "SST"),         # 1981-09 on, degC
+        "ERSSTv5": ("ERSSTv5/1x1/monthly/sst.monthly.*.nc", "sst"),              # 1854 on, degC
+        "ESA_CCI_SST": ("ESA_CCI_SST/1x1/monthly/sst.monthly.*.nc", "sst"),      # 1980 on, K
+    },
+    "FLUT": {
+        "NOAA_CDR_OLR": ("NOAA_CDR/1x1/monthly/FLUT.monthly.*.nc", "FLUT"),      # NOAA CDR OLR, 1979 on, W m-2
+    },
+    "TREFHT": {
+        "ERA5_Land": ("ERA5_LND/1x1/monthly/t2m_*.nc", "t2m"),                    # land only, 1950 on, K
+    },
 }
 
 # Verification regions [lon0, lon1, lat0, lat1] (0-360 longitudes).
@@ -126,8 +147,8 @@ def figure_dir():
     return path
 
 
-def save_figure(fig, *parts, dpi=150):
-    path = figure_dir() / figure_filename(*parts)
+def save_figure(fig, *parts, dpi=150, ext="png"):
+    path = figure_dir() / figure_filename(*parts, ext=ext)
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     return path
 
@@ -278,8 +299,8 @@ def _target_months(init_month, nlead=NLEAD):
     return [(init_month - 1 + lead) % 12 + 1 for lead in range(nlead)]
 
 
-def obs_monthly_climatology(field, clim_years=CLIM_YEARS, mode="auto"):
-    da = obs_monthly(field, mode=mode)
+def obs_monthly_climatology(field, clim_years=CLIM_YEARS, mode="auto", product=None):
+    da = obs_monthly(field, mode=mode, product=product)
     return da.sel(time=slice(f"{clim_years[0]}-01", f"{clim_years[1]}-12")).groupby("time.month").mean("time")
 
 
@@ -350,9 +371,20 @@ def model_grid():
     return xr.Dataset(coords={"lat": ("lat", lat), "lon": ("lon", lon)})
 
 
-def obs_product(field, years=OBS_YEARS):
-    """(product, file variable, archive glob or None) covering ``years`` for ``field``."""
-    product, obs_field = FIELDS[field]["obs"]
+def obs_product(field, years=OBS_YEARS, product=None):
+    """(product, file variable, archive glob or None) covering ``years`` for ``field``.
+
+    ``product`` picks an entry of ``OBS_ALT_PRODUCTS``; None (or the default product) keeps
+    the e3sm_diags default with its archive fallback.
+    """
+    default, obs_field = FIELDS[field]["obs"]
+    if product is not None and product != default:
+        if product not in OBS_ALT_PRODUCTS.get(field, {}):
+            raise ValueError(f"unknown {field} product {product}; "
+                             f"choose from {[default] + sorted(OBS_ALT_PRODUCTS.get(field, {}))}")
+        pattern, obs_field = OBS_ALT_PRODUCTS[field][product]
+        return product, obs_field, str(OBS_ARCHIVE_ROOT / pattern)
+    product = default
     if years[1] <= OBS_LAST_YEAR.get(product, years[1]):
         return product, obs_field, None
     if field not in OBS_ARCHIVE:
@@ -367,16 +399,18 @@ def _archive_preproc(ds, **kwargs):
 
     ESP-Lab takes the month from the lower time bound, but the GPCP v2.3 archive's bounds run
     from the 17th of the previous month, which would shift every month back by one. The archive
-    time stamps (month start for OISST/GPCP, mid-month for NSIDC) name the right month.
+    time stamps (month start for OISST/GPCP, mid-month for NSIDC/ERSST/ESA CCI) name the right month.
     """
-    ds = ds.drop_vars([v for v in ("time_bnds", "time_bounds") if v in ds.variables])
+    if "valid_time" in ds.dims:   # ERA5(-Land) CDS files
+        ds = ds.rename(valid_time="time")
+    ds = ds.drop_vars([v for v in ("time_bnds", "time_bounds", "expver", "number") if v in ds.variables])
     ds["time"].attrs.pop("bounds", None)
     return dao.preprocessor_monthly(ds, **kwargs)
 
 
-def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto"):
+def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto", product=None):
     """Observed monthly values on the model 1x1 grid (time, lat, lon) in display units."""
-    product, obs_field, pattern = obs_product(field, years)
+    product, obs_field, pattern = obs_product(field, years, product)
     path = diag_dir("observations", "case_study", FIELDS[field]["realm"], field,
                     f"{product}_{field}_monthly_y{years[0]}-{years[1]}_{GRID_TAG}.nc")
     expected = {"cache_version": OBS_CACHE_VERSION, "product": product, "start_year": years[0],
@@ -413,13 +447,15 @@ def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto"):
     return da
 
 
-def obs_anomaly(field, years=OBS_YEARS, clim_years=CLIM_YEARS, mode="auto"):
+def obs_anomaly(field, years=OBS_YEARS, clim_years=CLIM_YEARS, mode="auto", product=None):
     """Observed monthly anomalies from the 1981-2010 monthly climatology, on the model grid.
 
     Past the e3sm_diags coverage the archive product supplies both the anomaly years and the
-    climatology (OISST starts in 1981-09, so its Jan-Aug climatology is 1982-2010).
+    climatology (OISST starts in 1981-09, so its Jan-Aug climatology is 1982-2010). ``product``
+    selects an ``OBS_ALT_PRODUCTS`` entry instead (e.g. "ERSSTv5" or "ESA_CCI_SST" for TS).
     """
-    product = obs_product(field, (min(clim_years[0], years[0]), max(clim_years[1], years[1])))[0]
+    span = (min(clim_years[0], years[0]), max(clim_years[1], years[1]))
+    product = obs_product(field, span, product)[0]
     path = diag_dir("observations", "case_study", FIELDS[field]["realm"], field,
                     f"{product}_{field}_anomaly_y{years[0]}-{years[1]}_clim_{clim_years[0]}_{clim_years[1]}_{GRID_TAG}.nc")
     expected = {"cache_version": OBS_CACHE_VERSION, "product": product, "clim_start_year": clim_years[0],
@@ -429,9 +465,10 @@ def obs_anomaly(field, years=OBS_YEARS, clim_years=CLIM_YEARS, mode="auto"):
     if mode == "require":
         raise FileNotFoundError(f"missing or stale observation cache {path}")
 
-    da = obs_monthly(field, years=(min(clim_years[0], years[0]), max(clim_years[1], years[1])), mode=mode)
+    da = obs_monthly(field, years=span, mode=mode, product=product)
     clim = da.sel(time=slice(f"{clim_years[0]}-01", f"{clim_years[1]}-12")).groupby("time.month").mean("time")
-    anom = (da.sel(time=slice(f"{years[0]}-01", f"{years[1]}-12")).groupby("time.month") - clim).drop_vars("month")
+    # Load so a fresh build matches a cache read: dask chunks shorter than a rolling window (ONI) fail
+    anom = (da.sel(time=slice(f"{years[0]}-01", f"{years[1]}-12")).groupby("time.month") - clim).drop_vars("month").load()
     anom.attrs = {"units": FIELDS[field]["units"], "long_name": FIELDS[field]["long_name"], "product": product}
     out = anom.to_dataset(name=field)
     out.attrs.update(expected)
@@ -452,9 +489,12 @@ def _obs_to_display_units(da, field):
 
 
 def match_obs(model, obs):
-    """Observed values at each model lead's target month (dims follow ``model.time``)."""
+    """Observed values at each model lead's target month (dims follow ``model.time``).
+
+    Target months past the end of the observations are NaN.
+    """
     target = model["time"]
-    picked = obs.sel(time=[cftime.DatetimeNoLeap(t.year, t.month, 15) for t in target.values], method="nearest")
+    picked = obs.reindex(time=[cftime.DatetimeNoLeap(t.year, t.month, 15) for t in target.values])
     return picked.rename(time="lead").assign_coords(lead=model["lead"].values, time=("lead", target.values))
 
 
@@ -509,14 +549,20 @@ def pattern_rmse(fcst, obs, region="Global"):
     return np.sqrt((w * (f - o) ** 2).sum(("lat", "lon")) / w.sum(("lat", "lon")))
 
 
-def seasonal_leads(da, nseason=8):
-    """Non-overlapping 3-month means over leads (season 1 = leads 0-2), keeping the centre-month time."""
+def seasonal_leads(da, nseason=8, complete=False):
+    """Non-overlapping 3-month means over leads (season 1 = leads 0-2), keeping the centre-month time.
+
+    ``complete=True`` leaves a season NaN unless each of its months has data somewhere (e.g.
+    observations that end inside the season).
+    """
     seasons = []
     for s in range(nseason):
         chunk = da.isel(lead=slice(3 * s, 3 * s + 3))
         if chunk.sizes["lead"] < 3:
             break
         mean = chunk.mean("lead")
+        if complete and not bool(chunk.notnull().any([d for d in chunk.dims if d != "lead"]).all()):
+            mean = mean.where(False)
         if "time" in chunk.coords:
             mean = mean.assign_coords(time=chunk["time"].values[1])
         seasons.append(mean)
@@ -533,8 +579,53 @@ def target_mean(da, months):
 
 
 def obs_target_mean(obs, months):
+    """Mean over ``months`` [(year, month), ...]; NaN unless every month is observed."""
     times = [cftime.DatetimeNoLeap(y, m, 15) for y, m in months]
-    return obs.sel(time=times, method="nearest").mean("time")
+    return obs.reindex(time=times).mean("time", skipna=False)
+
+
+EARTH_RADIUS = 6.371e6
+
+
+def velocity_potential(u, v):
+    """Velocity potential (m2/s) of the wind (u, v) on a regular global lat-lon grid.
+
+    Solves lap(chi) = div(u, v) for each zonal wavenumber: Fourier in longitude and a
+    finite-volume Laplacian in latitude with no flux through the poles. chi has zero global
+    mean. Linear, so the potential of anomalous winds is the velocity potential anomaly.
+    """
+    u, v = u.transpose(..., "lat", "lon"), v.transpose(..., "lat", "lon")
+    lat = np.deg2rad(u["lat"].values)
+    nlat, nlon = lat.size, u.sizes["lon"]
+    dlat, a = lat[1] - lat[0], EARTH_RADIUS
+    coslat = np.cos(lat)
+    faces = np.cos(np.concatenate([[lat[0] - dlat / 2], (lat[:-1] + lat[1:]) / 2, [lat[-1] + dlat / 2]]))
+    faces[[0, -1]] = 0.0   # no flux through the poles
+
+    m = np.arange(nlon // 2 + 1)
+    uh = np.fft.rfft(u.values, axis=-1)
+    vh = np.fft.rfft(v.values * coslat[:, None], axis=-1)
+    vface = np.zeros(vh.shape[:-2] + (nlat + 1, vh.shape[-1]), dtype=complex)   # v cos(lat) on the faces
+    vface[..., 1:-1, :] = 0.5 * (vh[..., 1:, :] + vh[..., :-1, :])
+    div = (1j * m * uh + (vface[..., 1:, :] - vface[..., :-1, :]) / dlat) / (a * coslat[:, None])
+
+    lead = div.shape[:-2]
+    rhs = div.reshape(-1, nlat, m.size)
+    chi = np.empty_like(rhs)
+    upper, lower = faces[1:-1] / (a**2 * dlat**2 * coslat[:-1]), faces[1:-1] / (a**2 * dlat**2 * coslat[1:])
+    for k in m:
+        lap = np.zeros((nlat, nlat))
+        idx = np.arange(nlat)
+        lap[idx, idx] = -(faces[:-1] + faces[1:]) / (a**2 * dlat**2 * coslat) - k**2 / (a * coslat) ** 2
+        lap[idx[:-1], idx[1:]] = upper
+        lap[idx[1:], idx[:-1]] = lower
+        b = rhs[:, :, k].T
+        chi[:, :, k] = (np.linalg.lstsq(lap, b, rcond=None)[0] if k == 0 else np.linalg.solve(lap, b)).T
+    out = np.fft.irfft(chi.reshape(lead + (nlat, m.size)), n=nlon, axis=-1)
+    out = xr.DataArray(out, coords=u.coords, dims=u.dims)
+    w = area_weights(u["lat"])
+    out = out - out.weighted(w).mean(("lat", "lon"))
+    return out.assign_attrs(units="m2/s", long_name="Velocity potential")
 
 
 def hemispheric_area(frac):
