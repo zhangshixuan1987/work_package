@@ -1,8 +1,9 @@
 # RTENSO2026 case-study diagnostics
 
-Diagnostics for the RTENSO2026 2015 hindcasts (`../hindcast_run/RTENSO2026/`,
-post-processed by `../postprocess/RTENSO2026/`), treated as a case study of the
-2015/16 El Nino. The notebooks follow the layout and conventions of the ESP-Lab
+Diagnostics for the RTENSO2026 hindcasts (`../hindcast_run/RTENSO2026/`,
+post-processed by `../postprocess/RTENSO2026/`), treated as case studies of the
+2015/16 El Nino (2015 Feb/May/Aug/Nov starts) and the 2026/27 El Nino (2026
+Feb/May/Aug starts; no Reanalysis-FOSIRL runs). Each notebook's `EVENTS` lists the events. The notebooks follow the layout and conventions of the ESP-Lab
 suite (`~/code/ESP-Lab/jupyter`): a run-control block at the top, cache-first
 products under `S2D_DIAG_ROOT`, and figures named with `figure_filename`. ESP-Lab
 measures skill over many start years; here one event is followed through 4 starts.
@@ -40,7 +41,16 @@ later years, such as the 2026 starts, `obs_anomaly(field, years=(2026, 2027))` s
 the 1x1 archive products under `/global/cfs/cdirs/e3sm/zhan391/data` (`OBS_ARCHIVE`), which
 then also supply the 1981-2010 climatology: NOAA OISST v2.1 for `TS` (to Sep 2026; Jan-Aug
 climatology 1982-2010), GPCP v2.3 for `PRECT` (to Jun 2026) and NOAA/NSIDC CDR v6 for `SICE`
-(to Sep 2026). There is no archive product yet for `TREFHT`, `PSL` or `U850` after 2019.
+(to Sep 2026), and NOAA CDR for `FLUT` (OLR, to Sep 2026). There is no archive product yet for
+`PSL`, `U850`, `Z500`, `T925` or the 200-hPa winds after 2019; `TREFHT` over land comes from
+ERA5-Land (`product="ERA5_Land"`, to Sep 2026).
+
+Alternative products are picked by name with `obs_anomaly(field, product=...)` from
+`OBS_ALT_PRODUCTS`: for `TS`, `HadISST1.1` (`data/HadSST`, 1870 on), `OISSTv2.1`, `ERSSTv5`
+(1854 on) and `ESA_CCI_SST` (ESA CCI SST v3.0, 1980 on), each with its own 1981-2010
+climatology. `1_enso_plume.ipynb` plots HadISST 1.1, ERSSTv5 and ESA CCI SST and keeps
+HadISST 1.1 as the reference for errors. ERA5-Land has no ocean
+points, so it gives no Nino index.
 
 ## Files
 
@@ -48,10 +58,12 @@ climatology 1982-2010), GPCP v2.3 for `PRECT` (to Jun 2026) and NOAA/NSIDC CDR v
 | --- | --- |
 | `rtenso_case.py` | Shared helpers: case registry, hindcast loading, lead-time climatologies, observation anomalies, pattern ACC/RMSE, regions. |
 | `build_caches.py` | Build the Reanalysis lead-time climatologies and observation caches ahead of the notebooks (`python build_caches.py [FIELD ...] [--mode rebuild]`). |
-| `1_enso_plume.ipynb` | Nino3.4/3/4/1+2 forecast plumes per start against HadISST2, peak-season summary, ensemble-mean error and spread (after 3a). |
-| `2_anomaly_maps_acc.ipynb` | DJF 2015/16 anomaly maps from every start, and spatial pattern ACC and RMSE by lead season and region, per member and ensemble mean (after 1a/1b). Set `FIELD` to `TS`, `TREFHT`, `PRECT` or `PSL`. |
+| `1_enso_plume.ipynb` | Nino3.4/3/4/1+2/ONI forecast plumes per start against HadISST 1.1, ERSSTv5 and ESA CCI SST with the observed peak period shaded, peak-season summary, ensemble-mean error and spread (after 3a), and a map of the Nino regions. |
+| `2_anomaly_maps_acc.ipynb` | Peak-season (DJF) anomaly maps from every start, and spatial pattern ACC and RMSE by lead season and region, per member and ensemble mean (after 1a/1b); only fully observed seasons are scored. Set `FIELD` to `TS`, `PRECT` (both events), `TREFHT`, `PSL` or `U850` (2015 only). |
 | `3_ic_sensitivity.ipynb` | `Reanalysis-CLIM` vs `Reanalysis-OBS` vs `Reanalysis-FOSIRL` differences: land-mean differences with member-based intervals, fraction of land with significant differences by lead, stippled difference maps, and hemispheric sea-ice area against HadISST2. |
-| `4_teleconnections.ipynb` | DJF 2015/16 teleconnections of `PRECT`/`TREFHT`/`PSL` per degC of Nino3.4 against the observed event and the 1982-2010 observed regression, an inter-member regression, and equatorial Hovmollers of SST and U850 (after 3b). |
+| `4_teleconnections.ipynb` | Peak-season teleconnections of `PRECT`/`TREFHT`/`PSL` per degC of Nino3.4 against the observed event and the 1982-2010 observed regression, an inter-member regression, and CPC-style equatorial Hovmollers of SST, U850, OLR and 200-hPa velocity potential (`rc.velocity_potential`) (after 3b). |
+| `5_npac_namerica.ipynb` | CPC-style North Pacific / North America maps (120E-60W, 20-70N) for Nov-Feb: 500-hPa height and anomaly, 200-hPa wind, 925-hPa temperature anomaly, observed (ERA5, through 2019) and each case's ensemble mean. |
+| `6_us_temp_precip.ipynb` | CPC-style U.S. maps: 1- and 3-month percent of average precipitation and temperature departures, and a tercile-probability seasonal outlook (NDJ) from the pooled members with the observed category. |
 
 ## Running
 
