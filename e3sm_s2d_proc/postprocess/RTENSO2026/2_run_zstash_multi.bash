@@ -16,11 +16,11 @@ run2_dir="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/simulation"   # 1_run_mov_arch
 work_dir="/global/cfs/cdirs/e3sm/zhan391/s2d_diag"
 export HPSS_PTH="/home/projects/e3sm/www/RTENSO2026"   # read by zstash_S2D.sh
 
-ic_method="obs" #"${IC_METHOD:-clim}"   # clim | obs | hybrid_ic
+ic_method="clim" #"${IC_METHOD:-clim}"   # clim | obs | obs_ice_nsidc | hybrid_ic
 exp="WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_${ic_method}"
 max_jobs=1
 
-leads=(2015020100 2015050100 2015080100 2015110100)
+leads=(2026020100 2026050100 2026080100)
 
 log_dir="${work_dir}/post_process_logs"
 mkdir -p "${log_dir}"

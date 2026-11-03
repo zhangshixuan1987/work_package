@@ -14,7 +14,7 @@ CASE_PATTERN="WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_${IC_METHOD}"
 # Empty        => all dates
 # "1980*"      => all 1980 starts
 # "1980050100" => one specific start date
-CASE_DATE=""
+CASE_DATE="2026*"
 
 MAX_JOBS=10
 WAIT_TIME=10
