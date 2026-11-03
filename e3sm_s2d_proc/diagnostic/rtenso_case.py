@@ -142,7 +142,7 @@ def diag_dir(source, *parts):
 
 
 def figure_dir():
-    path = env_paths.figure_root().parent / "e3sm-s2d_rtenso2026_case"
+    path = env_paths.figure_root().parent / "e3sm-rtenso2026"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

@@ -89,7 +89,7 @@ Outputs:
 - Caches: `$S2D_DIAG_ROOT/Reanalysis/leadtime_clim/`, `$S2D_DIAG_ROOT/observations/case_study/`
   and `$S2D_DIAG_ROOT/RTENSO2026/case_study/` (`S2D_DIAG_ROOT` defaults to
   `/global/cfs/cdirs/e3sm/S2S2D/s2d_diag`).
-- Figures: `/global/cfs/cdirs/e3sm/www/zhan391/e3sm-s2d_rtenso2026_case/`, kept apart from
+- Figures: `/global/cfs/cdirs/e3sm/www/zhan391/e3sm-rtenso2026/`, kept apart from
   the ESP-Lab gallery.
 
 Land and sea-ice diagnostics in `3_ic_sensitivity.ipynb` need the RTENSO2026 `lnd_mon1`
