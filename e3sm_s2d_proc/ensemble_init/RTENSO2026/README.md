@@ -447,6 +447,31 @@ directory holds only the source files.
 Date directories exist for all eight dates (`20150201`-`20151101` and
 `20260201`-`20261101`).
 
+### Selected years
+
+BruteForce year whose ELM, MOSART, MPAS-Seaice, and coupler restarts each branch
+uses (from `selection.json`; the joint distance in parentheses):
+
+| Target date | `clim` | `obs` |
+| --- | --- | --- |
+| 2015-02-01 | 2010 | 2014 |
+| 2015-05-01 | 2004 | 2014 |
+| 2015-08-01 | 2009 | 2017 |
+| 2015-11-01 | 2008 | 2014 |
+| **2026-02-01** | **2010** (0.839) | **2010** (1.289) |
+| 2026-05-01 | 2009 | 2011 |
+| 2026-08-01 | 2009 | 2016 |
+| 2026-11-01 | 1995 | not yet selected |
+
+**2026-02-01: `clim` and `obs` selected the same year.** The two branches score
+the candidates independently (different targets and fields), and both ranked
+2010 first; the runners-up were 2009 (`clim`, 0.876) and 2013 (`obs`, 1.317).
+Nothing requires the branches to differ, so `20260201/{lnd,rof,ice,cpl}/clim/`
+and `.../obs/` hold byte-identical 2010 restarts, and the RTENSO2026 `clim` and
+`obs` hindcasts from that date are bit-identical. They were kept as run; the
+diagnostics (`../../diagnostic/README.md`) count those members once. The
+`obs_ice_nsidc` branch differs from both through its NSIDC sea ice.
+
 ## Member selection
 
 The DART 20-member subset is selected with

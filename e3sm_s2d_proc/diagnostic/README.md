@@ -18,11 +18,24 @@ measures skill over many start years; here one event is followed through 4 start
 All share the ERA5 atmosphere and CFSR ocean ICs. Cases whose `init_months` is empty
 are placeholders and are dropped from the notebooks.
 
-For the 1 Feb 2026 start, the `clim` and `obs` selections both picked the BruteForce 2010
-land/river/sea-ice state (`initial_conditions/20260201/*/{clim,obs}/selection.json`), so
-`Reanalysis-CLIM` and `Reanalysis-OBS` are bit-identical for that start. Pooled ensembles
-(notebook 4 member regression, notebook 6 outlook) count those members once: 20 members
-(CLIM + NSIDC) instead of 30. All other starts use different years for the two methods.
+## 1 Feb 2026 start: `Reanalysis-CLIM` and `Reanalysis-OBS` are the same runs
+
+For this one start the `clim` and `obs` IC selections both chose the BruteForce **2010**
+land, river and sea-ice state, so the two hindcasts started from identical initial
+conditions and are bit-identical member for member (Nino3.4 difference 0.0 everywhere).
+Every other start uses different years for the two methods; see "Selected years" in
+`../ensemble_init/RTENSO2026/README.md`. The runs were kept as they are.
+
+What this means in the diagnostics:
+
+* **Feb 2026 has no CLIM vs OBS contrast.** In plots the `Reanalysis-CLIM` line or map is
+  hidden under `Reanalysis-OBS`; any CLIM-OBS difference for that start is zero by
+  construction, not a result.
+* **Pooled ensembles count those members once.** The notebook 4 inter-member regression
+  and the notebook 6 outlook pool `Reanalysis-CLIM`, `-OBS` and `-NSIDC`, and skip a case
+  whose members repeat an already pooled case exactly (each run prints a note). The Feb
+  2026 pool is therefore 20 members (CLIM + NSIDC) instead of 30.
+* `Reanalysis-NSIDC` is unaffected: its NSIDC sea ice differs from the 2010 state.
 
 ## Drift correction
 
