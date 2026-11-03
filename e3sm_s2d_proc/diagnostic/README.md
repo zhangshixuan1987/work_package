@@ -18,6 +18,12 @@ measures skill over many start years; here one event is followed through 4 start
 All share the ERA5 atmosphere and CFSR ocean ICs. Cases whose `init_months` is empty
 are placeholders and are dropped from the notebooks.
 
+For the 1 Feb 2026 start, the `clim` and `obs` selections both picked the BruteForce 2010
+land/river/sea-ice state (`initial_conditions/20260201/*/{clim,obs}/selection.json`), so
+`Reanalysis-CLIM` and `Reanalysis-OBS` are bit-identical for that start. Pooled ensembles
+(notebook 4 member regression, notebook 6 outlook) count those members once: 20 members
+(CLIM + NSIDC) instead of 30. All other starts use different years for the two methods.
+
 ## Drift correction
 
 Model anomalies remove the Reanalysis (BruteForce) 1981-2010 lead-time climatology,
