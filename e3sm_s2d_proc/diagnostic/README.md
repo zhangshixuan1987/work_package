@@ -105,11 +105,23 @@ the Reanalysis (BruteForce) cases read from `RAW_MODEL_ROOT`
 
 Outputs:
 
-- Caches: `$S2D_DIAG_ROOT/Reanalysis/leadtime_clim/`, `$S2D_DIAG_ROOT/observations/case_study/`
-  and `$S2D_DIAG_ROOT/RTENSO2026/case_study/` (`S2D_DIAG_ROOT` defaults to
+- Notebook products: one folder per notebook under the fixed
+  `/global/cfs/cdirs/e3sm/www/zhan391/e3sm-rtenso2026/` (`rc.OUTPUT_ROOT`), kept apart from
+  the ESP-Lab gallery. Each notebook sets `NOTEBOOK` and writes through `rc.save_figure` and
+  `rc.output_dir`:
+
+  ```text
+  e3sm-rtenso2026/
+    1_enso_plume/{figures,data}/          data: Nino index netCDF per case/start, peak summary CSV
+    2_anomaly_maps_acc/{figures,data}/    data/<FIELD>/: pattern-skill netCDF, ACC CSV
+    3_ic_sensitivity/{figures,data}/
+    4_teleconnections/{figures,data}/     data: teleconnection ACC CSV
+    5_npac_namerica/figures/
+    6_us_temp_precip/figures/
+  ```
+- Reusable caches stay outside it: `$S2D_DIAG_ROOT/Reanalysis/leadtime_clim/` and
+  `$S2D_DIAG_ROOT/observations/case_study/` (`S2D_DIAG_ROOT` defaults to
   `/global/cfs/cdirs/e3sm/S2S2D/s2d_diag`).
-- Figures: `/global/cfs/cdirs/e3sm/www/zhan391/e3sm-rtenso2026/`, kept apart from
-  the ESP-Lab gallery.
 
 Land and sea-ice diagnostics in `3_ic_sensitivity.ipynb` need the RTENSO2026 `lnd_mon1`
 and `ice_mon1` post-processing; cases not yet processed are skipped.

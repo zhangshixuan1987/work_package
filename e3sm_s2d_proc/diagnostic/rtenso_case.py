@@ -141,14 +141,24 @@ def diag_dir(source, *parts):
     return env_paths.s2d_diag_root().joinpath(source, *parts)
 
 
-def figure_dir():
-    path = env_paths.figure_root().parent / "e3sm-rtenso2026"
+# Figures and tables of the case-study notebooks: OUTPUT_ROOT/<notebook>/{figures,data}/.
+# Reusable caches (observation anomalies, lead-time climatologies) stay under diag_dir().
+OUTPUT_ROOT = Path("/global/cfs/cdirs/e3sm/www/zhan391/e3sm-rtenso2026")
+
+
+def output_dir(notebook, kind, *parts):
+    """OUTPUT_ROOT/<notebook>/<kind>/<parts...>, created if missing (kind: "figures" or "data")."""
+    path = OUTPUT_ROOT.joinpath(notebook, kind, *parts)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def save_figure(fig, *parts, dpi=150, ext="png"):
-    path = figure_dir() / figure_filename(*parts, ext=ext)
+def figure_dir(notebook):
+    return output_dir(notebook, "figures")
+
+
+def save_figure(fig, notebook, *parts, dpi=150, ext="png"):
+    path = figure_dir(notebook) / figure_filename(*parts, ext=ext)
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     return path
 
