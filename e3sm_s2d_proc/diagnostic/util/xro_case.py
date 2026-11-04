@@ -48,13 +48,21 @@ OBS_YEARS = (1981, 2026)        # observed state vector: training, initial state
 # Control XRO of Zhao et al. (2024): annual + semi-annual cycle, quadratic IOD term, T^2 and T*h terms
 # in the ENSO T equation. Trend orders per variable ("default" for the rest): linear for SST, quadratic
 # for h, as in the XRO real-time notebook. "spread" is the percentile range shown for every ensemble
-# (E3SM members and XRO stochastic copies alike).
+# (E3SM members and XRO stochastic copies alike). A few red-noise members run away through the
+# nonlinear terms (about 0.1% of the validation members, mostly beyond lead 11); a member whose
+# |Nino3.4| ever exceeds "diverge_threshold" (degC; observed 1981-2026 maximum 2.6) is set to NaN.
 XRO_SETUP = {
     "ac_order": 2, "maskb": ("IOD",), "maskNT": ("T2", "TH"),
     "detrend_order": {"default": 1, "WWV": 2},
     "ncopy": 100, "seed": 2026,
     "spread": (5, 95),
+    "diverge_threshold": 6.0,
 }
+
+# Out-of-sample validation (7a) and the cross-validated spread calibration derived from it, shared so
+# that 7b/7c apply exactly the factors 7a evaluates.
+VALIDATION = {"years": (1995, 2025), "train_start": 1981, "n_month": 24, "ncopy": 50, "seed": 1995}
+CALIBRATION = {"pool": 1, "min_samples": 60, "vars": ("Nino34",)}   # h is not calibrated (7a section 8)
 
 # Events: "init_months" are the hindcast starts, "train" the XRO training years (all before the event),
 # "peak_season" the target season of the summaries and sensitivity experiments.
@@ -337,6 +345,15 @@ def forecast(model, fit_ds, X0, ic_year, ic_month, n_month, ncopy=1, noise_type=
     return fc.assign_coords(time=("lead", times))
 
 
+def mask_diverged(ens, threshold=XRO_SETUP["diverge_threshold"]):
+    """Set every variable of a stochastic member to NaN at all leads if its |Nino3.4| ever exceeds
+    ``threshold``; the count is stored in attrs["diverged_members"]."""
+    bad = (np.abs(ens["Nino34"]) > threshold).any("lead")
+    out = ens.where(~bad)
+    out.attrs = dict(ens.attrs, diverged_members=int(bad.sum()), diverge_threshold=threshold)
+    return out
+
+
 def initial_state(xfit, year, init):
     """Detrended observed state of the month before the hindcast start, or None if not fully observed."""
     ic_year, ic_month = add_months(year, init, -1)
@@ -368,7 +385,8 @@ def event_forecast(xfit, year, init, X0=None, stochastic=True, n_month=rc.NLEAD 
     tr = trend_values(xfit["trend"], det_dt["time"].values, like=det_dt).assign_coords(det_dt.coords)
     out = {"det": det_dt + tr, "det_dt": det_dt}
     if stochastic:
-        out["stoch"] = run(ncopy=setup["ncopy"], noise_type="red", seed=setup["seed"]) + tr
+        out["stoch"] = mask_diverged(run(ncopy=setup["ncopy"], noise_type="red", seed=setup["seed"]) + tr,
+                                     setup["diverge_threshold"])
     return out
 
 
@@ -446,7 +464,7 @@ def rolling_hindcasts(X, years, train_start, n_month=24, orders=None, ncopy=0, s
     expected = {"cache_version": CACHE_VERSION, "first_year": years[0], "last_year": years[1],
                 "train_start": train_start, "n_month": n_month, "orders": tag, "sst_product": OBS_SST,
                 "ac_order": setup["ac_order"], "maskb": ",".join(setup["maskb"]), "maskNT": ",".join(setup["maskNT"])}
-    stoch_expected = dict(expected, ncopy=ncopy, seed=str(seed))
+    stoch_expected = dict(expected, ncopy=ncopy, seed=str(seed), diverge_threshold=setup["diverge_threshold"])
     det_path, stoch_path = base.with_name(base.name + "_det.nc"), base.with_name(base.name + f"_stoch{ncopy}.nc")
     det_ok = mode != "rebuild" and rc._cache_ok(det_path, expected)
     stoch_ok = ncopy == 0 or (mode != "rebuild" and rc._cache_ok(stoch_path, stoch_expected))
@@ -477,7 +495,7 @@ def rolling_hindcasts(X, years, train_start, n_month=24, orders=None, ncopy=0, s
     atomic_to_netcdf(det, det_path)
     if not ncopy:
         return det, None
-    stoch = xr.concat(stoch, dim="init").transpose("init", "lead", "member")
+    stoch = mask_diverged(xr.concat(stoch, dim="init").transpose("init", "lead", "member"), setup["diverge_threshold"])
     stoch.attrs.update(stoch_expected)
     atomic_to_netcdf(stoch, stoch_path)
     return det, stoch
@@ -505,11 +523,107 @@ def skill(fc, obs, dim="init"):
     return xr.Dataset({"acc": xr.corr(f, o, dim=dim), "rmse": np.sqrt(((f - o) ** 2).mean(dim)), "n": ok.sum(dim)})
 
 
+# -----------------------------------------------------------------------------
+# Probabilistic calibration of the stochastic ensemble (spread inflation)
+# -----------------------------------------------------------------------------
+def _month_number(times):
+    t = pd.DatetimeIndex(np.atleast_1d(times))
+    return t.year.values * 12 + t.month.values - 1
+
+
+def required_inflation(ens, obs, interval=XRO_SETUP["spread"]):
+    """Factor by which each forecast's central interval (``interval`` percentiles), scaled about the
+    ensemble mean, must widen to just contain the observation (side of the observation only).
+    ens: (init, lead, member); obs: (init, lead). NaN where unobserved."""
+    mu = ens.mean("member")
+    qlo = ens.quantile(interval[0] / 100, "member").drop_vars("quantile")
+    qhi = ens.quantile(interval[1] / 100, "member").drop_vars("quantile")
+    up, dn = (qhi - mu).clip(min=1e-8), (mu - qlo).clip(min=1e-8)
+    return xr.where(obs >= mu, (obs - mu) / up, (mu - obs) / dn).where(obs.notnull())
+
+
+def inflation_factors(r, issue, coverage=None, pool=1, min_samples=60, interval=XRO_SETUP["spread"]):
+    """Lead-dependent inflation alpha(lead) for a forecast issued at ``issue`` (its initial month).
+
+    Uses only historical forecasts whose target month (init + lead) precedes the issue month, i.e.
+    verified when the forecast is issued, pooling leads within +-``pool``. alpha is the
+    ``coverage`` quantile (default: the interval's nominal coverage) of the required inflation, so
+    the inflated interval would have contained that fraction of the past observations. NaN with
+    fewer than ``min_samples`` cases. Returns (alpha, n) DataArrays over lead.
+    """
+    coverage = (interval[1] - interval[0]) / 100 if coverage is None else coverage
+    issue_n = _month_number(pd.Timestamp(issue))[0]
+    target = _month_number(r["init"].values)[:, None] + r["lead"].values[None, :]
+    vals = np.where(target < issue_n, r.values, np.nan)
+    leads = r["lead"].values
+    alpha, n = np.full(len(leads), np.nan), np.zeros(len(leads), int)
+    for j, L in enumerate(leads):
+        sample = vals[:, np.abs(leads - L) <= pool].ravel()
+        sample = sample[np.isfinite(sample)]
+        n[j] = sample.size
+        if sample.size >= min_samples:
+            alpha[j] = np.quantile(sample, coverage)
+    coords = {"lead": r["lead"]}
+    return xr.DataArray(alpha, coords=coords, dims="lead"), xr.DataArray(n, coords=coords, dims="lead")
+
+
+def inflate(ens, alpha):
+    """Calibrated ensemble: mean + alpha * (member - mean); the ensemble mean is unchanged."""
+    mu = ens.mean("member")
+    return mu + alpha * (ens - mu)
+
+
+def crps_ensemble(ens, obs):
+    """Empirical ensemble CRPS: E|X - o| - 0.5 E|X - X'| over the valid (non-NaN) members,
+    NaN where unobserved."""
+    x = np.sort(ens.transpose(..., "member").values, axis=-1)          # NaN members sort last
+    m = np.isfinite(x).sum(-1)
+    o = obs.broadcast_like(ens.isel(member=0, drop=True)).transpose(*ens.isel(member=0, drop=True).dims).values
+    with warnings.catch_warnings():          # rows without an observation are all-NaN by design
+        warnings.simplefilter("ignore", RuntimeWarning)
+        term1 = np.nanmean(np.abs(x - o[..., None]), axis=-1)
+    i = np.arange(1, x.shape[-1] + 1)
+    w = np.where(i <= m[..., None], 2 * i - m[..., None] - 1, 0)
+    term2 = np.nansum(x * w, axis=-1) * 2 / np.maximum(m, 1) ** 2
+    crps = np.where(m > 0, term1 - 0.5 * term2, np.nan)
+    dims = [d for d in ens.dims if d != "member"]
+    return xr.DataArray(crps, coords={d: ens[d] for d in dims}, dims=dims).where(obs.notnull())
+
+
+def event_inflation(X, year, init, var="Nino34", mode="auto"):
+    """Cross-validated inflation factors for an event forecast (``event_forecast`` leads).
+
+    Factors come from the 7a validation hindcasts verified before XRO's initial month (the month
+    before the start); event lead L uses the factor of XRO lead L + 1, and lead -1 (the observed
+    initial month) gets 1. Returns a DataArray over event leads (NaN where too few past cases).
+    """
+    v = VALIDATION
+    _, stoch = rolling_hindcasts(X, v["years"], v["train_start"], v["n_month"], ncopy=v["ncopy"], seed=v["seed"], mode=mode)
+    r = required_inflation(stoch[var], target_obs(stoch[[var]], X)[var])
+    issue = pd.Timestamp(*add_months(year, init, -1), 1)
+    alpha, _ = inflation_factors(r, issue, pool=CALIBRATION["pool"], min_samples=CALIBRATION["min_samples"])
+    alpha = alpha.assign_coords(lead=alpha["lead"].values - 1)
+    return xr.where(alpha["lead"] < 0, 1.0, alpha)
+
+
+def calibrated_stoch(X, year, init, stoch, mode="auto"):
+    """Stochastic event ensemble with CALIBRATION["vars"] inflated about the ensemble mean (other
+    variables unchanged)."""
+    out = stoch.copy()
+    for var in CALIBRATION["vars"]:
+        alpha = event_inflation(X, year, init, var, mode=mode).reindex(lead=stoch["lead"])
+        out[var] = inflate(stoch[var], alpha)
+    out.attrs["calibrated_vars"] = ",".join(CALIBRATION["vars"])
+    return out
+
+
 __all__ = [
+    "VALIDATION", "CALIBRATION", "event_inflation", "calibrated_stoch",
     "OBS_SST", "OBS_YEARS", "XRO_SETUP", "EVENTS", "CASES", "OBS_STYLE", "XRO_STYLE", "MONTH_NAMES",
     "SST_BOXES", "WWV_BOX", "XRO_VARS", "LABELS", "SHORT", "UNITS", "quiet_xro", "short", "available_cases",
     "state_vector", "decimal_year", "to_month_start", "add_months", "month_index", "obs_value", "obs_state",
     "last_observed", "hindcast_state", "hindcast_states", "fit_trend", "trend_values", "fit", "fit_xro",
     "forecast", "initial_state", "event_forecast", "removal_sensitivity", "perturbed_forecast", "simulate",
     "ro_parameters", "rolling_hindcasts", "target_obs", "persistence", "skill",
+    "required_inflation", "inflation_factors", "inflate", "crps_ensemble", "mask_diverged",
 ]
