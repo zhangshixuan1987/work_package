@@ -78,8 +78,8 @@ points, so it gives no Nino index.
 
 | File | Purpose |
 | --- | --- |
-| `util/rtenso_case.py` | Shared helpers, imported by every notebook as `from util import rtenso_case as rc`: case registry, hindcast loading, lead-time climatologies, observation products and anomalies, pattern ACC/RMSE, regions, velocity potential, output paths. |
-| `build_caches.py` | Build the Reanalysis lead-time climatologies and observation caches ahead of the notebooks (`python build_caches.py [FIELD ...] [--mode rebuild]`). |
+| `util/rtenso_case.py` | Shared helpers, imported by every notebook as `from util import rtenso_case as rc`: case registry, hindcast loading, lead-time climatologies, observation products and anomalies, cache builds (`build_caches`), pattern ACC/RMSE, regions, velocity potential, output paths. |
+| `0_build_caches.ipynb` | Builds the Reanalysis lead-time climatologies and observation caches ahead of the other notebooks (`FIELDS`, `derivation_mode`), through `rc.build_caches`. |
 | `1_enso_plume.ipynb` | Nino3.4/3/4/1+2/ONI forecast plumes per start against HadISST 1.1, ERSSTv5, ESA CCI SST and NOAA OISST v2.1 with the observed peak period shaded, peak-season summary, ensemble-mean error and spread (after 3a), and a map of the Nino regions. |
 | `2_anomaly_maps_acc.ipynb` | Peak-season (DJF) anomaly maps from every start, and spatial pattern ACC and RMSE by lead season and region, per member and ensemble mean (after 1a/1b); only fully observed seasons are scored. Set `FIELD` to `TS`, `PRECT` (both events), `TREFHT`, `PSL` or `U850` (2015 only). |
 | `3_ic_sensitivity.ipynb` | `Reanalysis-CLIM` vs `Reanalysis-OBS` vs `Reanalysis-FOSIRL` differences: land-mean differences with member-based intervals, fraction of land with significant differences by lead, stippled difference maps, and hemispheric sea-ice area against HadISST2. |
@@ -97,12 +97,13 @@ points, so it gives no Nino index.
 ## Running
 
 Use the `e3sm_analysis` kernel (ESP-Lab installed in editable mode) and start Jupyter in
-this directory so the `util` package (`util/rtenso_case.py`) imports. Build the caches once (about 4 minutes per
-field and start month; the U850 reads are the slowest):
+this directory so the `util` package (`util/rtenso_case.py`) imports. Build the caches once with
+`0_build_caches.ipynb` (about 4 minutes per field and start month; the U850 reads are the slowest),
+interactively or headless:
 
 ```bash
 conda activate e3sm_analysis
-python build_caches.py
+jupyter nbconvert --to notebook --execute --inplace 0_build_caches.ipynb
 ```
 
 Each notebook's run-control block holds `derivation_mode` ("auto" reuses valid caches,

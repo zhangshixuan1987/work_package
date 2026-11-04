@@ -20,6 +20,7 @@ Paths follow ``esp_lab.env_paths``; caches are written with
 from __future__ import annotations
 
 import glob
+import time
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -547,6 +548,39 @@ def match_obs(model, obs):
     target = model["time"]
     picked = obs.reindex(time=[cftime.DatetimeNoLeap(t.year, t.month, 15) for t in target.values])
     return picked.rename(time="lead").assign_coords(lead=model["lead"].values, time=("lead", target.values))
+
+
+# -----------------------------------------------------------------------------
+# Cache builds (0_build_caches.ipynb)
+# -----------------------------------------------------------------------------
+CACHE_FIELDS = ["TS", "PRECT", "TREFHT", "PSL", "U850"]
+
+
+def build_caches(fields=CACHE_FIELDS, mode="auto", verbose=True):
+    """Build the Reanalysis lead-time climatologies (every ``REFERENCE`` start month) and the
+    observation anomalies of ``fields`` ahead of the notebooks.
+
+    ``mode``: "auto" reuses valid caches, "rebuild" recomputes them. Returns one row per cache
+    built or checked: {"field", "cache", "seconds"}.
+    """
+    if mode not in ("auto", "rebuild"):
+        raise ValueError(f"mode must be 'auto' or 'rebuild', not {mode!r}")
+    rows = []
+
+    def timed(field, cache, build):
+        t0 = time.time()
+        build()
+        rows.append({"field": field, "cache": cache, "seconds": round(time.time() - t0, 1)})
+        if verbose:
+            print(f"{field} {cache} ready ({rows[-1]['seconds']:.0f} s)", flush=True)
+
+    for field in fields:
+        for init_month in REFERENCE["init_months"]:
+            timed(field, f"init{init_month:02d} climatology",
+                  lambda: leadtime_climatology(field, init_month, mode=mode))
+        if FIELDS[field]["obs"] is not None:
+            timed(field, "observation anomalies", lambda: obs_anomaly(field, mode=mode))
+    return rows
 
 
 # -----------------------------------------------------------------------------
