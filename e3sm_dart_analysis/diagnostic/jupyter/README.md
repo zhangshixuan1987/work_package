@@ -180,6 +180,15 @@ Land-atmosphere coupling in the hindcasts.
 
 Both S2S workflows expose January/June forecast groups, observation-variable selections, regions, and metrics as notebook parameters. The TCC workflow also accepts the Dec2011 analysis group with the `da` run. Weekly, biweekly, 15-day, and monthly TCC caches are kept in separate subdirectories. Existing NetCDF products are reused unless `force_compute = True`.
 
+## `fcst_init_eval/`
+
+Initialization-strategy hindcasts on Perlmutter (`INPUT_DATA_ROOT/F20TR_ne30pg2_r05_IcoswISC30E3r5_<CONFIG>_<YYYYMMDD>00/<ENxx>`): five configurations, CLIM_BASE (free-running climate state), HYB_BASE (ERA5-based atmosphere + DATM-forced land), DA_ATM (DART atmosphere), DA_LND (DART land), and DA_COUPLED (DART atmosphere and land). Each runs 20 members for 2 months from 4 starts per season, 16-31 Dec 2011 and 16-31 May 2012, 5 days apart (`configs/fcst_init_experiment_config.py`). Readers: `util/fcst_init_data.py`, which handles lead-day alignment, sampling (00Z states for pressure levels) and units as in the window scorecard, and reads ERA5, IMERG, NOAA OLR and ESA CCI references and their climatology. Scores: `util/fcst_init_skill.py`. Figures: `util/fcst_init_plotting.py`. The model time series must first be regenerated with `post_process/submit_regen_f20tr_ts.sbatch`; the zppy `ncclimo --split` files stop after 4 days. Each notebook only uses configuration-seasons whose members all report `regen_ts_<stream>.status` OK (`REQUIRE_ALL_MEMBERS`).
+
+1. `01_compute_and_plot_lead_skill.ipynb` - daily ensemble-mean RMSE, bias, spread, spread/RMSE, and fair CRPS by lead day (1-56), pooled over the starts of a season, for each region.
+2. `02_compute_and_plot_s2s_weekly_skill.ipynb` - weekly S2S anomaly skill following the ESP-Lab `s2s_skill` protocol (weeks 1-8, drift-corrected anomalies, ACC with a t-test, ΔACC vs `BASELINE`). Anomalies are taken from the reference climatology (`CLIM_YEARS`; ERA5 monthly for TREFHT/TS/fluxes). Drift is removed leave-one-start-out, because 4 starts per season are too few for a hindcast climatology. Outputs: regional pattern ACC and MSSS, plus gridpoint ACC over the 8 starts of both seasons.
+3. `03_compute_and_plot_land_skill_and_coupling.ipynb` - top-5-cm soil moisture vs ESA CCI and TSA vs ERA5 over land (lead-day and weekly), and ensemble-based soil-moisture memory and SM-TSA/SM-LHFLX coupling per configuration.
+4. `04_compute_and_plot_mjo_rmm_skill.ipynb` - RMM projection of every member on the observed EOFs of `hind_atm_mjo/03` (previous-120-day mean taken from the observations), then bivariate COR/RMSE, spread, and amplitude error by lead pooled over starts, plus lead-window skill.
+
 ## `hind_atm_mjo/`
 
 MJO in the AMIP hindcasts (same diagnostics as `fcst_atm_mjo/`, for continuous runs; `util/mjo_hovmoller_coupling.py`, `util/mjo_rmm_projection.py`).

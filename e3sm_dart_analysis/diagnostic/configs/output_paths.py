@@ -27,6 +27,7 @@ WORKFLOW_NAMES = (
     "fcst_lnd_model_evaluation",
     "fcst_s2s_pcc",
     "fcst_s2s_tcc",
+    "fcst_init_eval",
     "hind_atm_mjo",
     "hind_atm_eval",
 )

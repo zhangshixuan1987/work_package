@@ -67,3 +67,7 @@ diagnostic/**/*.eps
 !diagnostic/**/figures/README*
 !diagnostic/**/data/README*
 !diagnostic/**/.gitkeep
+
+# F20TR time-series regeneration job (post_process/submit_regen_f20tr_ts.sbatch)
+post_process/regen_f20tr_ts.o*
+post_process/regen_f20tr_ts.tasks.*
