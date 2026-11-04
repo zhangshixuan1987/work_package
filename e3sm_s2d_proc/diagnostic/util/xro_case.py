@@ -62,7 +62,21 @@ XRO_SETUP = {
 # Out-of-sample validation (7a) and the cross-validated spread calibration derived from it, shared so
 # that 7b/7c apply exactly the factors 7a evaluates.
 VALIDATION = {"years": (1995, 2025), "train_start": 1981, "n_month": 24, "ncopy": 50, "seed": 1995}
-CALIBRATION = {"pool": 1, "min_samples": 60, "vars": ("Nino34",)}   # h is not calibrated (7a section 8)
+# "method" per variable: "coverage" (alpha = 90th percentile of the required inflation) or "crps" (alpha
+# minimizing the mean CRPS of past forecasts). 7a section 9: coverage suits Nino3.4; for h it over-widens
+# the intervals, while the CRPS objective gives about 90% coverage at no CRPS cost.
+# "djf_min_samples": past DJF seasons needed for a DJF-specific factor.
+CALIBRATION = {"pool": 1, "min_samples": 60, "vars": ("Nino34", "WWV"),
+               "method": {"Nino34": "coverage", "WWV": "crps"}, "djf_min_samples": 8}
+
+
+def calibration_method(var, method=None):
+    """The calibration objective applied to ``var`` (``method`` overrides the configured one)."""
+    if method:
+        return method
+    m = CALIBRATION["method"]
+    return m[var] if isinstance(m, dict) else m
+ALPHA_GRID = np.round(np.arange(0.5, 3.501, 0.05), 2)   # candidate factors for the CRPS objective
 
 # Events: "init_months" are the hindcast starts, "train" the XRO training years (all before the event),
 # "peak_season" the target season of the summaries and sensitivity experiments.
@@ -449,13 +463,14 @@ def ro_parameters(xfit):
 # Out-of-sample validation
 # -----------------------------------------------------------------------------
 def rolling_hindcasts(X, years, train_start, n_month=24, orders=None, ncopy=0, seed=None,
-                      setup=XRO_SETUP, mode="auto"):
+                      setup=XRO_SETUP, mode="auto", use_cache=True):
     """Out-of-sample XRO hindcasts. For each year Y in ``years`` (first, last), XRO is detrended and
     fitted on ``train_start``..Y-1 only and run from every fully observed month of Y.
 
     Returns (det, stoch): Datasets (init, lead) and (init, lead, member) of full anomalies (the
     training trend added back), with XRO's lead convention (lead 0 = initial month); stoch is None
-    when ``ncopy`` is 0.
+    when ``ncopy`` is 0. The cache records the last observed months of ``X``, so extending the
+    observations rebuilds it; ``use_cache=False`` computes without reading or writing the cache.
     """
     orders = orders or setup["detrend_order"]
     tag = "_".join(f"{k}{v}" for k, v in sorted(orders.items()))
@@ -463,14 +478,15 @@ def rolling_hindcasts(X, years, train_start, n_month=24, orders=None, ncopy=0, s
                        f"XRO_rolling_y{years[0]}-{years[1]}_train{train_start}_{tag}_n{n_month}")
     expected = {"cache_version": CACHE_VERSION, "first_year": years[0], "last_year": years[1],
                 "train_start": train_start, "n_month": n_month, "orders": tag, "sst_product": OBS_SST,
-                "ac_order": setup["ac_order"], "maskb": ",".join(setup["maskb"]), "maskNT": ",".join(setup["maskNT"])}
+                "ac_order": setup["ac_order"], "maskb": ",".join(setup["maskb"]), "maskNT": ",".join(setup["maskNT"]),
+                "obs_last": "/".join("%d-%02d" % last_observed(X, v) for v in ("Nino34", "WWV"))}
     stoch_expected = dict(expected, ncopy=ncopy, seed=str(seed), diverge_threshold=setup["diverge_threshold"])
     det_path, stoch_path = base.with_name(base.name + "_det.nc"), base.with_name(base.name + f"_stoch{ncopy}.nc")
-    det_ok = mode != "rebuild" and rc._cache_ok(det_path, expected)
-    stoch_ok = ncopy == 0 or (mode != "rebuild" and rc._cache_ok(stoch_path, stoch_expected))
+    det_ok = use_cache and mode != "rebuild" and rc._cache_ok(det_path, expected)
+    stoch_ok = ncopy == 0 or (use_cache and mode != "rebuild" and rc._cache_ok(stoch_path, stoch_expected))
     if det_ok and stoch_ok:
         return load_netcdf(det_path), (load_netcdf(stoch_path) if ncopy else None)
-    if mode == "require":
+    if mode == "require" and use_cache:
         raise FileNotFoundError(f"missing or stale rolling hindcast cache {det_path}")
 
     det, stoch = [], []
@@ -491,13 +507,15 @@ def rolling_hindcasts(X, years, train_start, n_month=24, orders=None, ncopy=0, s
             stoch.append(fs + _trend_on_init_lead(xfit["trend"], fs))
     det = xr.concat(det, dim="init")
     det.attrs.update(expected)
-    det_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_to_netcdf(det, det_path)
+    if use_cache:
+        det_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_to_netcdf(det, det_path)
     if not ncopy:
         return det, None
     stoch = mask_diverged(xr.concat(stoch, dim="init").transpose("init", "lead", "member"), setup["diverge_threshold"])
     stoch.attrs.update(stoch_expected)
-    atomic_to_netcdf(stoch, stoch_path)
+    if use_cache:
+        atomic_to_netcdf(stoch, stoch_path)
     return det, stoch
 
 
@@ -573,52 +591,165 @@ def inflate(ens, alpha):
     return mu + alpha * (ens - mu)
 
 
+def _sorted_members(ens):
+    """Members sorted along the last axis (NaN members last) and the valid-member count."""
+    x = np.sort(ens.transpose(..., "member").values, axis=-1)
+    return x, np.isfinite(x).sum(-1)
+
+
+def _pair_mean_abs(x, m):
+    """E|X - X'| over the m valid members of sorted ``x``."""
+    i = np.arange(1, x.shape[-1] + 1)
+    w = np.where(i <= m[..., None], 2 * i - m[..., None] - 1, 0)
+    return np.nansum(x * w, axis=-1) * 2 / np.maximum(m, 1) ** 2
+
+
+def _obs_like(obs, ens):
+    ref = ens.isel(member=0, drop=True)
+    return obs.broadcast_like(ref).transpose(*ref.dims).values
+
+
 def crps_ensemble(ens, obs):
     """Empirical ensemble CRPS: E|X - o| - 0.5 E|X - X'| over the valid (non-NaN) members,
     NaN where unobserved."""
-    x = np.sort(ens.transpose(..., "member").values, axis=-1)          # NaN members sort last
-    m = np.isfinite(x).sum(-1)
-    o = obs.broadcast_like(ens.isel(member=0, drop=True)).transpose(*ens.isel(member=0, drop=True).dims).values
+    x, m = _sorted_members(ens)
+    o = _obs_like(obs, ens)
     with warnings.catch_warnings():          # rows without an observation are all-NaN by design
         warnings.simplefilter("ignore", RuntimeWarning)
         term1 = np.nanmean(np.abs(x - o[..., None]), axis=-1)
-    i = np.arange(1, x.shape[-1] + 1)
-    w = np.where(i <= m[..., None], 2 * i - m[..., None] - 1, 0)
-    term2 = np.nansum(x * w, axis=-1) * 2 / np.maximum(m, 1) ** 2
-    crps = np.where(m > 0, term1 - 0.5 * term2, np.nan)
+    crps = np.where(m > 0, term1 - 0.5 * _pair_mean_abs(x, m), np.nan)
     dims = [d for d in ens.dims if d != "member"]
     return xr.DataArray(crps, coords={d: ens[d] for d in dims}, dims=dims).where(obs.notnull())
 
 
-def event_inflation(X, year, init, var="Nino34", mode="auto"):
-    """Cross-validated inflation factors for an event forecast (``event_forecast`` leads).
+def crps_scaled(ens, obs, alphas=ALPHA_GRID):
+    """CRPS of the inflated ensemble mean + alpha (member - mean) for every alpha in ``alphas``
+    (new trailing dim "alpha"). The pair term scales with alpha, so it is computed once."""
+    mu = ens.mean("member")
+    d = ens - mu
+    x, m = _sorted_members(d)
+    g = _pair_mean_abs(x, m)
+    o = _obs_like(obs, ens)
+    muv = mu.transpose(*ens.isel(member=0, drop=True).dims).values
+    out = np.empty(o.shape + (len(alphas),))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for k, a in enumerate(alphas):
+            out[..., k] = np.nanmean(np.abs(muv[..., None] + a * x - o[..., None]), axis=-1) - 0.5 * a * g
+    dims = [dd for dd in ens.dims if dd != "member"]
+    coords = {dd: ens[dd] for dd in dims} | {"alpha": np.asarray(alphas)}
+    return xr.DataArray(out, coords=coords, dims=dims + ["alpha"]).where(obs.notnull())
+
+
+def inflation_factors_crps(C, issue, pool=1, min_samples=60):
+    """As ``inflation_factors`` but alpha minimizes the mean CRPS (``crps_scaled`` output ``C``) of the
+    historical forecasts verified before ``issue``. alpha may be below 1 (deflation)."""
+    issue_n = _month_number(pd.Timestamp(issue))[0]
+    target = _month_number(C["init"].values)[:, None] + C["lead"].values[None, :]
+    vals = np.where((target < issue_n)[..., None], C.transpose("init", "lead", "alpha").values, np.nan)
+    leads, alphas = C["lead"].values, C["alpha"].values
+    alpha, n = np.full(len(leads), np.nan), np.zeros(len(leads), int)
+    for j, L in enumerate(leads):
+        sample = vals[:, np.abs(leads - L) <= pool, :].reshape(-1, len(alphas))
+        sample = sample[np.isfinite(sample[:, 0])]
+        n[j] = sample.shape[0]
+        if sample.shape[0] >= min_samples:
+            alpha[j] = alphas[int(np.argmin(sample.mean(0)))]
+    coords = {"lead": C["lead"]}
+    return xr.DataArray(alpha, coords=coords, dims="lead"), xr.DataArray(n, coords=coords, dims="lead")
+
+
+_CAL_MEMO = {}
+
+
+def _validation_scores(X, var, method, mode="auto"):
+    """Required inflation ("coverage") or CRPS-vs-alpha ("crps") of the validation hindcasts (memoized)."""
+    v = VALIDATION
+    key = (var, method, "/".join("%d-%02d" % last_observed(X, w) for w in ("Nino34", "WWV")))
+    if key not in _CAL_MEMO:
+        _, stoch = rolling_hindcasts(X, v["years"], v["train_start"], v["n_month"], ncopy=v["ncopy"], seed=v["seed"], mode=mode)
+        obs = target_obs(stoch[[var]], X)[var]
+        _CAL_MEMO[key] = (stoch, required_inflation(stoch[var], obs) if method == "coverage" else crps_scaled(stoch[var], obs))
+    return _CAL_MEMO[key]
+
+
+def event_inflation(X, year, init, var="Nino34", method=None, mode="auto"):
+    """Cross-validated monthly inflation factors for an event forecast (``event_forecast`` leads).
 
     Factors come from the 7a validation hindcasts verified before XRO's initial month (the month
     before the start); event lead L uses the factor of XRO lead L + 1, and lead -1 (the observed
     initial month) gets 1. Returns a DataArray over event leads (NaN where too few past cases).
     """
-    v = VALIDATION
-    _, stoch = rolling_hindcasts(X, v["years"], v["train_start"], v["n_month"], ncopy=v["ncopy"], seed=v["seed"], mode=mode)
-    r = required_inflation(stoch[var], target_obs(stoch[[var]], X)[var])
+    method = calibration_method(var, method)
+    _, score = _validation_scores(X, var, method, mode)
     issue = pd.Timestamp(*add_months(year, init, -1), 1)
-    alpha, _ = inflation_factors(r, issue, pool=CALIBRATION["pool"], min_samples=CALIBRATION["min_samples"])
+    fn = inflation_factors if method == "coverage" else inflation_factors_crps
+    alpha, _ = fn(score, issue, pool=CALIBRATION["pool"], min_samples=CALIBRATION["min_samples"])
     alpha = alpha.assign_coords(lead=alpha["lead"].values - 1)
     return xr.where(alpha["lead"] < 0, 1.0, alpha)
 
 
-def calibrated_stoch(X, year, init, stoch, mode="auto"):
-    """Stochastic event ensemble with CALIBRATION["vars"] inflated about the ensemble mean (other
-    variables unchanged)."""
+def calibrated_stoch(X, year, init, stoch, method=None, mode="auto"):
+    """Stochastic event ensemble with CALIBRATION["vars"] inflated month by month about the ensemble
+    mean (other variables unchanged). Use ``calibrated_djf`` for DJF-mean ranges."""
     out = stoch.copy()
     for var in CALIBRATION["vars"]:
-        alpha = event_inflation(X, year, init, var, mode=mode).reindex(lead=stoch["lead"])
+        alpha = event_inflation(X, year, init, var, method=method, mode=mode).reindex(lead=stoch["lead"])
         out[var] = inflate(stoch[var], alpha)
-    out.attrs["calibrated_vars"] = ",".join(CALIBRATION["vars"])
+    out.attrs["calibrated_vars"] = ",".join(f"{v}:{calibration_method(v, method)}" for v in CALIBRATION["vars"])
+    return out
+
+
+# DJF-specific calibration: the factor scales the members' DJF means directly
+def djf_cases(stoch, X, ic_month, var="Nino34"):
+    """Validation cases for the DJF mean from initial month ``ic_month`` (Jan-Nov): member DJF means
+    (init, member), observed DJF (init) and the month number when each DJF is fully verified."""
+    init = pd.DatetimeIndex(stoch["init"].values)
+    sel = np.flatnonzero(init.month == ic_month)
+    leads = [12 - ic_month, 13 - ic_month, 14 - ic_month]
+    sub = stoch[[var]].isel(init=sel)
+    ens = sub[var].sel(lead=leads).mean("lead")
+    obs = target_obs(sub, X)[var].sel(lead=leads).mean("lead", skipna=False)
+    verified = _month_number(init[sel]) + leads[-1]
+    return ens, obs, verified
+
+
+def djf_factor(ens, obs, verified, issue, method="coverage", min_samples=None):
+    """DJF inflation factor from the cases verified before ``issue`` (coverage or CRPS objective)."""
+    min_samples = min_samples or CALIBRATION["djf_min_samples"]
+    past = np.flatnonzero((verified < _month_number(pd.Timestamp(issue))[0]) & np.isfinite(obs.values))
+    if past.size < min_samples:
+        return np.nan, int(past.size)
+    e, o = ens.isel(init=past), obs.isel(init=past)
+    if method == "coverage":
+        nominal = (XRO_SETUP["spread"][1] - XRO_SETUP["spread"][0]) / 100
+        return float(np.quantile(required_inflation(e, o).values, nominal)), int(past.size)
+    c = crps_scaled(e, o).mean("init")
+    return float(c["alpha"][int(c.argmin("alpha"))]), int(past.size)
+
+
+def event_djf_inflation(X, year, init, var="Nino34", method=None, mode="auto"):
+    """(alpha, n) for the DJF mean of an event forecast started on 1 ``init`` ``year``."""
+    v = VALIDATION
+    _, stoch = rolling_hindcasts(X, v["years"], v["train_start"], v["n_month"], ncopy=v["ncopy"], seed=v["seed"], mode=mode)
+    ic_year, ic_month = add_months(year, init, -1)
+    ens, obs, verified = djf_cases(stoch, X, ic_month, var)
+    return djf_factor(ens, obs, verified, pd.Timestamp(ic_year, ic_month, 1), calibration_method(var, method))
+
+
+def calibrated_djf(X, year, init, stoch, var="Nino34", method=None, mode="auto"):
+    """Event members' peak-season (DJF) means inflated with the DJF-specific factor; (member) DataArray
+    with attrs alpha and n_cases."""
+    alpha, n = event_djf_inflation(X, year, init, var, method, mode)
+    season = rc.target_mean(stoch[var], EVENTS[year]["peak_season"]["months"])
+    out = season.mean("member") + alpha * (season - season.mean("member"))
+    out.attrs.update(alpha=alpha, n_cases=n, method=calibration_method(var, method))
     return out
 
 
 __all__ = [
-    "VALIDATION", "CALIBRATION", "event_inflation", "calibrated_stoch",
+    "VALIDATION", "CALIBRATION", "ALPHA_GRID", "calibration_method", "event_inflation", "calibrated_stoch", "crps_scaled",
+    "inflation_factors_crps", "djf_cases", "djf_factor", "event_djf_inflation", "calibrated_djf",
     "OBS_SST", "OBS_YEARS", "XRO_SETUP", "EVENTS", "CASES", "OBS_STYLE", "XRO_STYLE", "MONTH_NAMES",
     "SST_BOXES", "WWV_BOX", "XRO_VARS", "LABELS", "SHORT", "UNITS", "quiet_xro", "short", "available_cases",
     "state_vector", "decimal_year", "to_month_start", "add_months", "month_index", "obs_value", "obs_state",
