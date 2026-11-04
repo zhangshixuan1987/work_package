@@ -431,6 +431,16 @@ def obs_product(field, years=OBS_YEARS, product=None):
     return product, obs_field, str(OBS_ARCHIVE_ROOT / pattern)
 
 
+def _source_stamp(pattern):
+    """Latest modification time (s) of an archive product's files; 0 for e3sm_diags series.
+
+    Part of the observation cache keys, so the caches rebuild when a product is extended
+    (e.g. a new month appended to the current year's file).
+    """
+    files = glob.glob(pattern) if pattern else []
+    return int(max(Path(f).stat().st_mtime for f in files)) if files else 0
+
+
 def _archive_preproc(ds, **kwargs):
     """ESP-Lab monthly preprocessing that places each month by its time stamp.
 
@@ -451,7 +461,7 @@ def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto", product
     path = diag_dir("observations", "case_study", FIELDS[field]["realm"], field,
                     f"{product}_{field}_monthly_y{years[0]}-{years[1]}_{GRID_TAG}.nc")
     expected = {"cache_version": OBS_CACHE_VERSION, "product": product, "start_year": years[0],
-                "end_year": years[1], "units": FIELDS[field]["units"]}
+                "end_year": years[1], "units": FIELDS[field]["units"], "source_mtime": _source_stamp(pattern)}
     if mode != "rebuild" and _cache_ok(path, expected):
         return load_netcdf(path)[field]
     if mode == "require":
@@ -474,7 +484,9 @@ def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto", product
     if da.sizes["lat"] != 180 or da.sizes["lon"] != 360:
         src = da.to_dataset(name=field)
         da = make_regridder(src, model_grid(), method="conservative")(src)[field]
-    da = da.drop_vars([c for c in da.coords if c not in ("time", "lat", "lon")])
+    # Load so a fresh build matches a cache read: dask chunks (one year) carried into the lead-drift
+    # climatology are shorter than the ONI rolling window
+    da = da.drop_vars([c for c in da.coords if c not in ("time", "lat", "lon")]).load()
     if field in ("TS", "SICE"):  # SST/sea ice are filled or missing over land; keep ocean points (EAM LANDFRAC < 0.5)
         da = da.where(land_fraction() < 0.5)
     da.attrs = {"units": FIELDS[field]["units"], "long_name": FIELDS[field]["long_name"], "product": product}
@@ -492,11 +504,11 @@ def obs_anomaly(field, years=OBS_YEARS, clim_years=CLIM_YEARS, mode="auto", prod
     selects an ``OBS_ALT_PRODUCTS`` entry instead (e.g. "ERSSTv5" or "ESA_CCI_SST" for TS).
     """
     span = (min(clim_years[0], years[0]), max(clim_years[1], years[1]))
-    product = obs_product(field, span, product)[0]
+    product, _, pattern = obs_product(field, span, product)
     path = diag_dir("observations", "case_study", FIELDS[field]["realm"], field,
                     f"{product}_{field}_anomaly_y{years[0]}-{years[1]}_clim_{clim_years[0]}_{clim_years[1]}_{GRID_TAG}.nc")
     expected = {"cache_version": OBS_CACHE_VERSION, "product": product, "clim_start_year": clim_years[0],
-                "clim_end_year": clim_years[1], "units": FIELDS[field]["units"]}
+                "clim_end_year": clim_years[1], "units": FIELDS[field]["units"], "source_mtime": _source_stamp(pattern)}
     if mode != "rebuild" and _cache_ok(path, expected):
         return load_netcdf(path)[field]
     if mode == "require":

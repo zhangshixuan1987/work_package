@@ -58,16 +58,19 @@ all conservatively regridded to the model 1x1 grid.
 These e3sm_diags time series end in 2022 (HadISST2), 2019 (ERA5) and 2017 (GPCP). For
 later years, such as the 2026 starts, `obs_anomaly(field, years=(2026, 2027))` switches to
 the 1x1 archive products under `/global/cfs/cdirs/e3sm/zhan391/data` (`OBS_ARCHIVE`), which
-then also supply the 1981-2010 climatology: NOAA OISST v2.1 for `TS` (to Sep 2026; Jan-Aug
+then also supply the 1981-2010 climatology: NOAA OISST v2.1 for `TS` (to Oct 2026; Jan-Aug
 climatology 1982-2010), GPCP v2.3 for `PRECT` (to Jun 2026) and NOAA/NSIDC CDR v6 for `SICE`
 (to Sep 2026), and NOAA CDR for `FLUT` (OLR, to Sep 2026). There is no archive product yet for
 `PSL`, `U850`, `Z500`, `T925` or the 200-hPa winds after 2019; `TREFHT` over land comes from
 ERA5-Land (`product="ERA5_Land"`, to Sep 2026).
 
+The observation caches record the latest modification time of the archive files, so
+`derivation_mode = "auto"` rebuilds them after a product is extended (no manual cleanup needed).
+
 Alternative products are picked by name with `obs_anomaly(field, product=...)` from
 `OBS_ALT_PRODUCTS`: for `TS`, `HadISST1.1` (`data/HadSST`, 1870 on), `OISSTv2.1`, `ERSSTv5`
 (1854 on) and `ESA_CCI_SST` (ESA CCI SST v3.0, 1980 on), each with its own 1981-2010
-climatology. `1_enso_plume.ipynb` plots HadISST 1.1, ERSSTv5 and ESA CCI SST and keeps
+climatology. `1_enso_plume.ipynb` plots HadISST 1.1, ERSSTv5, ESA CCI SST and NOAA OISST v2.1 and keeps
 HadISST 1.1 as the reference for errors. ERA5-Land has no ocean
 points, so it gives no Nino index.
 
@@ -77,7 +80,7 @@ points, so it gives no Nino index.
 | --- | --- |
 | `util/rtenso_case.py` | Shared helpers, imported by every notebook as `from util import rtenso_case as rc`: case registry, hindcast loading, lead-time climatologies, observation products and anomalies, pattern ACC/RMSE, regions, velocity potential, output paths. |
 | `build_caches.py` | Build the Reanalysis lead-time climatologies and observation caches ahead of the notebooks (`python build_caches.py [FIELD ...] [--mode rebuild]`). |
-| `1_enso_plume.ipynb` | Nino3.4/3/4/1+2/ONI forecast plumes per start against HadISST 1.1, ERSSTv5 and ESA CCI SST with the observed peak period shaded, peak-season summary, ensemble-mean error and spread (after 3a), and a map of the Nino regions. |
+| `1_enso_plume.ipynb` | Nino3.4/3/4/1+2/ONI forecast plumes per start against HadISST 1.1, ERSSTv5, ESA CCI SST and NOAA OISST v2.1 with the observed peak period shaded, peak-season summary, ensemble-mean error and spread (after 3a), and a map of the Nino regions. |
 | `2_anomaly_maps_acc.ipynb` | Peak-season (DJF) anomaly maps from every start, and spatial pattern ACC and RMSE by lead season and region, per member and ensemble mean (after 1a/1b); only fully observed seasons are scored. Set `FIELD` to `TS`, `PRECT` (both events), `TREFHT`, `PSL` or `U850` (2015 only). |
 | `3_ic_sensitivity.ipynb` | `Reanalysis-CLIM` vs `Reanalysis-OBS` vs `Reanalysis-FOSIRL` differences: land-mean differences with member-based intervals, fraction of land with significant differences by lead, stippled difference maps, and hemispheric sea-ice area against HadISST2. |
 | `4_teleconnections.ipynb` | Peak-season teleconnections of `PRECT`/`TREFHT`/`PSL` per degC of Nino3.4 against the observed event and the 1982-2010 observed regression, an inter-member regression, and CPC-style equatorial Hovmollers of SST, U850, OLR and 200-hPa velocity potential (`rc.velocity_potential`) (after 3b). |
@@ -89,6 +92,7 @@ points, so it gives no Nino index.
 | `7b_xro_events.ipynb` | XRO forecasts of the 2015/16 and 2026/27 events from the months before each start: Nino3.4 and *h* plumes, peak-season summary, peak-season Nino3.4 sensitivity to each initial-state component (removal experiments, with the non-additive remainder shown), and to the initial *h* alone. |
 | `7c_e3sm_xro_state.ipynb` | E3SM hindcasts in the XRO state space against observations and XRO: state-vector plumes (common 5-95% ranges), error decomposition into the start-month error B(0) and the error accumulated afterwards G(L) = B(L) - B(0), summary heat maps, growth of Nino3.4 and *h* from the start month, peak-season summary. |
 | `7d_e3sm_recharge.ipynb` | *T*-*h* phase planes, and XRO started from E3SM's start-month offsets (*h* only, and the full state) to test whether the E3SM-XRO peak difference comes from the initial state or from E3SM's evolution. |
+| `8_enso2026_animation.ipynb` | Animated month-by-month evolution of the 2026/27 El Nino: global maps (Robinson; `DOMAIN` for a regional box) of SST (OISST v2.1), 0-700 m heat content (EN4.2.2), precipitation (GPCP v2.3) and land 2-m air temperature (ERA5-Land) anomalies, observed and the pooled (`clim`/`obs`/`NSIDC`) ensemble mean of each 2026 start, above a Nino3.4 plume drawn up to the frame month, with the deterministic XRO forecast from each start (7b control setup) as a dashed reference. Saves a GIF and a video per field (H.264 MP4 if ffmpeg has libx264, e.g. via `imageio-ffmpeg`; else VP9 WebM) and a static storyboard of selected months; the pooled ensemble means are cached under `data/`. |
 
 ## Running
 
@@ -128,6 +132,7 @@ Outputs:
     7b_xro_events/{figures,data}/         data: XRO event forecasts (netCDF), peak and sensitivity CSVs
     7c_e3sm_xro_state/{figures,data}/     data: start-month and evolution error CSVs, peak summary
     7d_e3sm_recharge/{figures,data}/      data: matched-initial-state CSV
+    8_enso2026_animation/{figures,data}/  figures: GIF/video animations and storyboards; data: pooled ensemble-mean caches
   ```
 - Reusable caches stay outside it: `$S2D_DIAG_ROOT/Reanalysis/leadtime_clim/` and
   `$S2D_DIAG_ROOT/observations/case_study/` (`S2D_DIAG_ROOT` defaults to
