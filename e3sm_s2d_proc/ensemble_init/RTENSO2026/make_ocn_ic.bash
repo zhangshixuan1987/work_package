@@ -41,8 +41,9 @@ set -o pipefail
 
 # ---------------------------- USER SETTINGS ----------------------------------
 out_root="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions"
-dates=(2015-02-01 2015-05-01 2015-08-01 2015-11-01
-       2026-02-01 2026-05-01 2026-08-01)
+#dates=(2015-02-01 2015-05-01 2015-08-01 2015-11-01
+#       2026-02-01 2026-05-01 2026-08-01)
+dates=(2026-11-01)
 out_subdir="ocn"                      # written to <out_root>/YYYYMMDD/<out_subdir>/
 
 # Ocean analysis, named by calendar date (YYYYMMDD).
