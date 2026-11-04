@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import glob
 from datetime import timedelta
+from functools import lru_cache
 from pathlib import Path
 
 import cftime
@@ -94,17 +95,23 @@ FIELDS = {
     "TWS": {"realm": "lnd", "obs": None, "scale": 1.0, "offset": 0.0, "units": "mm", "long_name": "Terrestrial water storage"},
     "TSA": {"realm": "lnd", "obs": None, "scale": 1.0, "offset": -273.15, "units": "degC", "long_name": "Land 2-m air temperature"},
     "SICE": {"realm": "ice", "var": "timeMonthly_avg_iceAreaCell", "obs": ("HadISST2", "sic"), "scale": 1.0, "offset": 0.0, "units": "fraction", "long_name": "Sea-ice concentration"},
+    # MPAS-O writes the 0-700 m heat content per native cell (J); "per_native_cell" divides it by the
+    # native cell area remapped to the 1x1 grid (mpas_cell_area) to give J m-2, as EN4.
+    "OHC700": {"realm": "ocn", "var": "timeMonthly_avg_oceanHeatContentSfcTo700m", "per_native_cell": True,
+               "obs": ("EN4.2.2", "OHC700"), "scale": 1e-9, "offset": 0.0, "units": "GJ/m2",
+               "long_name": "0-700 m ocean heat content"},
 }
 
 # Last year of each e3sm_diags obs time series. Past it, obs_product() switches to the
 # archive products below (one file per year on the 1x1 grid, updated to the latest month).
-OBS_LAST_YEAR = {"HadISST2": 2022, "ERA5": 2019, "GPCP_v2.3": 2017}
+OBS_LAST_YEAR = {"HadISST2": 2022, "ERA5": 2019, "GPCP_v2.3": 2017, "EN4.2.2": 0}   # EN4: archive only
 OBS_ARCHIVE_ROOT = Path("/global/cfs/cdirs/e3sm/zhan391/data")
 OBS_ARCHIVE = {
     "TS": ("OISSTv2.1", "NOAA_OISST/1x1/monthly/SST.monthly.*.nc", "SST"),       # 1981-09 on, degC
     "PRECT": ("GPCP_v2.3", "GPCPv2.3/1x1/monthly/PRECT.monthly.*.nc", "PRECT"),   # mm/day
     "SICE": ("NSIDCv6", "NOAA_NSIDC/1x1/monthly/ICEFRAC.monthly.*.nc", "ICEFRAC"),  # fraction
     "FLUT": ("NOAA_CDR_OLR", "NOAA_CDR/1x1/monthly/FLUT.monthly.*.nc", "FLUT"),     # 1979 on, W m-2
+    "OHC700": ("EN4.2.2", "ENv4.2.2/1x1/monthly/OHC700.monthly.*.nc", "OHC700"),   # 1979 on, J m-2
 }
 # Alternative archive products, selected with obs_anomaly(field, product=...).
 OBS_ALT_PRODUCTS = {
@@ -197,6 +204,24 @@ def _to_display_units(da, field):
     return out
 
 
+@lru_cache(maxsize=4)
+def mpas_cell_area(map_file):
+    """Native MPAS cell area (m2) averaged onto the 1x1 grid with the file's own remap weights.
+
+    An extensive per-cell field (e.g. heat content in J) remapped with "aave" is the area-weighted
+    mean of native-cell totals, so dividing it by this mean native area gives a per-m2 value.
+    """
+    with xr.open_dataset(map_file) as m:
+        row, col, S = m["row"].values - 1, m["col"].values - 1, m["S"].values
+        area_a, frac_b = m["area_a"].values, m["frac_b"].values
+        nlat, nlon = (int(n) for n in m["dst_grid_dims"].values[::-1])
+    total = np.bincount(row, weights=S * area_a[col], minlength=frac_b.size)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = np.where(frac_b > 0, total / frac_b, np.nan) * EARTH_RADIUS**2
+    grid = model_grid()
+    return xr.DataArray(mean.reshape(nlat, nlon), coords={"lat": grid["lat"], "lon": grid["lon"]}, dims=("lat", "lon"))
+
+
 def open_member(case_prefix, year, init_month, member, field, nlead=NLEAD):
     """One member's monthly series as (lead, lat, lon) in display units, or None."""
     path = member_file(case_prefix, year, init_month, member, field)
@@ -220,6 +245,8 @@ def open_member(case_prefix, year, init_month, member, field, nlead=NLEAD):
         if "plev" in da.dims:
             da = da.sel(plev=info["plev"])
         da = da.load()
+        if info.get("per_native_cell"):
+            da = da / mpas_cell_area(ds.attrs["map_file"]).values
     da = da.rename(time="lead").assign_coords(lead=np.arange(nlead))
     return _to_display_units(da.drop_vars([c for c in da.coords if c not in ("lead", "lat", "lon")]), field)
 
@@ -492,6 +519,8 @@ def _obs_to_display_units(da, field):
         da = da - 273.15
     elif field == "PSL" and units in ("pa",):
         da = da / 100.0
+    elif field == "OHC700" and units in ("j m-2", "j/m2", "j m**-2"):
+        da = da * FIELDS[field]["scale"]
     elif field == "SICE" and (units in ("%", "percent") or float(da.max()) > 1.5):
         da = da / 100.0  # HadISST2 sic is in percent although its units say "Fraction"
     da.attrs["units"] = FIELDS[field]["units"]

@@ -83,6 +83,12 @@ points, so it gives no Nino index.
 | `4_teleconnections.ipynb` | Peak-season teleconnections of `PRECT`/`TREFHT`/`PSL` per degC of Nino3.4 against the observed event and the 1982-2010 observed regression, an inter-member regression, and CPC-style equatorial Hovmollers of SST, U850, OLR and 200-hPa velocity potential (`rc.velocity_potential`) (after 3b). |
 | `5_npac_namerica.ipynb` | CPC-style North Pacific / North America maps (120E-60W, 20-70N) for Nov-Feb: 500-hPa height and anomaly, 200-hPa wind, 925-hPa temperature anomaly, observed (ERA5, through 2019) and each case's ensemble mean. |
 | `6_us_temp_precip.ipynb` | CPC-style U.S. maps: 1- and 3-month percent of average precipitation and temperature departures, and a tercile-probability seasonal outlook (NDJ) from the pooled members with the observed category. |
+| `util/xro_case.py` | XRO state vector (Nino3.4, recharge *h*, NPMM, SPMM, IOB, IOD, SIOD, TNA, ATL3, SASD boxes) and the configuration shared by the 7a-7d notebooks (`EVENTS`, `CASES`, `XRO_SETUP`); cached observed and hindcast state vectors, training-period trend, XRO fit, event forecasts aligned with the hindcast starts, initial-state sensitivity experiments and out-of-sample rolling hindcasts. |
+| `util/pubfig.py` | Publication figure style for 7a-7d: figures drawn at journal column width (3.5/7.2 in) with 7-9 pt text, saved as vector PDF (embedded fonts) and 600-dpi PNG. |
+| `7a_xro_validation.ipynb` | XRO (Zhao et al. 2024) validated against observations only: training-period trends (linear vs quadratic *h*), fitted recharge-oscillator growth rate and period, stochastic simulations against observed seasonal synchronization, *h*-*T* lag correlation and persistence, out-of-sample skill (refit every year 1995-2025) by lead and initial month against persistence, DJF amplitude (does XRO underpredict strong El Ninos?), and calibration of the stochastic ensemble. |
+| `7b_xro_events.ipynb` | XRO forecasts of the 2015/16 and 2026/27 events from the months before each start: Nino3.4 and *h* plumes, peak-season summary, peak-season Nino3.4 sensitivity to each initial-state component (removal experiments, with the non-additive remainder shown), and to the initial *h* alone. |
+| `7c_e3sm_xro_state.ipynb` | E3SM hindcasts in the XRO state space against observations and XRO: state-vector plumes (common 5-95% ranges), error decomposition into the start-month error B(0) and the error accumulated afterwards G(L) = B(L) - B(0), summary heat maps, growth of Nino3.4 and *h* from the start month, peak-season summary. |
+| `7d_e3sm_recharge.ipynb` | *T*-*h* phase planes, and XRO started from E3SM's start-month offsets (*h* only, and the full state) to test whether the E3SM-XRO peak difference comes from the initial state or from E3SM's evolution. |
 
 ## Running
 
@@ -118,10 +124,29 @@ Outputs:
     4_teleconnections/{figures,data}/     data: teleconnection ACC CSV
     5_npac_namerica/figures/
     6_us_temp_precip/figures/
+    7a_xro_validation/{figures,data}/     data: RO parameters, skill, DJF amplitude and calibration CSVs
+    7b_xro_events/{figures,data}/         data: XRO event forecasts (netCDF), peak and sensitivity CSVs
+    7c_e3sm_xro_state/{figures,data}/     data: start-month and evolution error CSVs, peak summary
+    7d_e3sm_recharge/{figures,data}/      data: matched-initial-state CSV
   ```
 - Reusable caches stay outside it: `$S2D_DIAG_ROOT/Reanalysis/leadtime_clim/` and
   `$S2D_DIAG_ROOT/observations/case_study/` (`S2D_DIAG_ROOT` defaults to
   `/global/cfs/cdirs/e3sm/S2S2D/s2d_diag`).
+
+## XRO recharge proxy (`OHC700`)
+
+The hindcasts save no subsurface temperature, so the 7a-7d notebooks use the 5S-5N, 120E-80W
+mean 0-700 m heat content anomaly as the recharge *h* (instead of the 20 C isotherm depth).
+MPAS-O writes `oceanHeatContentSfcTo700m` per native cell (J, integrated with T in K);
+`rc.open_member` divides it by the native cell area remapped with the file's own `map_file`
+weights (`rc.mpas_cell_area`), giving GJ m-2. Observations are EN4.2.2 OHC700
+(`data/ENv4.2.2/1x1`, 1979 to Jul 2026). Anomalies remove the 1981-2010 climatology as for
+the other fields; the constant offset between K- and C-based integrals cancels at fixed depth
+(if MPAS integrates from the moving sea surface, sea-level anomalies add about 0.1 GJ m-2 per
+0.1 m in phase with recharge; not yet checked). The XRO state vectors and rolling hindcasts are
+cached under `$S2D_DIAG_ROOT/observations/xro/` and `$S2D_DIAG_ROOT/<source>/xro_state/`; rerun
+with `derivation_mode = "rebuild"` after new observations are added. The XRO
+package (`pip install XRO`, examples in `~/code/XRO`) must be installed in `e3sm_analysis`.
 
 Land and sea-ice diagnostics in `3_ic_sensitivity.ipynb` need the RTENSO2026 `lnd_mon1`
 and `ice_mon1` post-processing; cases not yet processed are skipped.
