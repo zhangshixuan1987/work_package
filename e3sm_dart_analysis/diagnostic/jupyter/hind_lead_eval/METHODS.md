@@ -165,6 +165,16 @@ Z500, T850) in the daily stream would give true model daily means at little cost
 
 ## 8. Limitations
 
+* **Incomplete ERA5 initial atmosphere (HYB_BASE, DA_LND): their results are not valid as they stand.** The
+  ERA5 file `DART_INIT/ATM/v3.LR.ne30pg2.ERA5.eam.i.<date>.nc`, and the `HYB_DARTPERT20` files built from it,
+  hold 13 variables (U, V, T, Q, PS, CLDLIQ, CLDICE and coordinates) against 129 in the DART and FREE_CLIM
+  files: no ozone, no linoz gases (H2OLNZ, CH4LNZ, N2OLNZ), no chemistry, no aerosols, no sea-ice surface
+  fields. EAM starts these near zero. Global clear-sky downward longwave at the surface (FLDSC) is then
+  94 W m-2 on day 1 against 318 in DA_ATM, recovers only over about 8 weeks, and the lower stratosphere
+  (50 hPa) cools by 11 K. Over land TREFHT is 6-7 K too cold for 2-4 weeks in both seasons (water vapour
+  is normal; the ocean is held by the prescribed SST). Contrasts with HYB_BASE or DA_LND, including
+  notebook 05's atmosphere benefit E10 - E00, mostly measure this defect, not the initialization.
+  Found 2026-11-06; these two configurations need complete initial files and new runs.
 * **Drift**: not removed by either bias treatment (section 5); week 1-2 comparisons between configurations
   include it.
 * **Verifying analysis**: ERA5 also provides the initial atmosphere of HYB_BASE and DA_LND, which favours them
