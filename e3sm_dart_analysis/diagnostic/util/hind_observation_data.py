@@ -1,14 +1,18 @@
 """Reference fields for the 2012-2013 AMIP hindcasts (``hind_*`` workflows).
 
-Observations are read from one root, ``OBSERVATION_ROOT`` (a notebook
-parameter), by default the reference-data archive
-``/global/cfs/cdirs/e3sm/zhan391/data``:
+Observations are read below one root, ``observation_root``, a required argument set
+by each notebook (``OBSERVATION_ROOT``), since the archive's location depends on the
+machine (on Perlmutter ``/global/cfs/cdirs/e3sm/zhan391/data``). This module holds
+only paths relative to that root:
 
-* ``ERA5/1x1/6hourly/ERA5.6hourly.en00.<VAR>.<YYYY>01-<YYYY>12.nc`` (1979-2019;
-  U850, U200, PSL, ...), averaged to 00Z-00Z days;
-* ``obs_for_e3sm_diags/time-series/<product>/<var>_<YYYYMM>_<YYYYMM>.nc``
-  (the E3SM Diags time series: NOAA OLR and IMERG daily; ERA5, ERA-Interim and
-  NOAA-20C monthly).
+* ``ERA5/1x1/daily/ERA5.daily.en00.<VAR>.<YYYY>01-<YYYY>12.nc`` (1979-2026; daily
+  means of the 6-hourly archive: U850, U200, PSL, ...);
+* ``NOAA_CDR/1x1/daily/FLUT.daily.<YYYY>.nc`` (NOAA OLR CDR, 1979-2025);
+* ``GPCPv3.3/1x1/daily/PRECT.daily.<YYYY>.nc`` (GPCP V3.3, 1998-2025, mm/day) and
+  ``NASA_GPM/1x1/daily/PRECT.daily.<YYYY>.nc`` (IMERG, 2001-2020, m/s);
+* ``obs_for_e3sm_diags/time-series/<product>/<var>_<YYYYMM>_<YYYYMM>.nc`` only for
+  the monthly ERA5, ERA-Interim and NOAA-20C reanalyses (E3SM Diags time series).
+  Its 1-degree GPCP daily file has its latitudes reversed and is not used.
 
 ``REFERENCES`` lists, per product and variable, candidate paths relative to
 the root in search order; the first that exists is read (a warning reports
@@ -29,21 +33,23 @@ import xarray as xr
 
 from util.hind_model_data import daily_label, monthly_label, pressure_in_pa, standardize_latlon
 
-DEFAULT_OBSERVATION_ROOT = Path("/global/cfs/cdirs/e3sm/zhan391/data")
 _TS = "obs_for_e3sm_diags/time-series"
 
 # (product, variable) -> [(glob relative to OBSERVATION_ROOT, variable in file), ...] in search order
 REFERENCES = {
-    ("NOAA_OLR", "FLUT"): [(f"{_TS}/NOAA-OLR_Daily/FLUT_*.nc", "FLUT"),
+    ("NOAA_OLR", "FLUT"): [("NOAA_CDR/1x1/daily/FLUT.daily.*.nc", "FLUT"),
                            ("NOAA_IOLR/daily/FLUT.daily.*.nc", "FLUT")],
-    ("IMERG", "PRECT"): [(f"{_TS}/IMERG_Daily/PRECT_*.nc", "PRECT"),
+    ("GPCP", "PRECT"): [("GPCPv3.3/1x1/daily/PRECT.daily.*.nc", "PRECT"),
+                        ("GPCP/daily/PRECT.daily.*.nc", "PRECT")],
+    ("IMERG", "PRECT"): [("NASA_GPM/1x1/daily/PRECT.daily.*.nc", "PRECT"),
                          ("NASA_GPM/daily/PRECT.daily.*.nc", "PRECT"),
                          ("IMERG/daily/PRECT.daily.*.nc", "PRECT")],
     ("NOAA20C", "psl"): [(f"{_TS}/NOAA-20C/psl_*.nc", "psl")],
 }
-# ERA5 daily from the 6-hourly 1-degree archive (one source for all variables)
+# ERA5 daily means (one source for all variables): the daily archive, else the 6-hourly one averaged here
 for _var in ("U850", "U200", "V850", "V200", "PSL"):
-    REFERENCES[("ERA5_DAILY", _var)] = [(f"ERA5/1x1/6hourly/ERA5.6hourly.en00.{_var}.*.nc", _var),
+    REFERENCES[("ERA5_DAILY", _var)] = [(f"ERA5/1x1/daily/ERA5.daily.en00.{_var}.*.nc", _var),
+                                        (f"ERA5/1x1/6hourly/ERA5.6hourly.en00.{_var}.*.nc", _var),
                                         (f"ERA5/daily/{_var}_*.nc", _var),
                                         (f"ERA5/6hourly/ERA5.6hourly.en00.{_var}.*.nc", _var)]
 for _var in ("ua", "ta", "zg", "va", "psl"):
@@ -83,7 +89,7 @@ def _open(files, chunks):
                              data_vars="minimal", coords="minimal", compat="override")
 
 
-def reference_files(product: str, variable: str, *, observation_root=DEFAULT_OBSERVATION_ROOT,
+def reference_files(product: str, variable: str, *, observation_root,
                     start: str | None = None, end: str | None = None) -> tuple[list[Path], str]:
     """Files (those overlapping start..end) and in-file variable name of the first candidate that exists."""
     key = (product, variable)
@@ -100,7 +106,7 @@ def reference_files(product: str, variable: str, *, observation_root=DEFAULT_OBS
 
 
 def open_reference_daily(product: str, variable: str, *, start: str, end: str,
-                         observation_root=DEFAULT_OBSERVATION_ROOT, lat_range=None,
+                         observation_root, lat_range=None,
                          chunks=None) -> xr.DataArray:
     """Daily reference (time, lat, lon) labelled by the 00Z start of each day.
 
@@ -135,7 +141,7 @@ def open_reference_daily(product: str, variable: str, *, start: str, end: str,
 
 
 def open_reference_monthly(product: str, variable: str, *, start: str, end: str,
-                           observation_root=DEFAULT_OBSERVATION_ROOT, chunks=None) -> xr.DataArray:
+                           observation_root, chunks=None) -> xr.DataArray:
     """Monthly reference labelled ``YYYY-MM-16`` (noleap), pressure in Pa.
 
     Opened lazily; select levels and latitudes before computing (the ERA5

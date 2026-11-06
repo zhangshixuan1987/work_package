@@ -35,7 +35,6 @@ from configs.hind_experiment_config import (
 )
 from util.hind_model_data import open_model_monthly, select_plev
 from util.hind_observation_data import (
-    DEFAULT_OBSERVATION_ROOT,
     REANALYSES,
     open_reference_monthly,
 )
@@ -183,7 +182,7 @@ def open_qbo_input(
     variable: str,
     *,
     data_root=DEFAULT_INPUT_DATA_ROOT,
-    observation_root=DEFAULT_OBSERVATION_ROOT,
+    observation_root,
     start: str = START_DATE,
     end: str = END_DATE,
     plev_pa=MODEL_PLEV_PA,

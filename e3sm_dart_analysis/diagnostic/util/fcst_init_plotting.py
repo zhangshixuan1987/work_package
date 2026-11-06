@@ -74,6 +74,36 @@ def plot_weekly_regional(table: pd.DataFrame, variables, *, region: str = "GLOBA
     return fig
 
 
+def plot_bias_impact(table: pd.DataFrame, variables, *, region: str = "GLOBAL", season: str,
+                     biases=("none", "amip"), metrics=("pattern_acc", "msss")) -> plt.Figure:
+    """Weekly score under ``biases[1]`` minus ``biases[0]`` per configuration (long table with a
+    ``bias`` column). With ("none", "amip"): positive = skill gained by removing the AMIP mean
+    bias (the cost of the model bias, once the forecast has drifted to the model climate);
+    negative in the first weeks, when the forecast is still near the observed state."""
+    t = table[(table.region == region) & (table.season == season)]
+    wide = t.pivot_table(index=["variable", "config", "week"], columns="bias", values=list(metrics), sort=False)
+    variables = [v for v in variables if v in set(t.variable)]
+    fig, axes = plt.subplots(len(variables), len(metrics), figsize=(4.8 * len(metrics), 2.8 * len(variables)),
+                             squeeze=False, constrained_layout=True)
+    k = 0
+    for i, v in enumerate(variables):
+        for j, m in enumerate(metrics):
+            ax = axes[i, j]
+            if (m, biases[0]) in wide.columns and (m, biases[1]) in wide.columns and v in wide.index.get_level_values(0):
+                d = (wide[m, biases[1]] - wide[m, biases[0]]).loc[v]
+                for c in d.index.get_level_values("config").unique():
+                    g = d.loc[c]
+                    ax.plot(g.index, g.values, marker="o", label=c, **_style(c))
+            ax.axhline(0, color="k", linewidth=0.6)
+            ax.set_xticks(range(1, 9))
+            ax.set_title(f"({_LETTERS[k]}) {v} Δ{m} ({biases[1]} − {biases[0]})", loc="left", fontsize=9)
+            ax.set_xlabel("Lead week")
+            k += 1
+    axes[0, 0].legend(frameon=False, fontsize=8)
+    fig.suptitle(f"{season}: effect of removing the model mean bias, {region}")
+    return fig
+
+
 def _map_axes(nrows, ncols, width=4.2, height=2.3):
     import cartopy.crs as ccrs
 

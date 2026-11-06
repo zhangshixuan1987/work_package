@@ -72,7 +72,7 @@ Initial-land diagnostics follow the same notebook-driver layout:
 4. Forecast-start products share `util/initial_lnd_file_collection.py`.
 5. See `jupyter/README.md` for the per-notebook list and the `util/` module behind each.
 6. `configs/initial_land_experiment_config.py`, `configs/initial_land_experiment_registry.py`, and `configs/initial_land_observation_registry.py` store paths and experiment/observation definitions.
-7. `util/initial_lnd_model_data.py`, `util/initial_lnd_observation_data.py`, `util/initial_lnd_restart_aggregation.py`, and `util/initial_lnd_restart_regridding.py` hold reusable processing.
+7. `util/initial_lnd_model_data.py`, `util/initial_lnd_restart_aggregation.py`, and `util/initial_lnd_restart_regridding.py` hold reusable processing.
 8. `script/run_process_land_rest.bash` drives the complete batch workflow; `script/initial_land/aggregate_restart.py` and `script/initial_land/regrid_restart.py` expose its individual stages.
 9. Regrid reference grids and map files are expected under `/compyfs/zhan391/acme_init/map_file/` by default (`REGRID_MAP_DIR`, `configs/input_paths.py`).
 10. Initial-land support files such as `dzsoi_elm.nc` and `landmask_1x1.nc` live in `/compyfs/zhan391/acme_init/lnd_sea_mask/` (`LAND_SUPPORT_DIR`) and are generated there when missing; observations are read from `/compyfs/zhan391/acme_init/Observations/` (`OBSERVATION_ROOT`).

@@ -38,17 +38,34 @@ from configs.hind_experiment_config import (
 )
 from util.hind_model_data import open_model_daily
 from util.hind_observation_data import (
-    DEFAULT_OBSERVATION_ROOT,
     open_reference_daily,
 )
 
-# variable -> (reference product, unit scale applied to model and reference)
+# variable -> reference product and common units (model and reference are converted from their own units)
 MJO_FIELDS = {
-    "FLUT": dict(product="NOAA_OLR", scale=1.0, units="W m-2", label="OLR"),
-    "PRECT": dict(product="IMERG", scale=86400.0 * 1000.0, units="mm day-1", label="PRECT"),
-    "U850": dict(product="ERA5_DAILY", scale=1.0, units="m s-1", label="U850"),
-    "U200": dict(product="ERA5_DAILY", scale=1.0, units="m s-1", label="U200"),
+    "FLUT": dict(product="NOAA_OLR", units="W m-2", label="OLR"),
+    "PRECT": dict(product="GPCP", units="mm day-1", label="PRECT"),
+    "U850": dict(product="ERA5_DAILY", units="m s-1", label="U850"),
+    "U200": dict(product="ERA5_DAILY", units="m s-1", label="U200"),
 }
+
+# factor from a file's units to the common units of MJO_FIELDS
+_UNIT_FACTORS = {
+    "mm day-1": {"m/s": 86400.0e3, "m s-1": 86400.0e3, "kg m-2 s-1": 86400.0, "kg/m2/s": 86400.0,
+                 "mm/day": 1.0, "mm day-1": 1.0, "mm/d": 1.0},
+    "W m-2": {"W m-2": 1.0, "W/m2": 1.0, "W/m^2": 1.0, "W m**-2": 1.0},
+    "m s-1": {"m s-1": 1.0, "m/s": 1.0, "m s**-1": 1.0},
+}
+
+
+def to_common_units(da: xr.DataArray, variable: str) -> xr.DataArray:
+    """``da`` converted from its ``units`` attribute to the common units of ``MJO_FIELDS``."""
+    target = MJO_FIELDS[variable]["units"]
+    units = str(da.attrs.get("units", "")).strip()
+    factor = _UNIT_FACTORS[target].get(units)
+    if factor is None:
+        raise ValueError(f"{variable}: cannot convert units {units!r} to {target!r}")
+    return (da * factor).assign_attrs(units=target) if factor != 1.0 else da.assign_attrs(units=target)
 
 
 @dataclass(frozen=True)
@@ -163,7 +180,7 @@ def open_mjo_input(
     variable: str,
     *,
     data_root=DEFAULT_INPUT_DATA_ROOT,
-    observation_root=DEFAULT_OBSERVATION_ROOT,
+    observation_root,
     start: str = START_DATE,
     end: str = END_DATE,
     lat_range=None,
@@ -176,7 +193,7 @@ def open_mjo_input(
     else:
         check_experiments([source])
         da = open_model_daily(source, variable, data_root=data_root, start=start, end=end)
-    return (da * meta["scale"]).assign_attrs(units=meta["units"])
+    return to_common_units(da, variable)
 
 
 # ---------------------------------------------------------------------------
