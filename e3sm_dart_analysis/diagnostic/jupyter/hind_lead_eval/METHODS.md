@@ -1,6 +1,6 @@
 # `hind_lead_eval`: data and methods
 
-How the five notebooks turn the F20TR initialization hindcasts and the observations into skill scores,
+How the six notebooks turn the F20TR initialization hindcasts and the observations into skill scores,
 and why each choice was made. Code: `util/fcst_init_data.py` (fields and climatologies),
 `util/fcst_init_skill.py` (scores), `util/fcst_init_plotting.py` (figures),
 `configs/fcst_init_experiment_config.py` (experiments), `util/init_benefit.py` (notebook 05). Last revised 2026-11-06.
@@ -134,6 +134,7 @@ overlapping days, so it leaks their observed anomalies into the forecast.
 | 03 land | lead-day scores over land; weekly skill as in 02 for both bias treatments; soil-moisture memory (week-1 with week-w soil moisture) and SM-TSA, SM-LHFLX coupling, correlations over the 80 member-starts of a season (departures from the ensemble mean, so independent of the climatology). |
 | 04 MJO | RMM index of each member (section 7); bivariate COR and RMSE of the ensemble mean by lead (Rashid et al. 2011), spread, amplitude error, lead-window skill. |
 | 05 initialization benefits | 2 x 2 roles (atmosphere, land DART-initialized: E00 HYB_BASE, E10 DA_ATM, E11 DA_COUPLED; E01 not run): pattern ACC of TREFHT over 30-60N land and the contrasts E10-E00 (atmosphere) and E11-E10 (land), weekly and on 7-day running means, both bias treatments; paired bootstrap over starts and members; panel against a held-out E11 member. Incremental benefits of DART over the reference initialization, not total component contributions. |
+| 06 heat wave 2012 | case study of the central U.S. heat wave (35-45N, 105-85W land; May starts): event from ERA5 daily-mean TREFHT above its calendar-day 90th percentile (2001-2014, +-7 days) for 3+ days (27 Jun-7 Jul 2012, peak 4 Jul, +5.1 K); coverage (leads 28-53); regional series of all members; member metrics (event-mean and peak anomaly, peak-date error, exceedance days, longest run, accumulated exceedance, area fraction, event precipitation), both bias treatments; maps. Organized as Q1 (HYB_BASE, DA_COUPLED vs CLIM_BASE), Q2 (DA_COUPLED vs HYB_BASE), Q3 (DA_ATM, DA_LND). |
 
 ## 7. MJO: winds for the RMM index
 
@@ -182,6 +183,11 @@ Z500, T850) in the daily stream would give true model daily means at little cost
 * **Significance**: the t-test treats the 8 starts as independent, but starts 5 days apart verify on
   overlapping periods, so significance is overstated. Lead with gridpoint ACC within a season and ΔACC.
 * **00Z fields**: verified at 00Z only (no model daily means), with all-hours climatologies (section 4).
+* **HYB_BASE and DA_LND initial atmosphere (found 2026-11-06)**: the ERA5 file `v3.LR.ne30pg2.ERA5.eam.i.<date>`
+  held only T, U, V, Q, PS, CLDLIQ, CLDICE; the radiation reads H2OLNZ, O3, N2OLNZ and CH4LNZ (`rad_climate`), so
+  these runs started radiatively dry without ozone (day 1: -190 W m-2 downward longwave, -250 DU ozone against
+  DA_ATM) and are 6-7 K too cold over land into week 3. Their scores, and every contrast with them, are invalid
+  until they are rerun from the completed files (`ensemble_perturbations/complete_era5_initial_states.ipynb`).
 * **DA_COUPLED**: started from the DART case, so its sea-ice state also differs (polar only; section 1).
 * **Precipitation**: GPCP V3.3 is built from IMERG V07B within 55N-55S, so it is not independent of IMERG
   there.
@@ -189,7 +195,7 @@ Z500, T850) in the daily stream would give true model daily means at little cost
 ## 9. Outputs and caches
 
 Under `DIAGNOSTIC_OUTPUT_ROOT/{data,figure}/hind_lead_eval/`: `lead_skill/` (01), `s2s_weekly/` (02),
-`land/` (03), `mjo/` (04), `init_benefit/` (05). Climatologies and anomalies are cached and reused unless `FORCE_COMPUTE`; a cached
+`land/` (03), `mjo/` (04), `init_benefit/` (05), `heatwave_2012/` (06). Climatologies and anomalies are cached and reused unless `FORCE_COMPUTE`; a cached
 observed climatology is reused only if it was built from monthly means of the daily series for the current
 `CLIM_YEARS`, and an anomaly file only if its `bias` and `clim_years` attributes match. Results built from the
 observations used before 2026-11-05 were moved to `data/_stale_obs_20261105/`.
