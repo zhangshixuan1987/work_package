@@ -13,11 +13,14 @@ Weekly S2S verification follows the protocol of the ESP-Lab ``s2s_skill`` notebo
 one-sided t-test are ported from there):
 
 * weeks 1-8 are non-overlapping 7-day blocks of lead days 1-7, ..., 50-56;
-* anomalies are taken from the reference calendar-day climatology on the verification
-  days. A season has only 4 start dates, too few for the hindcast's own lead-dependent
-  climatology, so the lead-dependent drift is removed instead with ``bias="loo"``: the
-  ensemble-mean error of each lead week averaged over the *other* start dates of the
-  season (leave-one-out, so a start's own error is never subtracted);
+* observed anomalies are taken from the reference climatology on the verification days,
+  forecast anomalies from the climatology of the free-running E3SMv3 AMIP runs
+  (``bias="amip"``; ``util.fcst_init_data.model_climatology``). A season has only 4
+  start dates, too few for the hindcast's own lead-dependent climatology; the AMIP
+  climatology removes the model's mean bias without using observations of the verified
+  period. ``bias="loo"`` (the ensemble-mean error of each week averaged over the other
+  starts of the season) is kept for comparison only: the other starts verify on
+  overlapping days, so it leaks their observed anomalies into the forecast anomaly;
 * ``pattern_acc``: centred, cos-lat weighted spatial anomaly correlation over a region
   for each start and week (the robust score with few starts), and its mean;
 * ``gridpoint_acc``: temporal ACC at each gridpoint over the start dates (pooled over
@@ -111,17 +114,31 @@ def lead_scores(model: xr.DataArray, reference: xr.DataArray, masks: xr.DataArra
 # Weekly anomalies and S2S skill
 # ---------------------------------------------------------------------------
 def weekly_anomalies(model: xr.DataArray, reference: xr.DataArray, climatology: xr.DataArray, *,
-                     bias: str = "loo") -> tuple[xr.DataArray, xr.DataArray]:
+                     bias: str = "amip", model_climatology: xr.DataArray | None = None
+                     ) -> tuple[xr.DataArray, xr.DataArray]:
     """Weekly ensemble-mean and reference anomalies (init, week, lat, lon).
 
-    ``bias``: ``"none"`` or ``"loo"`` (subtract the mean ensemble-mean error of the same
-    week over the other start dates; needs >= 2 starts).
+    The reference anomaly is always ``reference - climatology``. The forecast anomaly by ``bias``:
+
+    * ``"amip"``: ``model - model_climatology`` (the AMIP climatology of
+      ``util.fcst_init_data.model_climatology``). Removes the model's mean bias without
+      using any observation of the verified period; the initialization drift stays in
+      the forecast error.
+    * ``"none"``: ``model - climatology`` (the reference climatology; the model bias counts as error).
+    * ``"loo"``: as ``"none"`` minus the mean ensemble-mean error of the same week over the
+      other start dates (needs >= 2 starts). With starts 5 days apart in one season the
+      other starts verify on overlapping days, so this leaks their observed anomalies into
+      the forecast anomaly; kept for comparison.
     """
     fw = weekly_means(model.mean("member"))
     ow = weekly_means(reference)
     cw = weekly_means(climatology)
     fa, oa = fw - cw, ow - cw
-    if bias == "loo":
+    if bias == "amip":
+        if model_climatology is None:
+            raise ValueError("bias='amip' needs model_climatology")
+        fa = fw - weekly_means(model_climatology)
+    elif bias == "loo":
         n = fa.sizes["init"]
         if n < 2:
             raise ValueError("bias='loo' needs at least 2 start dates")
@@ -131,7 +148,7 @@ def weekly_anomalies(model: xr.DataArray, reference: xr.DataArray, climatology: 
         loo = (err.sum("init") - err.fillna(0)) / others   # mean error of the other starts
         fa = fa - loo.where(others > 0)
     elif bias != "none":
-        raise ValueError("bias must be 'none' or 'loo'")
+        raise ValueError("bias must be 'amip', 'none' or 'loo'")
     fa.attrs, oa.attrs = {"bias": bias}, {}
     return fa, oa
 

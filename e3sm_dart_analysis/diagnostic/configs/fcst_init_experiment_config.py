@@ -1,4 +1,4 @@
-"""Experiments of the F20TR initialization-strategy hindcasts (``fcst_init_eval`` workflow).
+"""Experiments of the F20TR initialization-strategy hindcasts (``hind_lead_eval`` workflow).
 
 Five ways of initializing the same E3SMv3 LR F20TR (prescribed SST/sea ice) model,
 each run as a 20-member, 2-month ensemble from 8 start dates (4 lagged starts per
@@ -62,7 +62,7 @@ SEASONS = {
 }
 FORECAST_MONTHS = 2
 
-# Line styles shared by every fcst_init_eval figure (references in black).
+# Line styles shared by every hind_lead_eval figure (references in black).
 STYLE_MAP = {
     "ERA5": dict(color="k", linestyle="-", linewidth=2.4, zorder=6),
     "OBS": dict(color="k", linestyle="-", linewidth=2.4, zorder=6),

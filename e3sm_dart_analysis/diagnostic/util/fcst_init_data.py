@@ -18,8 +18,13 @@ Sampling, as in ``util.forecast_window_scorecard`` (``VARIABLES[...]["sampling"]
   d is represented by the state at 00Z ending it (24 h x d after the start), and
   verified with ERA5 at the same instant.
 
-Units follow the scorecard: Z in m, Q in g kg-1, PRECT in mm day-1, PSL in hPa,
-soil moisture of the top 5 cm in m3 m-3.
+Units follow the scorecard: Z in m, Q in g kg-1, PRECT in mm day-1, PSL in hPa, TMQ in
+kg m-2, soil moisture of the top 5 cm in m3 m-3.
+
+Climatologies (``reference_climatology``, ``model_climatology``) are put on the same
+(init, lead) verification days: the reference from its daily series (00Z fields) or
+its monthly means (``month_of_records`` reads the month each monthly record averages),
+the model from the monthly means of the free-running E3SMv3 AMIP runs.
 """
 from __future__ import annotations
 
@@ -61,6 +66,7 @@ VARIABLES: dict[str, VarSpec] = {
     "TS": VarSpec("atm", "TS", "6hourly", "daily_mean", "ERA5", "TS", "K"),
     "PRECT": VarSpec("atm", "PRECT", "daily", "daily_mean", "IMERG", "PRECT", "mm day-1"),
     "FLUT": VarSpec("atm", "FLUT", "daily", "daily_mean", "NOAA_OLR", "FLUT", "W m-2"),
+    "TMQ": VarSpec("atm", "TMQ", "6hourly", "daily_mean", "ERA5", "TMQ", "kg m-2"),
     **{v: VarSpec("atm", v, "6hourly", "daily_mean", "ERA5", v, "W m-2")
        for v in ("LHFLX", "SHFLX", "FSNS", "FSDS", "FLDS")},
     **{f"{n}{p}": VarSpec("atm", f"{n}{p}", "daily", "00z", "ERA5", f"{n}{p}", u)
@@ -92,6 +98,10 @@ def _convert(field: xr.DataArray, variable: str) -> xr.DataArray:
         field = field * 1000.0
     elif variable == "PRECT" and units in {"m/s", "m s-1"}:
         field = field * 86400 * 1000
+    elif variable == "PRECT" and units in {"kg m-2 s-1", "kg/m2/s"}:
+        field = field * 86400
+    elif variable == "TMQ" and units.startswith("g m"):  # ERA5 monthly product
+        field = field * 0.001
     field = field.astype("float32")
     field.attrs = dict(units=spec(variable).units)
     return field
@@ -213,10 +223,18 @@ def valid_time(inits, max_lead: int = MAX_LEAD) -> xr.DataArray:
 # References
 # --------------------------------------------------------------------------
 def _reference_series(variable: str, start, end, observation_root) -> xr.DataArray:
-    """Daily reference (time labelled by its day; 00Z instants for ``00z``) covering start..end."""
+    """Daily reference (time labelled by its day; 00Z instants for ``00z``) covering start..end.
+
+    ERA5 records whose field is identically zero are treated as missing (a guard: the
+    pre-2026-11-05 archive had zeros on 31 Dec 2012 of its 2011-2012 surface fields; the
+    rebuilt archive passes a zero-record check), and a day lacking any of its 6-hourly
+    records is dropped.
+    """
     s = spec(variable)
     root = Path(observation_root)
-    y0, y1 = pd.Timestamp(start).year, (pd.Timestamp(end) + pd.Timedelta(days=1)).year
+    # the 00Z state ending the last day lies in the next year's file
+    y0 = pd.Timestamp(start).year
+    y1 = (pd.Timestamp(end) + pd.Timedelta(days=1)).year if s.sampling == "00z" else pd.Timestamp(end).year
     if s.reference == "ERA5":
         files = [root / _ERA5.format(name=s.ref_name, year=y) for y in range(y0, y1 + 1)]
     elif s.reference == "ESA_CCI":
@@ -235,6 +253,7 @@ def _reference_series(variable: str, start, end, observation_root) -> xr.DataArr
     t0, t1 = np.datetime64(pd.Timestamp(start)), np.datetime64(pd.Timestamp(end)) + 2 * _DAY
     field = field.sel(time=slice(t0, t1))
     if s.reference == "ERA5":
+        field = field.where((field != 0).any(("lat", "lon")))
         if s.sampling == "00z":
             field = field.sel(time=field.time.dt.hour == 0)
         else:  # complete 00Z-24Z days of the 6-hourly analyses
@@ -242,7 +261,7 @@ def _reference_series(variable: str, start, end, observation_root) -> xr.DataArr
             days, n = np.unique(day, return_counts=True)
             keep = np.isin(day, days[n == 4])
             field = field.isel(time=np.flatnonzero(keep))
-            field = field.coarsen(time=4).mean().assign_coords(time=days[n == 4])
+            field = field.coarsen(time=4).mean(skipna=False).assign_coords(time=days[n == 4])
             field.attrs["units"] = ds[s.ref_name].attrs.get("units", "")
     else:
         field = field.assign_coords(time=field.time.dt.floor("D"))
@@ -261,78 +280,411 @@ def open_reference(variable: str, inits, *, max_lead: int = MAX_LEAD,
 
 
 def reference_climatology(variable: str, inits, years, *, max_lead: int = MAX_LEAD, smooth_days: int = 31,
-                          observation_root=DEFAULT_OBSERVATION_ROOT) -> xr.DataArray:
-    """(init, lead, lat, lon) calendar-day climatology of the reference over ``years``.
+                          observation_root=DEFAULT_OBSERVATION_ROOT, source: str = "auto") -> xr.DataArray:
+    """(init, lead, lat, lon) climatology of the reference over ``years`` on the verification days.
 
-    For each year the reference is read on the same calendar days as the verification
-    days (padded by ``smooth_days // 2``), averaged over the years, smoothed with a
-    centred ``smooth_days`` running mean, and put back on each start date's leads.
-    Feb 29 is skipped in non-leap years (its value is the Feb 28/Mar 1 neighbours' mean).
+    ``source``:
+
+    * ``"daily"``: for each year the reference is read on the same calendar days as the
+      verification days (padded by ``smooth_days // 2``), averaged over the years,
+      smoothed with a centred ``smooth_days`` running mean, and put back on each start
+      date's leads (Feb 29 is skipped in non-leap years). Exact for the sampling of the
+      verified field, e.g. the 00Z states of the pressure-level fields.
+    * ``"monthly"``: calendar-month means over ``years`` interpolated linearly between
+      mid-month values to the verification days (``_monthly_on_leads``), built the same
+      way as the model climatology (``model_climatology``). ERA5 uses its monthly product
+      (all hours), corrected per calendar month to the sampling of the 6-hourly archive
+      that the verifying fields come from (``_era5_sampling_offset``); IMERG, NOAA OLR
+      and ESA CCI use monthly means of their daily series.
+    * ``"auto"`` (default): ``"daily"`` for ``00z`` variables, ``"monthly"`` otherwise.
     """
-    inits = np.asarray(inits, dtype="datetime64[D]")
     s = spec(variable)
+    if source == "auto":
+        source = "daily" if s.sampling == "00z" else "monthly"
+    if source == "monthly":
+        monthly, note = _reference_monthly(variable, years, observation_root)
+        out = _monthly_on_leads(monthly, variable, inits, max_lead)
+        out.attrs.update(climatology_years=f"{min(years)}-{max(years)}", climatology_source=note)
+        return out
+    if source != "daily":
+        raise ValueError("source must be 'auto', 'daily' or 'monthly'")
+    inits = np.asarray(inits, dtype="datetime64[D]")
     half = smooth_days // 2
     first, last = pd.Timestamp(inits.min()) - pd.Timedelta(days=half), \
         pd.Timestamp(inits.max() + max_lead * _DAY) + pd.Timedelta(days=half)
     ref_year = first.year
     target = pd.date_range(first, last, freq="D")
-    source = "daily"
-    if s.reference == "ERA5" and not _era5_6hourly_covers(s.ref_name, years, first, last, observation_root):
-        clim = _era5_monthly_climatology(variable, years, target, observation_root)
-        source = "ERA5 monthly"
-    else:
-        stack = []
-        for y in years:
-            shift = y - ref_year
-            a, b = first + pd.DateOffset(years=shift), last + pd.DateOffset(years=shift)
-            series = _reference_series(variable, a, b, observation_root)
-            days = pd.DatetimeIndex([d + pd.DateOffset(years=shift) for d in target])
-            if s.sampling == "00z":
-                series = series.assign_coords(time=series.time.dt.floor("D") - _DAY)
-            series = series.reindex(time=days.values).assign_coords(time=target.values)
-            stack.append(series.load())
-        clim = xr.concat(stack, "year").mean("year")
-        if smooth_days > 1:
-            clim = clim.rolling(time=smooth_days, center=True, min_periods=half + 1).mean()
-        clim.attrs["units"] = stack[0].attrs.get("units", "")
+    stack = []
+    for y in years:
+        shift = y - ref_year
+        a, b = first + pd.DateOffset(years=shift), last + pd.DateOffset(years=shift)
+        series = _reference_series(variable, a, b, observation_root)
+        days = pd.DatetimeIndex([d + pd.DateOffset(years=shift) for d in target])
+        if s.sampling == "00z":
+            series = series.assign_coords(time=series.time.dt.floor("D") - _DAY)
+        series = series.reindex(time=days.values).assign_coords(time=target.values)
+        stack.append(series.load())
+    clim = xr.concat(stack, "year").mean("year")
+    if smooth_days > 1:
+        clim = clim.rolling(time=smooth_days, center=True, min_periods=half + 1).mean()
+    clim.attrs["units"] = stack[0].attrs.get("units", "")
     shifted = clim.assign_coords(time=clim.time + _DAY) if s.sampling == "00z" else clim
     out = [_on_leads(shifted, i, max_lead, s.sampling).drop_vars("time") for i in inits]
     out = xr.concat(out, pd.Index(inits.astype("datetime64[ns]"), name="init"))
     out = _convert(out.assign_coords(time=valid_time(inits, max_lead)), variable).rename(variable)
     out.attrs.update(climatology_years=f"{min(years)}-{max(years)}", smooth_days=smooth_days,
-                     climatology_source=source)
+                     climatology_source=f"{s.reference} daily, {smooth_days}-day running mean")
     return out
 
 
-_ERA5_MONTHLY = "ERA5/1x1/monthly/ERA5.en00.{name}.197901-201812.nc"
+# --------------------------------------------------------------------------
+# Monthly climatologies (reference and AMIP model)
+# --------------------------------------------------------------------------
+_ERA5_MONTHLY = "ERA5/1x1/monthly/ERA5.en00.{name}.*.nc"
+SAMPLING_OFFSET_YEARS = (2011, 2012)  # years with both ERA5 products for the 6-hourly-only fields
 
 
-def _era5_6hourly_covers(name, years, first, last, observation_root) -> bool:
-    root = Path(observation_root)
-    span = range(first.year - first.year, last.year - first.year + 1)
-    return all((root / _ERA5.format(name=name, year=y + k)).is_file() for y in years for k in span)
+def month_of_records(ds: xr.Dataset) -> pd.DatetimeIndex:
+    """Month (as its first day) that each record of a monthly-mean file is labelled with.
+
+    The rule of ``esp_lab.data_access_obs.transform_to_mid_month``: the lower time bound
+    when the file has bounds, otherwise the month of the stamp itself; a stamp is never
+    reinterpreted (a day-1 stamp is a month start in CDS/C3S products but the end of the
+    interval in E3SM history files). Labels that may still be wrong are checked against
+    the data with ``verify_month_labels``.
+    """
+    def months(values):
+        out = []
+        for v in values:  # numpy datetime64 or cftime (e.g. the no-leap AMIP files)
+            v = pd.Timestamp(v) if isinstance(v, np.datetime64) else v
+            out.append(pd.Timestamp(v.year, v.month, 1))
+        return pd.DatetimeIndex(out)
+
+    for name in ("time_bnds", "time_bounds", "bounds_time", "time_bound"):
+        if name in ds.variables and "time" in ds[name].dims:
+            return months(ds[name].transpose("time", ...).values[:, 0])
+    t = ds["time"].values
+    return months(pd.DatetimeIndex(t) if np.issubdtype(t.dtype, np.datetime64) else t)
 
 
-def _era5_monthly_climatology(variable: str, years, target: pd.DatetimeIndex, observation_root) -> xr.DataArray:
-    """Daily climatology on ``target`` interpolated linearly between the mid-month means of
-    the ERA5 monthly series (for TREFHT, TS and fluxes, whose 6-hourly files cover only
-    2011-2012; the same choice as ``util.forecast_window_scorecard``)."""
+def _band_means(field: xr.DataArray, mask) -> np.ndarray:
+    """(time, band) cos-lat weighted means in 10-degree latitude bands (NaN where a band is empty)."""
+    lat = field.lat.values
+    w = np.cos(np.deg2rad(lat))
+    v = field.transpose("time", "lat", "lon").values.astype(np.float64)
+    ok = np.isfinite(v) if mask is None else np.isfinite(v) & mask[None]
+    out = []
+    for lo in range(-90, 90, 10):
+        sel = (lat >= lo) & (lat < lo + 10)
+        ww = w[sel][None, :, None] * ok[:, sel]
+        tot = ww.sum((1, 2))
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out.append(np.where(tot > 0, (np.where(ok[:, sel], v[:, sel], 0) * ww).sum((1, 2)) / tot, np.nan))
+    return np.stack(out, 1)
+
+
+def detect_month_shift(field: xr.DataArray, anchor: xr.DataArray, label: str = "", *,
+                       candidates=(-1, 0, 1), max_nrmse: float = 0.3, min_ratio: float = 2.0,
+                       scale_free: bool = False) -> tuple[int, dict]:
+    """Shift (in months) to add to the labels of ``field`` so that it matches ``anchor``.
+
+    Both are monthly (time, lat, lon) series of the same quantity in the same units, with
+    ``time`` at month starts; ``anchor`` has trusted labels (independent data, e.g. the
+    monthly means of a daily archive, or a file with time bounds). The comparison uses
+    10-degree latitude-band means (any grids; on a common grid only the points valid in
+    both), with each band's mean over the compared months removed, so a constant offset
+    between products does not matter. For each candidate shift: the RMS difference
+    normalised by the anchor's variability (nRMSE). The best shift must have nRMSE <
+    ``max_nrmse`` and beat every other by ``min_ratio``, else ``ValueError``. For the ERA5
+    monthly files the right shift gives nRMSE 0.002-0.03, a wrong one more than 0.5.
+    ``scale_free``: compare a related quantity of another sign or scale (e.g. a cloud
+    radiative effect against another product's cloud forcing): both series are
+    standardised and the anchor's sign is matched, so nRMSE = sqrt(2 (1 - |r|)).
+    """
+    same_grid = (field.sizes.get("lat") == anchor.sizes.get("lat") and field.sizes.get("lon") == anchor.sizes.get("lon")
+                 and np.allclose(field.lat, anchor.lat) and np.allclose(field.lon, anchor.lon))
+    def valid(x):  # points valid in every non-empty month
+        filled = x.notnull().any(("lat", "lon"))
+        return x.isel(time=filled.values).notnull().all("time")
+
+    mask = (valid(field) & valid(anchor)).values if same_grid else None
+    fb, ab = _band_means(field, mask), _band_means(anchor, mask)
+    fi = field.time.dt.year.values * 12 + field.time.dt.month.values - 1
+    ai = anchor.time.dt.year.values * 12 + anchor.time.dt.month.values - 1
+    scores = {}
+    fi, fb = fi[np.isfinite(fb).any(1)], fb[np.isfinite(fb).any(1)]   # drop empty months
+    ai, ab = ai[np.isfinite(ab).any(1)], ab[np.isfinite(ab).any(1)]
+    for k in candidates:
+        common = np.intersect1d(fi + k, ai)
+        if common.size < 12:
+            continue
+        f = fb[np.searchsorted(fi + k, common)]
+        a = ab[np.searchsorted(ai, common)]
+        good = np.isfinite(f).all(0) & np.isfinite(a).all(0)
+        f, a = f[:, good] - f[:, good].mean(0), a[:, good] - a[:, good].mean(0)
+        if scale_free:
+            f, a = f / np.sqrt((f ** 2).mean()), a / np.sqrt((a ** 2).mean())
+            f = f * np.sign((f * a).sum())
+        score = float(np.sqrt(((f - a) ** 2).mean() / (a ** 2).mean())) if good.any() else np.nan
+        if np.isfinite(score):
+            scores[k] = score
+    if not scores:
+        raise ValueError(f"{label}: fewer than 12 months overlap the anchor")
+    order = sorted(scores, key=scores.get)
+    best = order[0]
+    if scores[best] >= max_nrmse or any(scores[k] < min_ratio * scores[best] for k in order[1:]):
+        raise ValueError(f"{label}: cannot identify the month of each record (nRMSE by shift {scores})")
+    return best, scores
+
+
+def _shift_months(field: xr.DataArray, k: int) -> xr.DataArray:
+    if not k:
+        return field
+    return field.assign_coords(time=(pd.DatetimeIndex(field.time.values) + pd.DateOffset(months=k)).values)
+
+
+def verify_month_labels(field: xr.DataArray, anchor: xr.DataArray, label: str) -> tuple[xr.DataArray, str]:
+    """``field`` with its month labels checked against ``anchor`` (``detect_month_shift``) and
+    corrected if needed (with a warning); also returns a note for the provenance attributes."""
+    import warnings
+
+    k, scores = detect_month_shift(field, anchor, label)
+    note = f"month labels checked (shift {k:+d}, nRMSE {scores[k]:.3f})"
+    if k:
+        warnings.warn(f"{label}: records are labelled {abs(k)} month(s) {'early' if k > 0 else 'late'}; "
+                      f"relabelled by {k:+d} (nRMSE by shift {', '.join(f'{s:+d}: {v:.3f}' for s, v in scores.items())})",
+                      stacklevel=2)
+    return _shift_months(field, k), note
+
+
+def _check_months(field: xr.DataArray, years, label: str) -> None:
+    have = set(zip(field.time.dt.year.values.tolist(), field.time.dt.month.values.tolist()))
+    missing = [(y, m) for y in years for m in range(1, 13) if (y, m) not in have]
+    if missing:
+        raise FileNotFoundError(f"{label}: {len(missing)} months of {min(years)}-{max(years)} missing, e.g. {missing[:3]}")
+
+
+def _calendar_months(field: xr.DataArray) -> xr.DataArray:
+    out = field.groupby("time.month").mean("time")
+    out.attrs = dict(field.attrs)
+    return out
+
+
+def _era5_sampled_months(variable: str, observation_root) -> xr.DataArray | None:
+    """(time, lat, lon) monthly means of the daily reference (6-hourly archive) in
+    ``SAMPLING_OFFSET_YEARS``, labelled by month start; catalog units. None if absent."""
+    parts = []
+    for y in SAMPLING_OFFSET_YEARS:
+        try:
+            series = _reference_series(variable, f"{y}-01-01", f"{y}-12-31", observation_root)
+        except FileNotFoundError:
+            continue
+        series = _convert(series.sel(time=series.time.dt.year == y), variable).load()
+        if series.sizes["time"] < 360 or series.time.dt.month.to_index().nunique() < 12:
+            continue
+        parts.append(series.resample(time="MS").mean())
+    return xr.concat(parts, "time") if parts else None
+
+
+def _reference_monthly(variable: str, years, observation_root) -> tuple[xr.DataArray, str]:
+    """(month, lat, lon) calendar-month climatology of the reference over ``years``, catalog units.
+
+    ERA5: the monthly product, its month labels verified against the monthly means of the
+    6-hourly archive (``verify_month_labels``; shift 0 for every variable since the monthly
+    files were relabelled on 2026-11-05), then corrected per calendar month by the mean
+    difference between the two products over ``SAMPLING_OFFSET_YEARS``. The 6-hourly archive
+    (rebuilt 2026-11-05 from the hourly 0.25-degree ERA5: 00/06/12/18Z states, 6-hour flux
+    means, box-mean regridding) differs from the monthly product (all hours, regridded
+    separately) by a near-zero global mean but a seasonally varying spatial pattern, e.g.
+    RMS 0.37 K for TREFHT, 0.51 K for TS, 0.45 kg m-2 for TMQ, 4.1 W m-2 for LHFLX, 3.7 for
+    SHFLX, 2.6 for FSNS (2011-2012).
+    """
     s = spec(variable)
-    path = Path(observation_root) / _ERA5_MONTHLY.format(name=s.ref_name)
-    if not path.is_file():
-        raise FileNotFoundError(f"{variable}: no ERA5 6-hourly files for {min(years)}-{max(years)} and no {path}")
-    with xr.open_dataset(path) as ds:
-        field = _normalize(ds[s.ref_name])
-        units = ds[s.ref_name].attrs.get("units", "")
-        field = field.sel(time=field.time.dt.year.isin(list(years))).load()
-    monthly = field.groupby("time.month").mean("time")
-    # mid-month anchors spanning the target period (one month of padding on each side)
-    anchors = pd.date_range(target[0] - pd.offsets.MonthBegin(2), target[-1] + pd.offsets.MonthBegin(2), freq="MS") \
-        + pd.Timedelta(days=14)
+    years = list(years)
+    root = Path(observation_root)
+    if s.reference == "ERA5":
+        files = sorted(root.glob(_ERA5_MONTHLY.format(name=s.ref_name)))
+        if not files:
+            raise FileNotFoundError(f"{variable}: no ERA5 monthly file {root / _ERA5_MONTHLY.format(name=s.ref_name)}")
+        span = set(range(min(years) - 1, max(years) + 2)) | set(range(min(SAMPLING_OFFSET_YEARS) - 1,
+                                                                       max(SAMPLING_OFFSET_YEARS) + 2))
+        with xr.open_dataset(files[0]) as ds:
+            field = _normalize(ds[s.ref_name]).assign_coords(time=month_of_records(ds).values)
+            field.attrs["units"] = ds[s.ref_name].attrs.get("units", "")
+            product = _convert(field.sel(time=field.time.dt.year.isin(sorted(span))), variable).load()
+        note = "ERA5 monthly"
+        sampled = _era5_sampled_months(variable, root)
+        if sampled is None:
+            import warnings
+            warnings.warn(f"{variable}: no 6-hourly ERA5 in {SAMPLING_OFFSET_YEARS}; month labels of {files[0].name} "
+                          "not verified and no sampling correction", stacklevel=2)
+        else:
+            product, check = verify_month_labels(product, sampled, f"{variable} {files[0].name}")
+            note += f" ({check})"
+        clim_months = product.sel(time=product.time.dt.year.isin(years))
+        _check_months(clim_months, years, f"{variable} ERA5 monthly")
+        monthly = _calendar_months(clim_months)
+        if sampled is not None and s.sampling != "00z":
+            same = product.sel(time=product.time.isin(sampled.time.values))
+            offset = _calendar_months(sampled.sel(time=same.time.values) - same)
+            monthly = (monthly + offset).assign_attrs(monthly.attrs)
+            used = sorted(set(sampled.time.dt.year.values.tolist()))
+            note += f" + 6-hourly sampling offset ({'+'.join(map(str, used))})"
+        return monthly, note
+    parts = []
+    for y in years:
+        series = _reference_series(variable, f"{y}-01-01", f"{y}-12-31", root)
+        series = _convert(series.sel(time=series.time.dt.year == y), variable).load()
+        parts.append(_calendar_months(series))
+    monthly = xr.concat(parts, "year").mean("year")
+    monthly.attrs = dict(parts[0].attrs)
+    return monthly, f"{s.reference} monthly means of the daily series"
+
+
+def _monthly_to_days(monthly: xr.DataArray, instants: pd.DatetimeIndex) -> xr.DataArray:
+    """Linear interpolation of a (month, ...) climatology between mid-month values (day 15)."""
+    anchors = pd.date_range(instants[0].normalize() - pd.offsets.MonthBegin(2),
+                            instants[-1].normalize() + pd.offsets.MonthBegin(2), freq="MS") + pd.Timedelta(days=14)
     values = monthly.sel(month=xr.DataArray(anchors.month, dims="time")).assign_coords(time=anchors.values)
-    clim = values.interp(time=target.values)
-    clim.attrs["units"] = units
-    return clim
+    return values.drop_vars("month").interp(time=instants.values)
+
+
+def _monthly_on_leads(monthly: xr.DataArray, variable: str, inits, max_lead: int) -> xr.DataArray:
+    """(init, lead, lat, lon) of a calendar-month climatology: the value at the midday of each
+    verification day (``daily_mean``) or at the 00Z instant ending it (``00z``)."""
+    s = spec(variable)
+    inits = np.asarray(inits, dtype="datetime64[D]")
+    days = pd.date_range(pd.Timestamp(inits.min()), pd.Timestamp(inits.max() + max_lead * _DAY), freq="D")
+    if s.sampling == "00z":
+        clim = _monthly_to_days(monthly, days).assign_coords(time=days.values)  # 00Z instants, labelled as such
+    else:
+        clim = _monthly_to_days(monthly, days + pd.Timedelta(hours=12)).assign_coords(time=days.values)
+    clim.attrs = dict(monthly.attrs)
+    out = [_on_leads(clim, i, max_lead, s.sampling).drop_vars("time") for i in inits]
+    out = xr.concat(out, pd.Index(inits.astype("datetime64[ns]"), name="init"))
+    return _convert(out.assign_coords(time=valid_time(inits, max_lead)), variable).rename(variable)
+
+
+DEFAULT_AMIP_ROOT = DEFAULT_OBSERVATION_ROOT / "E3SMv3"
+AMIP_CASES = ("v3.LR.amip_0101", "v3.LR.amip_0151")
+_AMIP_CMIP = "{case}/post/atm/180x360_aave/cmip_ts/monthly/{name}_Amon_*.nc"
+_AMIP_LND = "{case}/post/lnd/180x360_aave/ts/monthly/5yr/{name}_*.nc"
+# catalog variable -> CMIP monthly name (single-level) of the E3SMv3 DECK AMIP runs
+_AMIP_ATM = {"TREFHT": "tas", "TS": "ts", "PSL": "psl", "PRECT": "pr", "FLUT": "rlut", "LHFLX": "hfls",
+             "SHFLX": "hfss", "FLDS": "rlds", "FSDS": "rsds", "TMQ": "prw"}
+_AMIP_PLEV = {"Z": "zg", "T": "ta", "U": "ua", "V": "va"}  # on plev19 (no specific humidity)
+_DENH2O, _DENICE = 1000.0, 917.0
+
+
+def _year_files(pattern: Path, years) -> list[str]:
+    """Files of ``pattern`` whose ``_YYYYMM[-_]YYYYMM`` span overlaps ``years``."""
+    import re
+
+    out = []
+    for f in sorted(pattern.parent.glob(pattern.name)):
+        m = re.search(r"_(\d{4})\d{2}[-_](\d{4})\d{2}\.nc$", f.name)
+        if m and int(m.group(1)) <= max(years) and int(m.group(2)) >= min(years):
+            out.append(str(f))
+    return out
+
+
+def _open_monthly(files: list[str], name: str, years) -> xr.DataArray:
+    """Monthly series of ``name`` in ``years`` padded by a year each side (for relabelling)."""
+    span = list(range(min(years) - 1, max(years) + 2))
+    parts = []
+    for f in files:
+        with xr.open_dataset(f) as ds:
+            field = _normalize(ds[name]).assign_coords(time=month_of_records(ds).values)
+            field = field.sel(time=field.time.dt.year.isin(span)).load()
+            field.attrs["units"] = ds[name].attrs.get("units", "")
+            parts.append(field)
+    out = xr.concat(parts, "time")
+    return out.isel(time=np.unique(out.time.values, return_index=True)[1])
+
+
+_LND_SHIFT: dict[tuple[str, str], tuple[int, str]] = {}
+
+
+def _amip_land_shift(case: str, years, amip_root) -> tuple[int, str]:
+    """Month shift of the ELM monthly ``ts`` files of ``case`` relative to its ``cmip_ts``
+    (time bounds): ``TSA`` against ``tas`` over land (``detect_month_shift``); once per case."""
+    key = (str(amip_root), case)
+    if key not in _LND_SHIFT:
+        root = Path(amip_root)
+        test = [max(years) - 4, max(years)]
+        tsa = _open_monthly(_year_files(root / _AMIP_LND.format(case=case, name="TSA"), test), "TSA", test)
+        tas = _open_monthly(_year_files(root / _AMIP_CMIP.format(case=case, name="tas"), test), "tas", test)
+        k, scores = detect_month_shift(tsa, tas, f"{case} ELM TSA vs cmip_ts tas")
+        if k:
+            import warnings
+            warnings.warn(f"{case}: ELM monthly files labelled {k:+d} month(s) off cmip_ts; relabelled", stacklevel=2)
+        _LND_SHIFT[key] = (k, f"ELM labels checked against cmip_ts tas (shift {k:+d}, nRMSE {scores[k]:.3f})")
+    return _LND_SHIFT[key]
+
+
+def _amip_monthly_series(variable: str, case: str, years, amip_root, land_support_dir) -> xr.DataArray:
+    """(time, lat, lon) monthly means of one AMIP case in ``years``, catalog units.
+
+    ``cmip_ts`` files carry time bounds (their labels are taken as they are); the ELM
+    ``ts`` labels are checked against them once per case (``_amip_land_shift``)."""
+    s = spec(variable)
+    root = Path(amip_root)
+    name = variable.rstrip("0123456789")
+    level = variable[len(name):]
+    if variable in _AMIP_ATM:
+        cmip = _AMIP_ATM[variable]
+        field = _open_monthly(_year_files(root / _AMIP_CMIP.format(case=case, name=cmip), years), cmip, years)
+    elif s.component == "atm" and name in _AMIP_PLEV and level:
+        cmip = _AMIP_PLEV[name]
+        field = _open_monthly(_year_files(root / _AMIP_CMIP.format(case=case, name=cmip), years), cmip, years)
+        field = field.sel(plev=float(level) * 100.0, method="nearest", tolerance=1.0).drop_vars("plev")
+    elif variable == "SOILM_5CM":
+        w = top_soil_weights(land_support_dir)
+        nlev = w.sizes["levgrnd"]
+        with xr.open_dataset(Path(land_support_dir) / "dzsoi_elm.nc") as ds:
+            dz = _normalize(ds["DZSOI"]).isel(levgrnd=slice(0, nlev)).load()
+        liq, ice = (_open_monthly(_year_files(root / _AMIP_LND.format(case=case, name=n), years), n, years)
+                    .isel(levgrnd=slice(0, nlev)) for n in ("SOILLIQ", "SOILICE"))
+        vol = liq / (dz.values[None] * _DENH2O) + ice / (dz.values[None] * _DENICE)  # H2OSOI, m3 m-3
+        field = (vol * w.values[None]).sum("levgrnd", min_count=1)
+        field.attrs["units"] = "m3 m-3"
+    elif s.component == "lnd" and s.model:
+        field = _open_monthly(_year_files(root / _AMIP_LND.format(case=case, name=s.model), years), s.model, years)
+    else:
+        raise KeyError(f"{variable}: no AMIP monthly counterpart")
+    if not field.sizes.get("time"):
+        raise FileNotFoundError(f"{variable}: no {case} monthly files for {min(years)}-{max(years)}")
+    note = "cmip_ts (time bounds)"
+    if s.component == "lnd":
+        k, note = _amip_land_shift(case, years, amip_root)
+        field = _shift_months(field, k)
+    field = field.sel(time=field.time.dt.year.isin(list(years)))
+    _check_months(field, years, f"{variable} {case}")
+    return _convert(field, variable).assign_attrs(month_labels=note)
+
+
+def model_climatology(variable: str, inits, years, *, max_lead: int = MAX_LEAD, amip_root=DEFAULT_AMIP_ROOT,
+                      cases=AMIP_CASES, land_support_dir=DEFAULT_LAND_SUPPORT_DIR) -> xr.DataArray:
+    """(init, lead, lat, lon) climatology of the free-running E3SMv3 AMIP runs (``cases``) over
+    ``years``, on the verification days.
+
+    Calendar-month means of each case, averaged over the cases and interpolated as the
+    reference monthly climatology (``_monthly_on_leads``). The AMIP runs keep the
+    hindcasts' grid and boundary forcing (observed SST and sea ice), so forecast
+    anomalies from it contain no observed information and remove the model's mean bias
+    (not the lead-dependent initialization drift). For ``00z`` fields the monthly mean
+    covers all hours, so it differs from the 00Z climatology by the diurnal cycle
+    (about 0.5 K for T850, 0.5 m s-1 for U850 globally, more over land): a fixed
+    pattern in the forecast anomaly only.
+    """
+    per_case = [_calendar_months(_amip_monthly_series(variable, c, years, amip_root, land_support_dir))
+                for c in cases]
+    monthly = xr.concat(per_case, "case").mean("case").assign_attrs(per_case[0].attrs)
+    out = _monthly_on_leads(monthly, variable, inits, max_lead)
+    out.attrs.update(climatology_years=f"{min(years)}-{max(years)}",
+                     climatology_source=f"E3SMv3 AMIP monthly ({', '.join(cases)}; "
+                                        f"{per_case[0].attrs.get('month_labels', '')})")
+    return out
 
 
 # --------------------------------------------------------------------------

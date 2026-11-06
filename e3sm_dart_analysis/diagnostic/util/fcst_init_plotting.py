@@ -1,4 +1,4 @@
-"""Figures of the ``fcst_init_eval`` workflow (styles from ``configs.fcst_init_experiment_config``)."""
+"""Figures of the ``hind_lead_eval`` workflow (styles from ``configs.fcst_init_experiment_config``)."""
 from __future__ import annotations
 
 import string
@@ -85,6 +85,17 @@ def _map_axes(nrows, ncols, width=4.2, height=2.3):
     return fig, axes
 
 
+def _shade(ax, m: xr.DataArray, levels, cmap):
+    """Discrete-level shading of a (lat, lon) map. pcolormesh, not contourf: cartopy takes minutes
+    to project the contour polygons of a noisy 1-degree field."""
+    import cartopy.crs as ccrs
+    from matplotlib.colors import BoundaryNorm
+
+    norm = BoundaryNorm(levels, plt.get_cmap(cmap).N, extend="both")
+    return ax.pcolormesh(m.lon, m.lat, m, cmap=cmap, norm=norm, shading="nearest", rasterized=True,
+                         transform=ccrs.PlateCarree())
+
+
 def plot_week_maps(maps: xr.DataArray, *, title: str, weeks=(1, 2, 3, 4, 5, 6, 7, 8), levels=None,
                    cmap="RdBu_r", label="", stipple: xr.DataArray | None = None) -> plt.Figure:
     """2 x 4 panels of a (week, lat, lon) map (ESP-Lab s2s_skill layout); ``stipple``: bool mask."""
@@ -95,8 +106,7 @@ def plot_week_maps(maps: xr.DataArray, *, title: str, weeks=(1, 2, 3, 4, 5, 6, 7
     levels = np.linspace(-1, 1, 21) if levels is None else levels
     cf = None
     for ax, w in zip(axes.flat, weeks):
-        m = maps.sel(week=w)
-        cf = ax.contourf(m.lon, m.lat, m, levels=levels, cmap=cmap, extend="both", transform=ccrs.PlateCarree())
+        cf = _shade(ax, maps.sel(week=w), levels, cmap)
         if stipple is not None:
             s = stipple.sel(week=w).isel(lat=slice(None, None, 4), lon=slice(None, None, 4))
             lo, la = np.meshgrid(s.lon.values, s.lat.values)
@@ -114,8 +124,6 @@ def plot_week_maps(maps: xr.DataArray, *, title: str, weeks=(1, 2, 3, 4, 5, 6, 7
 def plot_config_week_maps(maps: dict[str, xr.DataArray], *, week: int, title: str, levels=None, cmap="RdBu_r",
                           label="") -> plt.Figure:
     """One lead week, one panel per configuration."""
-    import cartopy.crs as ccrs
-
     keys = list(maps)
     ncols = min(3, len(keys))
     nrows = int(np.ceil(len(keys) / ncols))
@@ -123,8 +131,7 @@ def plot_config_week_maps(maps: dict[str, xr.DataArray], *, week: int, title: st
     levels = np.linspace(-1, 1, 21) if levels is None else levels
     cf = None
     for k, (ax, c) in enumerate(zip(axes.flat, keys)):
-        m = maps[c].sel(week=week)
-        cf = ax.contourf(m.lon, m.lat, m, levels=levels, cmap=cmap, extend="both", transform=ccrs.PlateCarree())
+        cf = _shade(ax, maps[c].sel(week=week), levels, cmap)
         ax.set_title(f"({_LETTERS[k]}) {c}", loc="left", fontsize=10)
     for ax in list(axes.flat)[len(keys):]:
         ax.set_visible(False)
