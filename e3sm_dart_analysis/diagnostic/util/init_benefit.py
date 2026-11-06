@@ -2,7 +2,7 @@
 
 The benefit of an initialization change is a difference of skill between two experiments that
 differ only in that change, e.g. DA_ATM - HYB_BASE (DART atmosphere instead of ERA5 + DART
-perturbations, same DATM-forced land files member by member) or DA_COUPLED - DA_ATM (DART land
+perturbations of the same 20 DART members) or DA_COUPLED - DA_ATM (DART land
 instead of the DATM-forced land, same DART atmosphere files). Experiments are referred to by
 roles (``E00``, ``E10``, ``E01``, ``E11``: atmosphere, land initialized by DART when 1), and a
 contrast is ``(roles added, roles subtracted)``.
@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from configs.fcst_init_experiment_config import MEMBERS, init_dates
+from configs.fcst_init_experiment_config import init_dates, members as config_members
 from util.fcst_init_data import model_climatology, open_campaign, open_reference, reference_climatology
 from util.fcst_init_skill import WEEKS, weekly_means
 
@@ -43,23 +43,13 @@ def role_configs(roles: dict) -> dict[str, str]:
     return {r: c for r, c in roles.items() if c}
 
 
-def member_set(roles: dict, which: str = "matched") -> tuple[str, ...]:
-    """Member indices used for every experiment.
+def member_set(roles: dict, season: str) -> dict[str, tuple[str, ...]]:
+    """Member directories of each role in ``season``: every configuration's own 20 members.
 
-    ``matched``: the indices every role's configuration has (for HYB_BASE, DA_ATM and DA_COUPLED the
-    11 indices that HYB_BASE EN01-EN20 share with the DART member list), so member k of every
-    experiment starts from the same land (or atmosphere) files and all ensembles have one size.
-    ``all``: each configuration's own 20 members (only allowed when every role has the same list).
+    The members of an ensemble are exchangeable; their numbers (EN01-EN20, or the DART numbers of the
+    DA runs) are labels and are not paired across experiments.
     """
-    lists = [MEMBERS[c] for c in role_configs(roles).values()]
-    if which == "matched":
-        common = set(lists[0]).intersection(*lists[1:])
-        return tuple(m for m in lists[0] if m in common)
-    if which == "all":
-        if any(tuple(x) != tuple(lists[0]) for x in lists):
-            raise ValueError("MEMBER_SET='all' needs identical member lists; use 'matched'")
-        return tuple(lists[0])
-    raise ValueError("member set must be 'matched' or 'all'")
+    return {r: config_members(c, season) for r, c in role_configs(roles).items()}
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +168,7 @@ def era5_benefits(anoms: dict[str, np.ndarray], obs: np.ndarray, w: np.ndarray, 
                   inits_season: list[str], *, n_boot: int = 1000, seed: int = 42) -> dict:
     """Panel (b): skill of each role and the contrasts against the observations, with a paired bootstrap.
 
-    ``anoms[role]``: (init, member, week, lat, lon) forecast anomalies, members in matched order;
+    ``anoms[role]``: (init, member, week, lat, lon) forecast anomalies, members of each role in any order;
     ``obs``: (init, week, lat, lon) observed anomalies. Returns per-start pattern ACC, the mean
     curves, bootstrap percentiles (2.5, 97.5) and the gridpoint-ACC maps.
     """
@@ -209,8 +199,8 @@ def model_member_benefits(anoms: dict[str, np.ndarray], truth_role: str, w: np.n
     """Panel (c): verification against a held-out member of ``truth_role``, rotated over all members.
 
     For held-out member k, every experiment's forecast is the mean of its other members (index k is
-    dropped everywhere: in DA_ATM and DA_COUPLED member k shares the atmosphere initial state, so
-    keeping it would favour one experiment), and the truth is member k of ``truth_role``. Anomalies
+    dropped everywhere, so all ensembles keep one size; in DA_ATM, member k shares the DART atmosphere
+    file with the truth, and keeping it would favour that experiment), and the truth is member k of ``truth_role``. Anomalies
     of forecasts and truth come from the same (AMIP) climatology. Skill is averaged over k.
     """
     rng = np.random.default_rng(seed)

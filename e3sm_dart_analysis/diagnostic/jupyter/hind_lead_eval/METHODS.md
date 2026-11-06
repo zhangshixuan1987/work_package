@@ -1,9 +1,9 @@
 # `hind_lead_eval`: data and methods
 
-How the four notebooks turn the F20TR initialization hindcasts and the observations into skill scores,
+How the five notebooks turn the F20TR initialization hindcasts and the observations into skill scores,
 and why each choice was made. Code: `util/fcst_init_data.py` (fields and climatologies),
 `util/fcst_init_skill.py` (scores), `util/fcst_init_plotting.py` (figures),
-`configs/fcst_init_experiment_config.py` (experiments). Last revised 2026-11-05.
+`configs/fcst_init_experiment_config.py` (experiments), `util/init_benefit.py` (notebook 05). Last revised 2026-11-06.
 
 ## 1. Hindcasts
 
@@ -18,10 +18,30 @@ Five initialization configurations, 20 members each, run for about 62 days from 
 | DA_LND | as HYB_BASE | DART analysis |
 | DA_COUPLED | DART analysis | DART analysis |
 
+Both start sets hold the same experiments: 5 configurations x 4 starts x 20 members. The members of each
+ensemble are exchangeable and their numbers are labels only. The BASE configurations are EN01-EN20, with EN01
+the unperturbed control and EN02-EN20 the control plus the centred perturbations of 19 of a season's 20
+selected DART members (`ensemble_perturbations/add_dart_perturbations_to_hyb_clim.ipynb`). The DA
+configurations keep the DART numbers of the same 20 members, a different subset of the 40 in each season
+(Dec 2011, `DARTEN40`: EN01 EN03 EN04 EN07 EN08 EN09 EN10 EN14 EN17 EN18 EN20 EN21 EN25 EN26 EN28 EN31 EN35
+EN36 EN37 EN40; May 2012, `DARTEN40S1`: EN02 EN03 EN05 EN07 EN11 EN12 EN13 EN14 EN15 EN16 EN20 EN22 EN24
+EN26 EN27 EN28 EN31 EN32 EN34 EN38), so each configuration's list comes from `members(config, season)`.
+Members are never paired across configurations by number.
+
 Lead day 1 is the start date (00-24Z of the initial day); scores use lead days 1-56 (8 weeks). A
 configuration-season is used only when all 20 members report a finished post-processing
 (`regen_ts_<stream>.status` OK; the zppy files stop after 4 days, so `post_process/regen_f20tr_ts.sh`
-regenerates them).
+regenerates them). Every configuration must be ready in both seasons (`balanced_runs`); otherwise the
+notebooks stop rather than pool an unbalanced set.
+
+### Ocean and sea-ice boundary
+
+All runs are AMIP-type (interactive atmosphere and land) hybrid starts with the same prescribed SST: DOCN
+`SSTDATA` mode, the NOAA AVHRR 1x1 file, identical stream settings and records; no run reads a DOCN restart.
+Open-ocean TS on the first days is identical across configurations in 99 % of the fully ocean cells within
+45S-45N. The reference case differs: the DATM case for HYB_BASE, DA_ATM and DA_LND, the DART case for
+DA_COUPLED, so DA_COUPLED's sea-ice state also comes from DART; the remaining TS differences are in
+sea-ice and marginal-ice cells (prognostic sea-ice surface temperature).
 
 ### What the model output contains
 
@@ -113,6 +133,7 @@ overlapping days, so it leaks their observed anomalies into the forecast.
 | 02 weekly S2S skill | per bias treatment: pattern ACC (centred, cos-lat weighted) and MSSS by region and week; gridpoint ACC over the starts (pooled over the available seasons) with a one-sided t-test; ΔACC against `HYB_BASE`; scorecard; bias impact. |
 | 03 land | lead-day scores over land; weekly skill as in 02 for both bias treatments; soil-moisture memory (week-1 with week-w soil moisture) and SM-TSA, SM-LHFLX coupling, correlations over the 80 member-starts of a season (departures from the ensemble mean, so independent of the climatology). |
 | 04 MJO | RMM index of each member (section 7); bivariate COR and RMSE of the ensemble mean by lead (Rashid et al. 2011), spread, amplitude error, lead-window skill. |
+| 05 initialization benefits | 2 x 2 roles (atmosphere, land DART-initialized: E00 HYB_BASE, E10 DA_ATM, E11 DA_COUPLED; E01 not run): pattern ACC of TREFHT over 30-60N land and the contrasts E10-E00 (atmosphere) and E11-E10 (land), weekly and on 7-day running means, both bias treatments; paired bootstrap over starts and members; panel against a held-out E11 member. Incremental benefits of DART over the reference initialization, not total component contributions. |
 
 ## 7. MJO: winds for the RMM index
 
@@ -151,13 +172,14 @@ Z500, T850) in the daily stream would give true model daily means at little cost
 * **Significance**: the t-test treats the 8 starts as independent, but starts 5 days apart verify on
   overlapping periods, so significance is overstated. Lead with gridpoint ACC within a season and ΔACC.
 * **00Z fields**: verified at 00Z only (no model daily means), with all-hours climatologies (section 4).
+* **DA_COUPLED**: started from the DART case, so its sea-ice state also differs (polar only; section 1).
 * **Precipitation**: GPCP V3.3 is built from IMERG V07B within 55N-55S, so it is not independent of IMERG
   there.
 
 ## 9. Outputs and caches
 
 Under `DIAGNOSTIC_OUTPUT_ROOT/{data,figure}/hind_lead_eval/`: `lead_skill/` (01), `s2s_weekly/` (02),
-`land/` (03), `mjo/` (04). Climatologies and anomalies are cached and reused unless `FORCE_COMPUTE`; a cached
+`land/` (03), `mjo/` (04), `init_benefit/` (05). Climatologies and anomalies are cached and reused unless `FORCE_COMPUTE`; a cached
 observed climatology is reused only if it was built from monthly means of the daily series for the current
 `CLIM_YEARS`, and an anomaly file only if its `bias` and `clim_years` attributes match. Results built from the
 observations used before 2026-11-05 were moved to `data/_stale_obs_20261105/`.

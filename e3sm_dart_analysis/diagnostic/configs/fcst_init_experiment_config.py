@@ -27,8 +27,8 @@ DA_LND      ERA5 (v3.LR.ne30pg2.ERA5 eam.i)             DART EN40 land analysis
 DA_COUPLED  DART EN40 atmosphere analysis               DART EN40 land analysis
 ==========  ==========================================  ============================
 
-The BASE runs use members EN01-EN20; the DA runs use the 20 of the 40 DART members
-listed in ``DA_MEMBERS``.
+The BASE runs use members EN01-EN20; the DA runs use 20 of the 40 DART members, a different
+20 in each season (``DA_MEMBERS``; use ``members(config, season)``).
 """
 from __future__ import annotations
 
@@ -52,8 +52,14 @@ CONFIGS = {
 CONFIG_KEYS = tuple(CONFIGS)
 
 BASE_MEMBERS = tuple(f"EN{k:02d}" for k in range(1, 21))
-DA_MEMBERS = tuple(f"EN{k:02d}" for k in (1, 3, 4, 7, 8, 9, 10, 14, 17, 18, 20, 21, 25, 26, 28, 31, 35, 36, 37, 40))
-MEMBERS = {c: (DA_MEMBERS if c.startswith("DA_") else BASE_MEMBERS) for c in CONFIGS}
+# Every configuration has 20 members. The DA runs keep the numbers of the 20 DART members they use,
+# a different subset of the 40 in each season (DARTEN40 in Dec 2011, DARTEN40S1 in May 2012); the
+# BASE perturbations come from the same 20 DART members (EN01 = unperturbed control). The numbers are
+# labels only: the members of each ensemble are exchangeable and are not paired across configurations.
+DA_MEMBERS = {
+    "DJF": tuple(f"EN{k:02d}" for k in (1, 3, 4, 7, 8, 9, 10, 14, 17, 18, 20, 21, 25, 26, 28, 31, 35, 36, 37, 40)),
+    "JJA": tuple(f"EN{k:02d}" for k in (2, 3, 5, 7, 11, 12, 13, 14, 15, 16, 20, 22, 24, 26, 27, 28, 31, 32, 34, 38)),
+}
 
 # season -> start dates (lagged by 5 days; forecasts run 2 months)
 SEASONS = {
@@ -89,6 +95,22 @@ def check_configs(configs) -> tuple[str, ...]:
     if unknown:
         raise ValueError(f"Unknown configurations {unknown}; choose from {list(CONFIGS)}")
     return tuple(configs)
+
+
+def members(config: str, season: str) -> tuple[str, ...]:
+    """Member directories of ``config`` in ``season``."""
+    if season not in SEASONS:
+        raise ValueError(f"Unknown season {season!r}; choose from {list(SEASONS)}")
+    return DA_MEMBERS[season] if config.startswith("DA_") else BASE_MEMBERS
+
+
+def season_of(init) -> str:
+    """Season whose start dates include ``init``."""
+    d = np.datetime64(init, "D")
+    for s, dates in SEASONS.items():
+        if any(np.datetime64(x, "D") == d for x in dates):
+            return s
+    raise ValueError(f"{init} is not a start date of any season")
 
 
 def init_dates(seasons=tuple(SEASONS)) -> dict[str, tuple[np.datetime64, ...]]:
@@ -137,6 +159,20 @@ def stream_ready(config: str, init, member: str, component: str = "atm", freq: s
     return status.is_file() and status.read_text().startswith("OK")
 
 
+def balanced_runs(status, require_all_members: bool = True) -> list[tuple[str, str]]:
+    """(config, season) pairs of a ``readiness`` table, the same configurations in every season.
+
+    Both start sets (Dec 2011, May 2012) hold the same experiments, so a configuration missing in one
+    season would make the pooled and cross-season comparisons unbalanced; this raises instead.
+    """
+    summary = status.groupby(["config", "season"])[["ready", "members"]].sum()
+    ok = summary.ready >= (summary.members if require_all_members else 1)
+    missing = [f"{c} {s} ({r.ready}/{r.members})" for (c, s), r in summary[~ok].iterrows()]
+    if missing:
+        raise RuntimeError("Not every configuration is ready in every season: " + ", ".join(missing))
+    return list(summary.index)
+
+
 def readiness(configs=CONFIG_KEYS, seasons=tuple(SEASONS), streams=(("atm", "daily"),),
               data_root=DEFAULT_INPUT_DATA_ROOT):
     """Table (config, season, init, stream) -> number of members whose stream is regenerated."""
@@ -147,7 +183,7 @@ def readiness(configs=CONFIG_KEYS, seasons=tuple(SEASONS), streams=(("atm", "dai
         for s, inits in init_dates(seasons).items():
             for i in inits:
                 for comp, freq in streams:
-                    n = sum(stream_ready(c, i, m, comp, freq, data_root) for m in MEMBERS[c])
+                    n = sum(stream_ready(c, i, m, comp, freq, data_root) for m in members(c, s))
                     rows.append(dict(config=c, season=s, init=str(i), stream=f"{comp}_{freq}",
-                                     ready=n, members=len(MEMBERS[c])))
+                                     ready=n, members=len(members(c, s))))
     return pd.DataFrame(rows)

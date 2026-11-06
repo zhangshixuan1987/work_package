@@ -41,7 +41,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from configs.fcst_init_experiment_config import (DEFAULT_INPUT_DATA_ROOT, MEMBERS, init_dates, ts_file)
+from configs.fcst_init_experiment_config import (DEFAULT_INPUT_DATA_ROOT, init_dates, members as config_members,
+                                                  season_of, ts_file)
 
 # Locations are required arguments set by the notebooks (they depend on the machine):
 # observation_root (the reference-data archive), land_support_dir (its lnd_sea_mask folder,
@@ -208,7 +209,7 @@ def open_ensemble(config: str, init, variable: str, *, members=None, max_lead: i
                   data_root=DEFAULT_INPUT_DATA_ROOT, land_support_dir,
                   pair_mean: bool = False) -> xr.DataArray:
     """(member, lead, lat, lon) of one configuration and start date."""
-    members = MEMBERS[config] if members is None else members
+    members = config_members(config, season_of(init)) if members is None else members
     fields = [open_member_daily(config, init, m, variable, max_lead=max_lead, data_root=data_root,
                                 land_support_dir=land_support_dir, pair_mean=pair_mean) for m in members]
     return xr.concat(fields, pd.Index(list(members), name="member"), coords="minimal", compat="override")
