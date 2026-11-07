@@ -1,4 +1,5 @@
-"""Complete an ERA5-derived EAM initial file with the fields it lacks (``complete_era5_initial_states.ipynb``).
+"""Complete an ERA5-derived EAM initial file with the fields it lacks (steps 3a and 4a of
+``03_ic_era5_dartfill_dartpert.ipynb`` and ``04_ic_era5_climfill_dartpert.ipynb``).
 
 The ERA5 initial files (``v3.LR.ne30pg2.ERA5.eam.i.<date>.nc``) hold only T, U, V, Q, PS, CLDLIQ and
 CLDICE on the GLL dynamics columns. A full E3SMv3 initial file also holds ozone, the Linoz tracers,
@@ -7,13 +8,16 @@ zero. The radiation reads its gases from tracers (``rad_climate = 'A:H2OLNZ:H2O'
 'A:N2OLNZ:N2O', 'A:CH4LNZ:CH4'``), so a run from the ERA5 file starts radiatively dry, without ozone,
 N2O or CH4.
 
-The completed file takes the native layout of a DART member file (dynamics fields on ``ncol_d``,
-physics-grid surface fields on ``ncol``), every state field from the mean of the given DART members,
-and then the ERA5 values of the ERA5 fields. ``H2OLNZ`` (radiative water vapour) follows the ERA5
+The completed file takes the native layout of a full EAM initial file (dynamics fields on ``ncol_d``,
+physics-grid surface fields on ``ncol``), every state field from the mean of the given fill files, and
+then the ERA5 values of the ERA5 fields. The fill files are either the season's 20 selected DART
+members (``fill_label="DART ensemble mean"``) or a single full model state of the same date, e.g. the
+free-running CLIM_BASE (FREE_CLIM) initial file, to test how much the fields ERA5 does not provide
+(aerosols, chemistry, ozone, hydrometeor numbers) matter. ``H2OLNZ`` (radiative water vapour) follows the ERA5
 moisture with the model's own relative difference from ``Q`` (multiplicative, so it stays positive
 where ERA5 is drier than the DART mean):
 
-    H2OLNZ = Q_ERA5 * (mean H2OLNZ_DART / mean Q_DART), the ratio bounded to ``ratio_bounds``.
+    H2OLNZ = Q_ERA5 * (H2OLNZ_fill / Q_fill), the ratio bounded to ``ratio_bounds``.
 """
 from __future__ import annotations
 
@@ -45,6 +49,8 @@ def member_mean(files: list[Path]) -> xr.Dataset:
     """
     with xr.open_dataset(files[0], decode_times=False) as first:
         out = first.load()
+    if len(files) == 1:
+        return out
     state = [v for v in out.data_vars if _is_state(out[v])]
     acc = {v: out[v].values.astype("float64", copy=True) for v in state}
     for f in files[1:]:
@@ -64,8 +70,9 @@ def column_ozone_du(ds: xr.Dataset, o3: str = "O3") -> xr.DataArray:
     return (ds[o3].isel(time=0) * dp).sum("lev") / GRAVITY / DU_KG_M2
 
 
-def complete_era5_ic(era5_file: Path, dart_files: list[Path], out_file: Path, *, era5_vars=ERA5_VARS,
-                     ratio_bounds=(0.2, 5.0), overwrite: bool = False) -> dict:
+def complete_era5_ic(era5_file: Path, fill_files: list[Path], out_file: Path, *, era5_vars=ERA5_VARS,
+                     ratio_bounds=(0.2, 5.0), fill_label: str = "DART ensemble mean",
+                     overwrite: bool = False) -> dict:
     """Write the completed initial file and return its checks (see ``validate``)."""
     out_file = Path(out_file)
     if out_file.exists() and not overwrite:
@@ -73,7 +80,7 @@ def complete_era5_ic(era5_file: Path, dart_files: list[Path], out_file: Path, *,
     era5 = xr.open_dataset(era5_file, decode_times=False).load()
     if "ncol" not in era5.dims or "ncol_d" in era5.dims:
         raise ValueError(f"{era5_file}: expected the GLL columns on 'ncol'")
-    out = member_mean(dart_files)
+    out = member_mean(fill_files)
     if era5.sizes["ncol"] != out.sizes["ncol_d"]:
         raise ValueError(f"ERA5 has {era5.sizes['ncol']} columns, the DART files {out.sizes['ncol_d']}")
     if np.abs(era5["lat"].values - out["lat_d"].values).max() > 1e-8 or \
@@ -95,11 +102,12 @@ def complete_era5_ic(era5_file: Path, dart_files: list[Path], out_file: Path, *,
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     out.attrs.update(
-        title="ERA5 initial state completed with DART ensemble-mean fields",
+        title=f"ERA5 initial state completed with fields from the {fill_label}",
+        completed_fill_source=fill_label,
         completed_era5_source=str(era5_file),
         completed_era5_vars=",".join(era5_vars),
-        completed_dart_members=",".join(str(f) for f in dart_files),
-        completed_h2olnz="Q_ERA5 * (mean H2OLNZ_DART / mean Q_DART), ratio bounded to [%g, %g]" % ratio_bounds,
+        completed_fill_files=",".join(str(f) for f in fill_files),
+        completed_h2olnz="Q_ERA5 * (H2OLNZ_fill / Q_fill), ratio bounded to [%g, %g]" % ratio_bounds,
         history=f"{stamp} complete_era5_ic.py; " + out.attrs.get("history", ""),
     )
     out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -107,7 +115,7 @@ def complete_era5_ic(era5_file: Path, dart_files: list[Path], out_file: Path, *,
     tmp = out_file.with_suffix(".tmp.nc")
     out.to_netcdf(tmp, format="NETCDF4", encoding=encoding)
     tmp.rename(out_file)
-    return validate(out_file, era5_file, dart_files[0], era5_vars=era5_vars) | {"h2olnz_ratio_bounded_points": n_bounded}
+    return validate(out_file, era5_file, fill_files[0], era5_vars=era5_vars) | {"h2olnz_ratio_bounded_points": n_bounded}
 
 
 def validate(out_file: Path, era5_file: Path, dart_file: Path, *, era5_vars=ERA5_VARS) -> dict:
