@@ -81,6 +81,9 @@ VARIABLES: dict[str, VarSpec] = {
     "PRECT": VarSpec("atm", "PRECT", "daily", "daily_mean", "GPCP", "PRECT", "mm day-1"),   # GPCP V3.3 (global)
     "FLUT": VarSpec("atm", "FLUT", "daily", "daily_mean", "NOAA_OLR", "FLUT", "W m-2"),
     "TMQ": VarSpec("atm", "TMQ", "6hourly", "daily_mean", "ERA5", "TMQ", "kg m-2"),
+    # vertically integrated water vapour flux (eastward, northward): ERA5 VIWVE/VIWVN, same units and sign
+    "TUQ": VarSpec("atm", "TUQ", "6hourly", "daily_mean", "ERA5", "VIWVE", "kg m-1 s-1"),
+    "TVQ": VarSpec("atm", "TVQ", "6hourly", "daily_mean", "ERA5", "VIWVN", "kg m-1 s-1"),
     **{v: VarSpec("atm", v, "6hourly", "daily_mean", "ERA5", v, "W m-2")
        for v in ("LHFLX", "SHFLX", "FSNS", "FSDS", "FLDS")},
     **{f"{n}{p}": VarSpec("atm", f"{n}{p}", "daily", "00z", "ERA5", f"{n}{p}", u)
