@@ -2,7 +2,9 @@
 
 Steps: the simulation coverage of the observed event, the event defined from observations
 (calendar-day percentile of daily-mean 2-m temperature), regional daily series of every member
-against the observations, and heat metrics of every member on the observed event window.
+against the observations, heat metrics of every member on the observed event window
+(event-centred), ensemble scores (CRPS) on standard S2S lead windows (lead-centred), event
+probabilities, and unpaired ensemble contrasts between configurations.
 
 Fields are kept on a map box (e.g. CONUS) as (init, member, lead, lat, lon) and cached once per
 configuration and variable; regional means are cos(lat)-weighted over the land points of the
@@ -10,6 +12,8 @@ region. Calendar dates of a start's leads are ``init + lead - 1`` (lead 1 = the 
 """
 from __future__ import annotations
 
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 import matplotlib.dates as mdates
@@ -18,8 +22,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from util.fcst_init_data import (_reference_series, _convert, model_climatology, open_campaign,
-                                 reference_climatology)
+from configs.fcst_init_experiment_config import init_dates
+from util.fcst_init_data import (_reference_series, _convert, model_climatology,
+                                 open_member_daily, reference_climatology)
 
 _DAY = np.timedelta64(1, "D")
 
@@ -64,19 +69,57 @@ def coverage_table(inits, n_days: int, window: tuple[str, str]) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Model and observed fields (cached)
 # ---------------------------------------------------------------------------
+def _load_member_box(args):
+    """One (start, member) daily field on the box, loaded: (lead, lat, lon) (a process-pool task)."""
+    config, init, member, variable, n_days, box, data_root, land_support_dir = args
+    da = open_member_daily(config, init, member, variable, max_lead=n_days, data_root=data_root,
+                           land_support_dir=land_support_dir, box=box)
+    return to_box(da, box).drop_vars("time", errors="ignore").load()
+
+
+def _parallel_map(func, jobs, workers):
+    """``[func(j) for j in jobs]`` over ``workers`` processes; if a worker dies (e.g. a login-node
+    memory or process limit), the unfinished jobs are rerun serially in this process."""
+    jobs = list(jobs)
+    if workers <= 1 or len(jobs) <= 1:
+        return [func(j) for j in jobs]
+    results, done = [None] * len(jobs), [False] * len(jobs)
+    try:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            for i, r in enumerate(pool.map(func, jobs)):
+                results[i], done[i] = r, True
+    except (BrokenProcessPool, OSError) as err:     # a worker killed, or the pool could not start
+        todo = [i for i, d in enumerate(done) if not d]
+        print(f"[WARN] reader pool failed ({type(err).__name__}); reading the remaining {len(todo)} files serially", flush=True)
+        for i in todo:
+            results[i] = func(jobs[i])
+    return results
+
+
 def model_box(config: str, season: str, variable: str, members, box: dict, *, n_days: int, data_root,
-              land_support_dir, cache: Path | None = None, force: bool = False) -> xr.DataArray:
-    """(init, member, lead, lat, lon) daily field of ``members`` on ``box``; cached in ``cache``."""
+              land_support_dir, cache: Path | None = None, force: bool = False, workers: int = 4) -> xr.DataArray:
+    """(init, member, lead, lat, lon) daily field of ``members`` on ``box``; cached in ``cache``.
+
+    Each (start, member) file is cut to the box before the daily averaging (``open_member_daily(box=)``)
+    and the files are read by ``workers`` processes (``workers=1``: serially in this process). On a login
+    node keep ``workers`` small (memory is limited per user); on a compute node it can be much larger.
+    """
     key = ",".join(members)
     if cache is not None and cache.exists() and not force:
         da = xr.load_dataarray(cache)
         if da.attrs.get("members") == key and da.attrs.get("box") == str(box) and da.sizes["lead"] == n_days:
             return da
-    field = open_campaign(config, season, variable, members=list(members), max_lead=n_days, data_root=data_root,
-                          land_support_dir=land_support_dir)
-    out = to_box(field, box).drop_vars("time").load().transpose("init", "member", "lead", "lat", "lon")
+    inits = list(init_dates([season])[season])
+    members = list(members)
+    jobs = [(config, i, m, variable, n_days, box, data_root, land_support_dir) for i in inits for m in members]
+    fields = _parallel_map(_load_member_box, jobs, workers)
+    units = fields[0].attrs.get("units", "")
+    per_init = [xr.concat(fields[k * len(members):(k + 1) * len(members)], pd.Index(members, name="member"),
+                          coords="minimal", compat="override") for k in range(len(inits))]
+    out = xr.concat(per_init, pd.Index(np.array(inits, dtype="datetime64[ns]"), name="init"), coords="minimal",
+                    compat="override").transpose("init", "member", "lead", "lat", "lon")
     out = out.astype("float32").rename(variable).assign_attrs(config=config, season=season, members=key, box=str(box),
-                                                              units=field.attrs.get("units", ""))
+                                                              units=units)
     if cache is not None:
         out.to_netcdf(cache)
     return out
@@ -174,7 +217,14 @@ def heat_metrics(anom: np.ndarray, times, thr_anom: np.ndarray, area: np.ndarray
                  tolerance_days: int = 7) -> dict:
     """Metrics of one regional anomaly series ``anom`` (same calendar days ``times`` as ``thr_anom``,
     the observed threshold minus climatology, and ``area``, the fraction of region points above their
-    threshold) on the event ``window``; peak timing searched within +-``tolerance_days`` of it."""
+    threshold) on the event ``window``.
+
+    Primary (exact dates, the observed window): event-mean anomaly, peak anomaly and its date error,
+    exceedance days, longest run, accumulated exceedance (K day), mean area fraction. Secondary
+    (timing-tolerant, the window widened by +-``tolerance_days``): ``peak_anomaly_tol`` and its date
+    error, ``longest_run_tol_days`` (the longest run of hot days the model produces near the event).
+    The peak is that of the anomaly series, searched by the same rules for observations and models.
+    """
     t = pd.DatetimeIndex(times)
     w0, w1 = pd.Timestamp(window[0]), pd.Timestamp(window[1])
     inw = (t >= w0) & (t <= w1)
@@ -184,13 +234,65 @@ def heat_metrics(anom: np.ndarray, times, thr_anom: np.ndarray, area: np.ndarray
     a, th = anom[inw], thr_anom[inw]
     exceed = a > th
     longest = max((b - c + 1 for c, b in runs(exceed)), default=0)
-    at = np.where(tol & np.isfinite(anom), anom, -np.inf)
-    k = int(np.argmax(at))
-    return dict(event_mean_anomaly=float(np.nanmean(a)), peak_anomaly=float(anom[k]),
-                peak_date_error_days=int((t[k] - pd.Timestamp(obs_peak)) / pd.Timedelta(days=1)),
+    longest_tol = max((b - c + 1 for c, b in runs(tol & (anom > thr_anom))), default=0)
+
+    def peak(sel):
+        k = int(np.argmax(np.where(sel & np.isfinite(anom), anom, -np.inf)))
+        return float(anom[k]), int((t[k] - pd.Timestamp(obs_peak)) / pd.Timedelta(days=1))
+
+    pk, pk_err = peak(inw)
+    pt, pt_err = peak(tol)
+    return dict(event_mean_anomaly=float(np.nanmean(a)), peak_anomaly=pk, peak_date_error_days=pk_err,
                 exceedance_days=int(exceed.sum()), longest_run_days=int(longest),
                 accumulated_exceedance=float(np.nansum(np.clip(a - th, 0, None))),
-                area_fraction_mean=float(np.nanmean(area[inw])), window_days_covered=int(np.isfinite(a).sum()))
+                area_fraction_mean=float(np.nanmean(area[inw])), window_days_covered=int(np.isfinite(a).sum()),
+                peak_anomaly_tol=pt, peak_date_error_tol_days=pt_err, longest_run_tol_days=int(longest_tol))
+
+
+# ---------------------------------------------------------------------------
+# Ensemble scores: CRPS, S2S lead windows, unpaired contrasts
+# ---------------------------------------------------------------------------
+def crps_ensemble(members, obs: float) -> float:
+    """CRPS of the ensemble ``members`` (1-D; NaN dropped) against ``obs``:
+    mean|F_m - O| - 1/(2 M^2) sum_m sum_n |F_m - F_n| (the empirical-distribution form)."""
+    f = np.asarray(members, dtype="float64")
+    f = f[np.isfinite(f)]
+    if f.size == 0 or not np.isfinite(obs):
+        return np.nan
+    return float(np.mean(np.abs(f - obs)) - 0.5 * np.mean(np.abs(f[:, None] - f[None, :])))
+
+
+def lead_window_scores(fc: xr.DataArray, obs: xr.DataArray, init, windows: dict) -> list[dict]:
+    """Scores of one start's regional series ``fc`` (member, time; calendar days) against ``obs`` (time)
+    on lead windows ``windows`` ({name: (first lead, last lead)}, lead 1 = the start date): the
+    window means of observations and members, ensemble-mean error, member spread (s.d.) and CRPS.
+    A window not fully simulated is skipped."""
+    i = np.datetime64(pd.Timestamp(init), "D")
+    lead = ((fc.time.values.astype("datetime64[D]") - i) / _DAY).astype(int) + 1
+    rows = []
+    for name, (l0, l1) in windows.items():
+        sel = (lead >= l0) & (lead <= l1)
+        if sel.sum() < l1 - l0 + 1:
+            continue
+        days = fc.time.values[sel]
+        f = fc.sel(time=days).mean("time").values
+        o = float(obs.sel(time=days).mean())
+        rows.append(dict(window=name, lead_first=l0, lead_last=l1, date_first=str(days[0])[:10],
+                         date_last=str(days[-1])[:10], obs=o, ens_mean=float(np.mean(f)),
+                         ens_mean_error=float(np.mean(f) - o), spread=float(np.std(f, ddof=1)),
+                         crps=crps_ensemble(f, o)))
+    return rows
+
+
+def bootstrap_contrast(a, b, stat=np.mean, *, n_boot: int = 2000, ci=(0.05, 0.95), seed: int = 0) -> dict:
+    """``stat(a) - stat(b)`` of two unpaired ensembles (1-D member values) and its bootstrap interval,
+    resampling the members of each ensemble independently (no member pairing is assumed)."""
+    a, b = np.asarray(a, dtype="float64"), np.asarray(b, dtype="float64")
+    a, b = a[np.isfinite(a)], b[np.isfinite(b)]
+    rng = np.random.default_rng(seed)
+    boot = np.array([stat(rng.choice(a, a.size)) - stat(rng.choice(b, b.size)) for _ in range(n_boot)])
+    lo, hi = np.quantile(boot, ci)
+    return dict(diff=float(stat(a) - stat(b)), lo=float(lo), hi=float(hi))
 
 
 # ---------------------------------------------------------------------------
@@ -257,8 +359,128 @@ def plot_series(panels: dict, obs: dict, window, styles: dict, flagged=(), *, yl
     return fig
 
 
+def _metric_title(m: str, units: dict | None) -> str:
+    u = (units or {}).get(m, "")
+    return m.replace("_", " ") + (f" ({u})" if u else "")
+
+
+def plot_by_start(table: pd.DataFrame, obs_metrics: dict, metrics: list[str], configs: list[str], styles: dict, *,
+                  title: str, units: dict | None = None, spread=(0.1, 0.9)):
+    """Start-resolved metrics: for each start (x) and configuration, the member median (point) and the
+    ``spread`` member quantiles (bar); the observed value as a black line."""
+    inits = sorted(table.init.unique())
+    ncol = min(3, len(metrics))
+    nrow = int(np.ceil(len(metrics) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(4.3 * ncol, 3.0 * nrow), squeeze=False)
+    for ax, m in zip(axes.flat, metrics):
+        for k, c in enumerate(configs):
+            col = styles.get(c, {}).get("color")
+            off = (k - (len(configs) - 1) / 2) * 0.15
+            for x, init in enumerate(inits):
+                v = table[(table.config == c) & (table.init == init)][m].dropna()
+                if v.empty:
+                    continue
+                lo, hi = v.quantile(spread[0]), v.quantile(spread[1])
+                ax.plot([x + off] * 2, [lo, hi], color=col, lw=1.2)
+                ax.plot(x + off, v.median(), "o", color=col, ms=4, label=c if x == 0 else None)
+        if m in obs_metrics:
+            ax.axhline(obs_metrics[m], color="k", lw=1.4, label="OBS")
+        ax.set_xticks(range(len(inits)), [f"start {str(i)[5:10]}" for i in inits], fontsize=8)
+        ax.set_title(_metric_title(m, units), fontsize=9)
+    for ax in list(axes.flat)[len(metrics):]:
+        ax.set_visible(False)
+    axes[0, 0].legend(fontsize=7, frameon=False)
+    fig.suptitle(title, fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
+def plot_lead_scores(scores: pd.DataFrame, configs: list[str], styles: dict, columns: dict, *, title: str,
+                     event_leads: dict | None = None):
+    """Rows: scores (``columns``: {column: y label}); columns: starts; x: lead windows. Windows that
+    overlap the observed event's leads of a start (``event_leads[init] = (first, last)``) are shaded."""
+    inits = sorted(scores.init.unique())
+    wins = list(dict.fromkeys(scores.sort_values("lead_first").window))
+    fig, axes = plt.subplots(len(columns), len(inits), figsize=(3.4 * len(inits), 2.5 * len(columns)),
+                             sharex=True, sharey="row", squeeze=False)
+    for j, init in enumerate(inits):
+        s = scores[scores.init == init]
+        for i, (col, ylab) in enumerate(columns.items()):
+            ax = axes[i, j]
+            if event_leads and init in event_leads:
+                e0, e1 = event_leads[init]
+                for x, w in enumerate(wins):
+                    r = s[s.window == w]
+                    if not r.empty and r.lead_first.iloc[0] <= e1 and r.lead_last.iloc[0] >= e0:
+                        ax.axvspan(x - 0.5, x + 0.5, color="0.9", zorder=0)
+            for c in configs:
+                r = s[s.config == c].set_index("window").reindex(wins)
+                ax.plot(range(len(wins)), r[col], marker="o", ms=4, label=c, **styles.get(c, {}))
+            if col == "ens_mean_error":
+                ax.axhline(0, color="0.5", lw=0.8)
+            if j == 0:
+                ax.set_ylabel(ylab, fontsize=8)
+            if i == 0:
+                ax.set_title(f"start {str(init)[:10]}", fontsize=9)
+            ax.set_xticks(range(len(wins)), wins, rotation=30, fontsize=7)
+    axes[0, 0].legend(fontsize=7, frameon=False)
+    fig.suptitle(title, fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
+def plot_event_probability(prob: pd.DataFrame, configs: list[str], styles: dict, *, title: str):
+    """Grouped bars: the member fraction with the event (``p_event``) per start and configuration;
+    the Brier score of each bar is written above it."""
+    inits = sorted(prob.init.unique())
+    fig, ax = plt.subplots(figsize=(2.2 * len(inits) + 2, 3.4))
+    width = 0.8 / len(configs)
+    for k, c in enumerate(configs):
+        r = prob[prob.config == c].set_index("init").reindex(inits)
+        x = np.arange(len(inits)) + (k - (len(configs) - 1) / 2) * width
+        ax.bar(x, r.p_event, width * 0.9, color=styles.get(c, {}).get("color"), label=c)
+        for xi, (p, bs) in zip(x, zip(r.p_event, r.brier)):
+            if np.isfinite(p):
+                ax.text(xi, p + 0.02, f"{bs:.2f}", ha="center", fontsize=6.5, rotation=90)
+    ax.set_xticks(range(len(inits)), [f"start {str(i)[:10]}" for i in inits], fontsize=8)
+    ax.set_ylim(0, 1.15)
+    ax.set_ylabel("member fraction with the event", fontsize=8)
+    ax.legend(fontsize=7, frameon=False, ncol=len(configs), loc="upper left")
+    ax.set_title(title, fontsize=9)
+    fig.tight_layout()
+    return fig
+
+
+def plot_contrasts(table: pd.DataFrame, metrics: list[str], *, title: str, units: dict | None = None):
+    """One panel per metric: each contrast (y) and start (marker), the difference and its bootstrap
+    interval; zero marked."""
+    contrasts = list(dict.fromkeys(table.contrast))
+    inits = sorted(table.init.unique())
+    markers = dict(zip(inits, "o^sDvP"))
+    fig, axes = plt.subplots(1, len(metrics), figsize=(4.0 * len(metrics), 0.55 * len(contrasts) + 1.6),
+                             sharey=True, squeeze=False)
+    for ax, m in zip(axes[0], metrics):
+        for y, con in enumerate(contrasts):
+            for k, init in enumerate(inits):
+                r = table[(table.contrast == con) & (table.init == init) & (table.metric == m)]
+                if r.empty:
+                    continue
+                yy = y + (k - (len(inits) - 1) / 2) * 0.15
+                ax.plot([r.lo.iloc[0], r.hi.iloc[0]], [yy, yy], color="0.4", lw=1)
+                ax.plot(r["diff"].iloc[0], yy, markers[init], color="tab:blue", ms=4,
+                        label=f"start {str(init)[:10]}" if y == 0 else None)
+        ax.axvline(0, color="k", lw=0.8)
+        ax.set_title(_metric_title(m, units), fontsize=9)
+        ax.set_yticks(range(len(contrasts)), contrasts, fontsize=8)
+        ax.invert_yaxis()
+    axes[0, 0].legend(fontsize=7, frameon=False)
+    fig.suptitle(title, fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
 def plot_metrics(table: pd.DataFrame, obs_metrics: dict, metrics: list[str], configs: list[str], styles: dict,
-                 flagged=(), *, title: str):
+                 flagged=(), *, title: str, units: dict | None = None):
     """Member values (points, one marker per start) and the observed value (black line) of each metric."""
     inits = sorted(table.init.unique())
     markers = dict(zip(inits, "o^sDvP"))
@@ -278,7 +500,7 @@ def plot_metrics(table: pd.DataFrame, obs_metrics: dict, metrics: list[str], con
         if m in obs_metrics:
             ax.axhline(obs_metrics[m], color="k", lw=1.6)
         ax.set_xticks(range(len(configs)), [c + ("*" if c in flagged else "") for c in configs], rotation=30, fontsize=8)
-        ax.set_title(m.replace("_", " "), fontsize=9)
+        ax.set_title(_metric_title(m, units), fontsize=9)
     for ax in list(axes.flat)[len(metrics):]:
         ax.set_visible(False)
     axes[0, 0].legend(fontsize=7, frameon=False, title="start", title_fontsize=7)
@@ -315,6 +537,41 @@ def plot_maps(obs_map: xr.DataArray, model_maps: dict, region: dict, flagged=(),
     return fig
 
 
+def plot_maps_by_start(obs_map: xr.DataArray, maps: dict, region: dict, *, title: str, vmax: float = 6.0,
+                       units: str = "K"):
+    """Rows: starts; columns: OBS (first row only) and each configuration's ensemble-mean map
+    (``maps[init][config]``)."""
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+
+    inits = list(maps)
+    configs = list(maps[inits[0]])
+    ncol = len(configs) + 1
+    proj = ccrs.LambertConformal(central_longitude=-97, standard_parallels=(33, 45))
+    fig, axes = plt.subplots(len(inits), ncol, figsize=(3.6 * ncol, 2.5 * len(inits)),
+                             subplot_kw=dict(projection=proj), squeeze=False)
+    im = None
+    for i, init in enumerate(inits):
+        for j, (n, f) in enumerate([("OBS", obs_map if i == 0 else None), *maps[init].items()]):
+            ax = axes[i, j]
+            if f is None:
+                ax.set_visible(False)
+                continue
+            im = ax.pcolormesh(f.lon, f.lat, f, transform=ccrs.PlateCarree(), cmap="RdBu_r", vmin=-vmax, vmax=vmax,
+                               shading="auto")
+            ax.coastlines(lw=0.5)
+            ax.add_feature(cfeature.STATES, lw=0.3, edgecolor="0.5")
+            (a0, a1), (o0, o1) = region["lat"], region["lon"]
+            ax.plot([o0, o1, o1, o0, o0], [a0, a0, a1, a1, a0], color="k", lw=1, transform=ccrs.PlateCarree())
+            ax.set_extent([float(f.lon.min()), float(f.lon.max()), float(f.lat.min()), float(f.lat.max())],
+                          ccrs.PlateCarree())
+            ax.set_title(n if n == "OBS" else f"{n}, start {str(init)[5:10]}", fontsize=8)
+    fig.colorbar(im, ax=axes.ravel().tolist(), orientation="horizontal", shrink=0.5, pad=0.03, label=f"anomaly ({units})")
+    fig.suptitle(title, fontsize=10)
+    return fig
+
+
 __all__ = ["to_box", "region_weights", "region_mean", "calendar", "coverage_table", "model_box", "observed_box",
-           "climatologies", "percentile_threshold", "runs", "observed_events", "heat_metrics", "plot_coverage",
-           "plot_series", "plot_metrics", "plot_maps"]
+           "climatologies", "percentile_threshold", "runs", "observed_events", "heat_metrics", "crps_ensemble",
+           "lead_window_scores", "bootstrap_contrast", "plot_coverage", "plot_series", "plot_metrics", "plot_by_start",
+           "plot_lead_scores", "plot_event_probability", "plot_contrasts", "plot_maps", "plot_maps_by_start"]

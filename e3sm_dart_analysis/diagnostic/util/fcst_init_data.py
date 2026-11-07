@@ -167,10 +167,28 @@ def top_soil_weights(land_support_dir, depth_cm: float = 5.0) -> xr.DataArray:
     return _dz_cache[key]
 
 
+def _subset_box(ds: xr.Dataset, box: dict | None) -> xr.Dataset:
+    """``ds`` cut to the lat/lon ``box`` (``lat``, ``lon`` ranges in degrees north / east 0-360; a
+    ``lon`` range with lon0 > lon1 wraps through 0) by index, whatever the file's coordinate names,
+    longitude convention or ordering; ``box=None`` returns ``ds`` unchanged."""
+    if box is None:
+        return ds
+    lat = "lat" if "lat" in ds.dims else "latitude"
+    lon = "lon" if "lon" in ds.dims else "longitude"
+    la, lo = ds[lat].values, ds[lon].values % 360
+    lo0, lo1 = box["lon"]
+    lon_ok = ((lo >= lo0) & (lo <= lo1)) if lo0 <= lo1 else ((lo >= lo0) | (lo <= lo1))
+    lat_ok = (la >= box["lat"][0]) & (la <= box["lat"][1])
+    return ds.isel({lat: np.flatnonzero(lat_ok), lon: np.flatnonzero(lon_ok)})
+
+
 def open_member_daily(config: str, init, member: str, variable: str, *, max_lead: int = MAX_LEAD,
                       data_root=DEFAULT_INPUT_DATA_ROOT, land_support_dir,
-                      pair_mean: bool = False) -> xr.DataArray:
+                      pair_mean: bool = False, box: dict | None = None) -> xr.DataArray:
     """(lead, lat, lon) daily field of one member in catalog units (lazy).
+
+    ``box``: cut the file to this lat/lon box (as ``heatwave_case.to_box``) right after opening, so
+    the 6-hourly-to-daily averaging and the reads touch only the box (default: the whole grid).
 
     ``pair_mean``: for a ``00z`` variable, estimate each day's mean as the mean of the 00Z
     states at its start and end (lead day 1 uses the initial state), for workflows that
@@ -182,7 +200,7 @@ def open_member_daily(config: str, init, member: str, variable: str, *, max_lead
     s = spec(variable)
     sampling = s.sampling
     path = ts_file(config, init, member, s.model, s.component, s.stream, data_root)
-    ds = xr.open_dataset(path, chunks={"time": -1})
+    ds = _subset_box(xr.open_dataset(path, chunks={"time": -1}), box)
     if s.stream == "6hourly":
         field = daily_from_6hourly(ds, s.model)
     elif s.sampling == "00z":
@@ -199,6 +217,8 @@ def open_member_daily(config: str, init, member: str, variable: str, *, max_lead
     field = _normalize(field)
     if variable == "SOILM_5CM":
         w = top_soil_weights(land_support_dir)
+        if box is not None:
+            w = _normalize(w).reindex(lat=field.lat, lon=field.lon, method="nearest", tolerance=0.01)
         field = field.isel(levgrnd=slice(0, w.sizes["levgrnd"]))
         units = field.attrs.get("units", "")
         field = (field * w.assign_coords(levgrnd=field.levgrnd).values[None]).sum("levgrnd", min_count=1)
@@ -210,20 +230,20 @@ def open_member_daily(config: str, init, member: str, variable: str, *, max_lead
 
 def open_ensemble(config: str, init, variable: str, *, members=None, max_lead: int = MAX_LEAD,
                   data_root=DEFAULT_INPUT_DATA_ROOT, land_support_dir,
-                  pair_mean: bool = False) -> xr.DataArray:
+                  pair_mean: bool = False, box: dict | None = None) -> xr.DataArray:
     """(member, lead, lat, lon) of one configuration and start date."""
     members = config_members(config, season_of(init)) if members is None else members
     fields = [open_member_daily(config, init, m, variable, max_lead=max_lead, data_root=data_root,
-                                land_support_dir=land_support_dir, pair_mean=pair_mean) for m in members]
+                                land_support_dir=land_support_dir, pair_mean=pair_mean, box=box) for m in members]
     return xr.concat(fields, pd.Index(list(members), name="member"), coords="minimal", compat="override")
 
 
 def open_campaign(config: str, season: str, variable: str, *, members=None, max_lead: int = MAX_LEAD,
-                  data_root=DEFAULT_INPUT_DATA_ROOT, land_support_dir) -> xr.DataArray:
+                  data_root=DEFAULT_INPUT_DATA_ROOT, land_support_dir, box: dict | None = None) -> xr.DataArray:
     """(init, member, lead, lat, lon) of every start date of ``season``; ``time`` is (init, lead)."""
     inits = init_dates([season])[season]
     fields = [open_ensemble(config, i, variable, members=members, max_lead=max_lead, data_root=data_root,
-                            land_support_dir=land_support_dir).drop_vars("time") for i in inits]
+                            land_support_dir=land_support_dir, box=box).drop_vars("time") for i in inits]
     out = xr.concat(fields, pd.Index(np.array(inits, dtype="datetime64[ns]"), name="init"))
     return out.assign_coords(time=valid_time(out.init.values, max_lead))
 
