@@ -89,6 +89,7 @@ FIELDS = {
     "U200": {"realm": "atm", "var": "U", "plev": 20000.0, "obs": ("ERA5", "ua"), "scale": 1.0, "offset": 0.0, "units": "m/s", "long_name": "200-hPa zonal wind"},
     "V200": {"realm": "atm", "var": "V", "plev": 20000.0, "obs": ("ERA5", "va"), "scale": 1.0, "offset": 0.0, "units": "m/s", "long_name": "200-hPa meridional wind"},
     "Z500": {"realm": "atm", "var": "Z3", "plev": 50000.0, "obs": ("ERA5", "zg"), "scale": 1.0, "offset": 0.0, "units": "m", "long_name": "500-hPa geopotential height"},
+    "Z10": {"realm": "atm", "var": "Z3", "plev": 1000.0, "obs": ("ERA5", "zg"), "scale": 1.0, "offset": 0.0, "units": "m", "long_name": "10-hPa geopotential height"},
     "T925": {"realm": "atm", "var": "T", "plev": 92500.0, "obs": ("ERA5", "ta"), "scale": 1.0, "offset": 0.0, "units": "K", "long_name": "925-hPa temperature"},
     "FLUT": {"realm": "atm", "obs": ("ERA5", "rlut"), "scale": 1.0, "offset": 0.0, "units": "W/m2", "long_name": "Outgoing longwave radiation"},
     "SOILWATER_10CM": {"realm": "lnd", "obs": None, "scale": 1.0, "offset": 0.0, "units": "kg/m2", "long_name": "Top 10-cm soil water"},
