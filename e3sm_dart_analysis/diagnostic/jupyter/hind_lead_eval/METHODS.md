@@ -21,7 +21,7 @@ Five initialization configurations, 20 members each, run for about 62 days from 
 Both start sets hold the same experiments: 5 configurations x 4 starts x 20 members. The members of each
 ensemble are exchangeable and their numbers are labels only. The BASE configurations are EN01-EN20, with EN01
 the unperturbed control and EN02-EN20 the control plus the centred perturbations of 19 of a season's 20
-selected DART members (`ensemble_perturbations/add_dart_perturbations_to_hyb_clim.ipynb`). The DA
+selected DART members (`ensemble_perturbations/02_ic_free_clim_dartpert.ipynb` and `03_ic_era5_dartfill_dartpert.ipynb`). The DA
 configurations keep the DART numbers of the same 20 members, a different subset of the 40 in each season
 (Dec 2011, `DARTEN40`: EN01 EN03 EN04 EN07 EN08 EN09 EN10 EN14 EN17 EN18 EN20 EN21 EN25 EN26 EN28 EN31 EN35
 EN36 EN37 EN40; May 2012, `DARTEN40S1`: EN02 EN03 EN05 EN07 EN11 EN12 EN13 EN14 EN15 EN16 EN20 EN22 EN24
@@ -170,12 +170,17 @@ Z500, T850) in the daily stream would give true model daily means at little cost
   ERA5 file `DART_INIT/ATM/v3.LR.ne30pg2.ERA5.eam.i.<date>.nc`, and the `HYB_DARTPERT20` files built from it,
   hold 13 variables (U, V, T, Q, PS, CLDLIQ, CLDICE and coordinates) against 129 in the DART and FREE_CLIM
   files: no ozone, no linoz gases (H2OLNZ, CH4LNZ, N2OLNZ), no chemistry, no aerosols, no sea-ice surface
-  fields. EAM starts these near zero. Global clear-sky downward longwave at the surface (FLDSC) is then
+  fields. EAM starts these near zero, and the radiation reads its gases from those tracers
+  (`rad_climate = 'A:H2OLNZ:H2O', 'A:O3:O3', 'A:N2OLNZ:N2O', 'A:CH4LNZ:CH4'`), so the runs start
+  radiatively dry and without ozone (day 1 against DA_ATM: -190 W m-2 downward longwave over land, -250 DU
+  ozone). Global clear-sky downward longwave at the surface (FLDSC) is then
   94 W m-2 on day 1 against 318 in DA_ATM, recovers only over about 8 weeks, and the lower stratosphere
   (50 hPa) cools by 11 K. Over land TREFHT is 6-7 K too cold for 2-4 weeks in both seasons (water vapour
   is normal; the ocean is held by the prescribed SST). Contrasts with HYB_BASE or DA_LND, including
   notebook 05's atmosphere benefit E10 - E00, mostly measure this defect, not the initialization.
-  Found 2026-11-06; these two configurations need complete initial files and new runs.
+  Found 2026-11-06. The completed files (ERA5 fields plus the DART-mean of every other field, H2OLNZ from
+  ERA5 Q) are built by `ensemble_perturbations/03_ic_era5_dartfill_dartpert.ipynb` (step 3a); these two
+  configurations need new runs from them.
 * **Drift**: not removed by either bias treatment (section 5); week 1-2 comparisons between configurations
   include it.
 * **Verifying analysis**: ERA5 also provides the initial atmosphere of HYB_BASE and DA_LND, which favours them
@@ -183,11 +188,6 @@ Z500, T850) in the daily stream would give true model daily means at little cost
 * **Significance**: the t-test treats the 8 starts as independent, but starts 5 days apart verify on
   overlapping periods, so significance is overstated. Lead with gridpoint ACC within a season and ΔACC.
 * **00Z fields**: verified at 00Z only (no model daily means), with all-hours climatologies (section 4).
-* **HYB_BASE and DA_LND initial atmosphere (found 2026-11-06)**: the ERA5 file `v3.LR.ne30pg2.ERA5.eam.i.<date>`
-  held only T, U, V, Q, PS, CLDLIQ, CLDICE; the radiation reads H2OLNZ, O3, N2OLNZ and CH4LNZ (`rad_climate`), so
-  these runs started radiatively dry without ozone (day 1: -190 W m-2 downward longwave, -250 DU ozone against
-  DA_ATM) and are 6-7 K too cold over land into week 3. Their scores, and every contrast with them, are invalid
-  until they are rerun from the completed files (`ensemble_perturbations/complete_era5_initial_states.ipynb`).
 * **DA_COUPLED**: started from the DART case, so its sea-ice state also differs (polar only; section 1).
 * **Precipitation**: GPCP V3.3 is built from IMERG V07B within 55N-55S, so it is not independent of IMERG
   there.
