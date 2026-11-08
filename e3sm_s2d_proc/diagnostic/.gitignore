@@ -1,0 +1,3 @@
+# executed test copies and logs of the 9x series
+.split_work/run/
+.split_work/test_*.py

@@ -78,6 +78,9 @@ CASES = {
     },
 }
 REFERENCE = {"case_prefix": f"{MODEL_PREFIX}_BruteForce", "source": "Reanalysis", "init_months": (5, 11)}
+# The Reanalysis also has Feb and Aug starts every five years (1980-2015, 10 members): 1985-2010 inside
+# CLIM_YEARS give a direct (60 member-year) climatology for those starts (matched_climatology method "direct").
+DIRECT_INIT_MONTHS = (2, 8)
 
 # Field -> realm, file variable, obs product/variable, unit conversion to display units.
 FIELDS = {
@@ -287,9 +290,10 @@ def _cache_ok(path, expected):
 
 
 def leadtime_climatology(field, init_month, years=CLIM_YEARS, mode="auto"):
-    """Reanalysis ensemble-mean climatology (lead, lat, lon) for a May or Nov start."""
-    if init_month not in REFERENCE["init_months"]:
-        raise ValueError(f"Reanalysis climatology exists only for init months {REFERENCE['init_months']}")
+    """Reanalysis ensemble-mean climatology (lead, lat, lon) for a May or Nov start (every year of ``years``),
+    or a Feb or Aug start (the years of ``years`` that have one: every fifth year)."""
+    if init_month not in REFERENCE["init_months"] + DIRECT_INIT_MONTHS:
+        raise ValueError(f"Reanalysis climatology exists only for init months {REFERENCE['init_months'] + DIRECT_INIT_MONTHS}")
     realm = FIELDS[field]["realm"]
     path = diag_dir(REFERENCE["source"], "leadtime_clim", realm, field,
                     f"{REFERENCE['source']}_init{init_month:02d}_{field}_leadclim_y{years[0]}-{years[1]}_m{NENS}_l{NLEAD}_{GRID_TAG}.nc")
@@ -357,8 +361,19 @@ def matched_climatology(field, init_month, method="lead_drift", mode="auto"):
       the nearest lead (averaged when equally near). Simple, but at short
       leads it borrows a climatology that has already drifted.
 
-    Fields without an observational product always use "target_month".
+    * "direct": the Reanalysis climatology of the same start month, which for Feb and Aug comes from the
+      starts that exist every fifth year (1985-2010 within CLIM_YEARS: 6 years x 10 members). No drift
+      assumption; noisier than the 30-year May/Nov climatologies.
+
+    Fields without an observational product always use "target_month" (unless "direct").
     """
+    if method == "direct" and init_month in DIRECT_INIT_MONTHS:
+        clim = leadtime_climatology(field, init_month, mode=mode)
+        used = load_netcdf(diag_dir(REFERENCE["source"], "leadtime_clim", FIELDS[field]["realm"], field,
+                                    f"{REFERENCE['source']}_init{init_month:02d}_{field}_leadclim_y{CLIM_YEARS[0]}-{CLIM_YEARS[1]}"
+                                    f"_m{NENS}_l{NLEAD}_{GRID_TAG}.nc")).attrs.get("years_used", "")
+        clim.attrs["climatology_method"] = f"Reanalysis init{init_month:02d} starts {used.replace(',', ', ')} (direct)"
+        return clim
     if init_month in REFERENCE["init_months"]:
         clim = leadtime_climatology(field, init_month, mode=mode)
         clim.attrs["climatology_method"] = f"Reanalysis init{init_month:02d} {CLIM_YEARS[0]}-{CLIM_YEARS[1]}"
@@ -375,7 +390,7 @@ def matched_climatology(field, init_month, method="lead_drift", mode="auto"):
                       "climatology_method": (f"{FIELDS[field]['obs'][0]} {CLIM_YEARS[0]}-{CLIM_YEARS[1]} target-month "
                                              "climatology + Reanalysis init05/init11 mean drift at the same lead")}
         return clim
-    if method not in ("lead_drift", "target_month"):
+    if method not in ("lead_drift", "target_month", "direct"):
         raise ValueError(f"unknown climatology method {method!r}")
     leads, mapping = [], []
     for lead in range(NLEAD):

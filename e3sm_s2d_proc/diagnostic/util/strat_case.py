@@ -127,9 +127,9 @@ def _parallel_map(func, jobs, workers):
         with ProcessPoolExecutor(max_workers=workers) as pool:
             for i, r in enumerate(pool.map(func, jobs)):
                 results[i], done[i] = r, True
-    except BrokenProcessPool:
+    except (BrokenProcessPool, OSError) as err:     # a worker killed, or the pool could not start
         todo = [i for i, d in enumerate(done) if not d]
-        print(f"[WARN] a reader process was killed; reading the remaining {len(todo)} jobs serially", flush=True)
+        print(f"[WARN] reader pool failed ({type(err).__name__}); reading the remaining {len(todo)} jobs serially", flush=True)
         for i in todo:
             results[i] = func(jobs[i])
     return results
@@ -350,13 +350,20 @@ def lead_climatology(init_month, ref, obs_month_clim, method="lead_drift"):
     """Monthly lead-time climatology (lead, plev, lat) for any start month.
 
     ``ref``: {init_month: Reanalysis monthly_zonal Dataset} for the starts that have one (May,
-    Nov). Other starts: ``obs_month_clim`` (month, plev, lat; ERA5 on the model levels) of each
+    Nov; with Feb and Aug, built from the starts of every fifth year, for ``method="direct"``). Other starts: ``obs_month_clim`` (month, plev, lat; ERA5 on the model levels) of each
     target month plus the mean Reanalysis drift at the same lead ("lead_drift"), or the
     Reanalysis value for the same target month at the nearest lead ("target_month").
     """
     clim = {m: ds.mean(("year", "member")) for m, ds in ref.items()}
+    if method == "direct" and init_month not in clim:
+        raise ValueError(f"no Reanalysis zonal-mean climatology for init month {init_month} in ref {sorted(clim)}")
     if init_month in clim:
-        return clim[init_month].assign_attrs(climatology_method=f"Reanalysis init{init_month:02d} {rc.CLIM_YEARS[0]}-{rc.CLIM_YEARS[1]}")
+        ds = ref[init_month]
+        has = np.isfinite(ds["U"].isel(lead=0, plev=0, lat=-1)).any("member")
+        years = [int(y) for y in ds["year"].values[has.values]]
+        label = (f"{years[0]}-{years[-1]}" if len(years) == years[-1] - years[0] + 1
+                 else f"{len(years)} starts {years[0]}-{years[-1]} (every fifth year)")
+        return clim[init_month].assign_attrs(climatology_method=f"Reanalysis init{init_month:02d} {label}")
     if method == "lead_drift":
         drift = sum(clim[m] - obs_month_clim.sel(month=xr.DataArray(target_months(m), dims="lead")).drop_vars("month")
                     for m in clim) / len(clim)
@@ -845,3 +852,25 @@ def ssw_event_details(u, times, dates, recover_days=10):
         rows.append({"central_date": t[i], "min_u": float(np.min(u[i:max(j, i + 1)])), "easterly_days": int(j - i),
                      "recovery_date": rec, "days_to_recovery": (rec - t[i]).days if pd.notna(rec) else np.nan})
     return pd.DataFrame(rows, columns=["central_date", "min_u", "easterly_days", "recovery_date", "days_to_recovery"])
+
+
+def map_lead_climatology(pool, year, init_month, maps, days, method="direct", field="Z10", lat_min=MAP_LAT_MIN,
+                         mode="auto"):
+    """Daily climatology (time, lat, lon) of the native daily maps of one pooled start, on ``days``.
+
+    The Reanalysis lead-time climatology of the monthly product (``rc.matched_climatology(field, method)``;
+    "direct" uses each start's own Reanalysis starts) plus the ensemble-mean daily-minus-monthly offset of
+    the same runs (native ``Z010`` is ~40 m above the monthly ``Z3``), month by month, interpolated to days.
+    ``maps``: the pooled daily maps (member, time, lat, lon) of the start (``pooled_daily_maps``).
+    """
+    def north(da):
+        return da.sel(lat=slice(lat_min - 0.01, 90.0))
+
+    lead_clim = north(rc.matched_climatology(field, init_month, method=method, mode=mode))
+    mon = [rc.open_hindcast(prefix, year, init_month, field) for prefix in pool.values()]
+    mon = north(xr.concat([m.drop_vars("member") for m in mon if m is not None], dim="member").mean("member"))
+    dmean = monthly_means(north(maps).mean("member")).load()
+    targets = to_datetime64(mon["time"].values).astype("datetime64[M]").astype("datetime64[ns]") + np.timedelta64(14, "D")
+    offset = dmean.reindex(time=targets).rename(time="lead").assign_coords(lead=mon["lead"].values) - mon.drop_vars("time")
+    out = daily_from_lead(lead_clim + offset, year, init_month, to_datetime64(days))
+    return out.assign_attrs(climatology_method=lead_clim.attrs.get("climatology_method", method))

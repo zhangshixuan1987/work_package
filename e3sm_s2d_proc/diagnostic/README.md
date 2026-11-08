@@ -93,9 +93,18 @@ points, so it gives no Nino index.
 | `7c_e3sm_xro_state.ipynb` | E3SM hindcasts in the XRO state space against observations and XRO: state-vector plumes (common 5-95% ranges), error decomposition into the start-month error B(0) and the error accumulated afterwards G(L) = B(L) - B(0), summary heat maps, growth of Nino3.4 and *h* from the start month, peak-season summary. |
 | `7d_e3sm_recharge.ipynb` | *T*-*h* phase planes, and XRO started from E3SM's start-month offsets (*h* only, and the full state) to test whether the E3SM-XRO peak difference comes from the initial state or from E3SM's evolution. |
 | `8_enso2026_animation.ipynb` | Animated month-by-month evolution of the 2026/27 El Nino: global maps (Robinson; `DOMAIN` for a regional box) of SST (OISST v2.1), 0-700 m heat content (EN4.2.2), precipitation (GPCP v2.3) and land 2-m air temperature (ERA5-Land) anomalies, observed and the pooled (`clim`/`obs`/`NSIDC`) ensemble mean of each 2026 start, above a Nino3.4 plume drawn up to the frame month, with the deterministic XRO forecast from each start (7b control setup) as a dashed reference. Saves a GIF and a video per field (H.264 MP4 if ffmpeg has libx264, e.g. via `imageio-ffmpeg`; else VP9 WebM) and a static storyboard of selected months; the pooled ensemble means are cached under `data/`. |
-| `util/strat_case.py` | Stratosphere helpers for notebook 9: daily zonal means from the native `eam.h1` files (U/V/T at 22 levels to 1 hPa, Z at 16 levels to 10 hPa, eddy heat flux; native columns averaged into 1-degree bands), monthly zonal means of the post-processed U/T/Z3 (Reanalysis 1981-2010 and the 2026 starts), the lead-time climatology of zonal means (`lead_drift` for Feb/Aug), ERA5 daily zonal means and smoothed daily climatologies, SSW central dates (Charlton and Polvani 2007) and final-warming dates (Butler et al. 2019), lag composites. Data roots are arguments. |
-| `9_ssw_polar_vortex.ipynb` | Polar vortex and SSWs in the 2026 starts: model stratospheric climatology against ERA5, QBO forecasts, the observed winter 2025/26 with the Feb start, daily U(60N, 10 hPa) plumes for 2026/27 and 2027/28, SSW frequency (raw and bias-adjusted wind) and final-warming dates against ERA5 1979 on (all, El Nino and La Nina winters), DJF vortex tercile probabilities, member vortex against Nino3.4 and the autumn QBO, and SSW lag composites (U, 100-hPa heat flux, polar-cap height). Needs `ERA5/1x1/daily_zonal` in the reference archive (`ERA5/scripts/daily_zonal`). |
-| `10_polar_vortex_animation.ipynb` | Animated day-by-day evolution of the 10-hPa polar vortex for one winter (`WINTER`: 2026/27 forecast by default, or 2025/26 against the Feb start): north-polar maps of total height (contours) and anomaly (shading) from ERA5 (00Z, hourly mirror) and each 2026 start's pooled ensemble mean, the ERA5 climatology, and one featured member per start (by default its first SSW of the winter), above a U(60N, 10 hPa) timeline. Model anomalies remove the Reanalysis lead-time climatology of `Z10`; totals add them to the ERA5 climatology. Saves a GIF, a video and a storyboard; the model daily maps (native `Z010`, remapped with the ne30pg2 map file) and ERA5 maps are cached under `$S2D_DIAG_ROOT`. |
+| `util/strat_case.py` | Stratosphere readers: daily zonal means and daily 10-hPa maps from the native `eam.h1` files, monthly zonal means of the post-processed U/T/Z3, ERA5 daily zonal means and 00Z maps, lead-time climatologies of zonal means (`direct`, `lead_drift`), the daily-minus-monthly Z offset, SSW central dates (Charlton and Polvani 2007), final warming with coverage status, event details, lag composites. |
+| `util/strat_diag.py` | Shared inputs of the 9a-9i notebooks: `StratConfig` (data roots and run controls), `load_era5` (cached ERA5 indices and climatologies), `load_references` (Reanalysis zonal means of every start month), `load_model` (pooled 2026 starts with their daily and monthly indices), `ssw_catalogue`, `djf_vortex`, DJF helpers. |
+| `util/vortex_plot.py` | North-polar map helpers of 9g-9i: projection and extent, fixed-level anomaly shading and total contours, U60 badges, video writer. |
+| `9a_strat_build_caches.ipynb` | Builds and checks every stratosphere cache (the only 9x notebook that reads raw data; the others use `derivation_mode = "require"`): ERA5 daily zonal means and indices, model daily/monthly zonal means and daily 10-hPa maps, Reanalysis climatologies of every start month (`direct`: Feb/Aug from the six 1985-2010 starts); cache inventory; the daily-minus-monthly height offset check (38 m at 10 hPa, constant over leads and starts). |
+| `9b_strat_model_climatology.ipynb` | E3SM's stratosphere against ERA5: seasonal cycle of U(60N, 10 hPa) and polar-cap temperature, DJF zonal-mean U bias, DJF vortex strength and interannual variability. |
+| `9c_vortex_forecast.ipynb` | The vortex forecast: Feb 2026 start against the observed end of winter 2025/26, daily U(60N, 10 hPa) plumes for 2026/27 and 2027/28, the vortex index plume (U60, polar-cap T and height, polar-cap SLP), DJF tercile probabilities with their sensitivity to the climatology method. |
+| `9d_ssw_occurrence.ipynb` | SSW frequency by start x case x winter (raw wind; bias-adjusted as sensitivity) against ERA5 1979/80 on, central-date months, final warming with censoring; event catalogue CSV. |
+| `9e_enso_qbo_background.ipynb` | QBO forecasts (time-height and 50 hPa), the ENSO/QBO background state by start and case, within-group member covariation with the DJF vortex. |
+| `9f_ssw_dynamics.ipynb` | Season-matched SSW lag composites (U60, 100-hPa heat flux, polar-cap height) with cluster-bootstrap intervals, event-property distributions, vertical evolution of polar-cap anomalies and SLP. |
+| `9g_ssw_mechanism.ipynb` | What distinguishes an SSW member from comparable members that do not reverse? A featured SSW member (`EVENT`) against a matched non-SSW member and a near-miss: aligned U60 / polar-cap T / heat-flux timelines, ensemble ranks, the ensemble relationship of preconditioning and pre-onset wave activity with the outcome, pre-onset 10-hPa maps, side-by-side animation. |
+| `9h_vortex_ssw_animation.ipynb` | Day-by-day 10-hPa polar maps of one winter: each start's ensemble mean and a featured SSW member, the all-start mean (or ERA5 for an observed winter), with a U60 timeline; GIF, video, storyboard. |
+| `9i_vortex_evolution_animation.ipynb` | Seasonal evolution Oct 2026-Apr 2027 without event-based selection: one fixed member and the ensemble mean of each start, raw 10-hPa height contours with optional anomaly shading, reference climatologies, U60 timeline; GIF, video, preview, storyboard. |
 
 ## Running
 
@@ -137,11 +146,10 @@ Outputs:
     7c_e3sm_xro_state/{figures,data}/     data: start-month and evolution error CSVs, peak summary
     7d_e3sm_recharge/{figures,data}/      data: matched-initial-state CSV
     8_enso2026_animation/{figures,data}/  figures: GIF/video animations and storyboards; data: pooled ensemble-mean caches
-    9_ssw_polar_vortex/{figures,data}/    data: SSW central dates, SSW frequency, final-warming dates, DJF vortex tercile CSVs
-    10_polar_vortex_animation/figures/    GIF/video of the 10-hPa vortex per winter and a storyboard
+    9a_strat_build_caches/ ... 9i_vortex_evolution_animation/   one folder per 9x notebook: figures, CSV tables
   ```
 - Reusable caches stay outside it: `$S2D_DIAG_ROOT/Reanalysis/leadtime_clim/`,
-  `$S2D_DIAG_ROOT/<source>/strat/{daily_zonal,monthly_zonal,daily_maps}/` and `observations/strat/daily_maps/` (notebooks 9, 10) and
+  `$S2D_DIAG_ROOT/<source>/strat/{daily_zonal,monthly_zonal,daily_maps}/` and `observations/strat/daily_maps/` (notebooks 9a-9i) and
   `$S2D_DIAG_ROOT/observations/case_study/` (`S2D_DIAG_ROOT` defaults to
   `/global/cfs/cdirs/e3sm/S2S2D/s2d_diag`).
 
@@ -162,3 +170,20 @@ package (`pip install XRO`, examples in `~/code/XRO`) must be installed in `e3sm
 
 Land and sea-ice diagnostics in `3_ic_sensitivity.ipynb` need the RTENSO2026 `lnd_mon1`
 and `ice_mon1` post-processing; cases not yet processed are skipped.
+
+## Stratosphere series (9a-9i)
+
+Run `9a_strat_build_caches` first (about 1 h the first time: the native daily model reads); the other 9x
+notebooks then only read caches (`derivation_mode = "require"`) and can run in any order. Each starts with
+its question and findings. The polar-vortex notebooks need `ERA5/1x1/daily_zonal` in the reference
+archive (built by `ERA5/scripts/daily_zonal`). On a login node (30 GB per user) run one 9x notebook at a time;
+`.split_work/run_strat_series.sbatch` runs the whole series on a compute node.
+
+The notebooks are generated by `.make_strat_series.py` from the cell sources in `.split_work/` (the former
+notebooks 9, 10 and 11, split by question) and the shared loaders in `util/strat_diag.py`; edit those and
+regenerate (`python .make_strat_series.py`) rather than the notebooks, or edit a notebook directly and
+carry the change back.
+
+Model anomalies use each start's own Reanalysis climatology (`CLIM_METHOD = "direct"`): May/Nov
+1981-2010, Feb/Aug the six 1985-2010 starts. The earlier `lead_drift` climatology produced a spurious
+weak-vortex signal for the Feb/Aug starts (9c keeps it as a sensitivity test).
