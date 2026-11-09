@@ -15,7 +15,7 @@ conditions. This set is in preparation; the workflow is not final.
 | 2026-02-01 | `2026-02-01-00000` | Hindcast | Planned |
 | 2026-05-01 | `2026-05-01-00000` | Hindcast | Planned |
 | 2026-08-01 | `2026-08-01-00000` | Hindcast | Planned |
-| 2026-11-01 | `2026-11-01-00000` | Hindcast | Planned (`obs` land/sea-ice year waits for observations) |
+| 2026-11-01 | `2026-11-01-00000` | Hindcast | Planned |
 
 ## Initial-condition sources
 
@@ -160,8 +160,9 @@ both (`EXCLUDE_TARGET_YEAR`).
    sea ice. The river always takes the land year.
 
 The `obs*` branches need observations for the target date: ERA5-Land and NSIDC
-on disk reach 2026-08-01 (2026-11-01 waits for them); ERA5 ends in June 2026,
-so `obs` also waits for 2026-08-01.
+on disk cover all four 2026 dates (2026-11-01 added on 2026-11-09; ERA5-Land
+for that date is the preliminary `expver 0005` release); ERA5 ends in June
+2026, so `OBS_SET = "era5"` cannot be used for 2026-08-01 or 2026-11-01.
 
 ### Choice of box size
 
@@ -462,7 +463,7 @@ uses (from `selection.json`; the joint distance in parentheses):
 | **2026-02-01** | **2010** (0.839) | **2010** (1.289) |
 | 2026-05-01 | 2009 | 2011 |
 | 2026-08-01 | 2009 | 2016 |
-| 2026-11-01 | 1995 | not yet selected |
+| 2026-11-01 | 1995 | 2015 |
 
 **2026-02-01: `clim` and `obs` selected the same year.** The two branches score
 the candidates independently (different targets and fields), and both ranked
