@@ -60,7 +60,7 @@ esac
 
 # JRA55/BruteForce example: 1980-2018 with months=(2 8)
 # 4DEnVar availability:     1980-2015 with months=(5 11)
-# Reanalysis ocean ICs:     2015 with months=(2 5 8 11); 2026 with months=(2 5 8)
+# Reanalysis ocean+ERA5 atm ICs: 2015 and 2026 with months=(2 5 8 11)
 start_year=2015
 end_year=2015
 months=(2 5 8 11)

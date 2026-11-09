@@ -15,7 +15,7 @@ conditions. This set is in preparation; the workflow is not final.
 | 2026-02-01 | `2026-02-01-00000` | Hindcast | Planned |
 | 2026-05-01 | `2026-05-01-00000` | Hindcast | Planned |
 | 2026-08-01 | `2026-08-01-00000` | Hindcast | Planned |
-| 2026-11-01 | `2026-11-01-00000` | Hindcast | Source data not yet available |
+| 2026-11-01 | `2026-11-01-00000` | Hindcast | Planned (`obs` land/sea-ice year waits for observations) |
 
 ## Initial-condition sources
 
@@ -338,10 +338,11 @@ first source that exists:
 
 The reconstruction reproduces the BruteForce 2015-02-01 EN00 bit-for-bit
 (`cprnc`). Tang's 2026-02-01, 05-01 and 08-01 HICCUP files arrived on
-2026-10-15; they have the same dimensions and variables as the 2015 files, but
-the non-ERA5 fields (aerosols, trace gases) come from a 2005-2014 monthly
-climatology of `v3.LR.amip_bonus_0101` `eam.i` files instead of the restart of
-the same date. 2026-11-01 is pending until its file exists. A date whose
+2026-10-15 and the 2026-11-01 file on 2026-11-09; they have the same
+dimensions and variables as the 2015 files, but the non-ERA5 fields (aerosols,
+trace gases) come from a 2005-2014 monthly climatology of
+`v3.LR.amip_bonus_0101` `eam.i` files instead of the restart of the same date.
+All eight dates are built. A date whose
 `atm.json` exists is reported as done and skipped (`overwrite_existing=true`
 redoes it), so rerunning the script only builds the new dates.
 

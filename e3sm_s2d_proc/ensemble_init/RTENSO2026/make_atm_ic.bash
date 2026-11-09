@@ -25,7 +25,7 @@ set -o pipefail
 #   bruteforce  the BruteForce members of the same date, copied unchanged (2015)
 #   hiccup      Tang's HICCUP file: reconstructed on the eam.i template (EN00)
 #               and perturbed with DART for EN01-EN09 (util/eam_ens.sh)
-#   pending     neither yet (2026-11-01 until Tang's file exists): reported, skipped
+#   pending     neither yet (a date whose HICCUP file has not arrived): reported, skipped
 # A date whose atm.json exists is done and skipped unless overwrite_existing.
 # The coupler restart is not written here: cpl/<method>/ gets the cpl.r of
 # the land year of each method (util/clim_restart.py).
