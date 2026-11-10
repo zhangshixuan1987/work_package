@@ -39,14 +39,17 @@ set -o pipefail
 # ---------------------------- USER SETTINGS ----------------------------------
 out_root="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions"
 dates=(2015-02-01 2015-05-01 2015-08-01 2015-11-01
-       2026-02-01 2026-05-01 2026-08-01)
+       2026-02-01 2026-05-01 2026-08-01 2026-11-01)
 [[ -n ${DATES:-} ]] && read -ra dates <<< "${DATES}"   # DATES="2026-02-01 ..." runs a subset
 out_subdir="ice/nsidc"                # written to <out_root>/YYYYMMDD/<out_subdir>/
 
-# Sea-ice initial conditions, one directory per calendar date (YYYYMMDD; both
-# %s are the date), remapped to IcoswISC30E3r5.
+# Sea-ice initial conditions, one directory per calendar date, remapped to
+# IcoswISC30E3r5. The first two %s are the date (YYYYMMDD), the third the
+# file's delivery stamp: ice_stamp, or ice_stamp_by_date for a date delivered later.
 ice_dir="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions/Reanalysis_ICs"
-ice_case="%s/mpassi.IcoswISC30E3r5.iceArea_from_NSIDCv6_%s_spunup.20261029.nc"
+ice_case="%s/mpassi.IcoswISC30E3r5.iceArea_from_NSIDCv6_%s_spunup.%s.nc"
+ice_stamp="20261029"
+declare -A ice_stamp_by_date=([2026-11-01]=20261109)
 ice_label="NSIDCv6"                   # recorded in ice.json and the file attributes
 
 # Model sea-ice restart the files are checked against (mesh and variables).
@@ -76,7 +79,8 @@ fi
 problems=0
 tasks=()
 for date in "${dates[@]}"; do
-  ice_file="${ice_dir}/$(printf "${ice_case}" "${date//-/}" "${date//-/}")"
+  stamp=${ice_stamp_by_date[${date}]:-${ice_stamp}}
+  ice_file="${ice_dir}/$(printf "${ice_case}" "${date//-/}" "${date//-/}" "${stamp}")"
   ref_date="${ref_year}${date:4}"
   ref="${src_root}/${ref_date}-00000/${prefix}.mpassi.rst.${ref_date}_00000.nc"
   out="${out_root}/${date//-/}/${out_subdir}/${prefix}.mpassi.rst.${date}_00000.nc"

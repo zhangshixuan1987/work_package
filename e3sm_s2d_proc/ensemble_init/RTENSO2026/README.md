@@ -367,7 +367,7 @@ different analyses.
 | Script | Source | Written to `YYYYMMDD/` |
 | --- | --- | --- |
 | `make_ocn_ic.bash` | CFSR ocean state (`mpas_YYYYMMDD.cfsr.ic.nc`: temperature, salinity, layer thickness, land-ice fields; velocities are zero, as in the BruteForce CFSRv2 restarts) appended onto the BruteForce `mpaso` restart of `template_year` (default 2018) on the same calendar date, which supplies only the fields CFSR does not have (flux accumulators, SSH history, frazil) | `ocn/20251024_s2d_spinup.mpaso.rst.YYYY-MM-DD_00000.nc`, `ocn/rpointer.ocn`, `ocn/ocean.json` |
-| `make_ice_ic.bash` | NSIDCv6 sea ice (`YYYYMMDD/mpassi.IcoswISC30E3r5.iceArea_from_NSIDCv6_spunup.YYYYMMDD.nc`), an alternative to each method's sea ice; the preflight checks the mesh and restart variables against the BruteForce `mpassi` restart | `ice/nsidc/20251024_s2d_spinup.mpassi.rst.YYYY-MM-DD_00000.nc`, `ice/nsidc/rpointer.ice`, `ice/nsidc/ice.json` |
+| `make_ice_ic.bash` | NSIDCv6 sea ice (`Reanalysis_ICs/YYYYMMDD/mpassi.IcoswISC30E3r5.iceArea_from_NSIDCv6_YYYYMMDD_spunup.STAMP.nc`; `STAMP` is the delivery date, `ice_stamp=20261029` except `ice_stamp_by_date` 2026-11-01 = 20261109), an alternative to each method's sea ice; the preflight checks the mesh and restart variables against the BruteForce `mpassi` restart | `ice/nsidc/20251024_s2d_spinup.mpassi.rst.YYYY-MM-DD_00000.nc`, `ice/nsidc/rpointer.ice`, `ice/nsidc/ice.json` |
 
 Both keep the source time as `xtime.orig`, so the model starts from the
 rpointer date (as in `../BruteForce/luke_cfsr/`), check every input and the
@@ -385,16 +385,27 @@ CHECK_ONLY=true ./make_ice_ic.bash   # likewise for the sea ice
 ./make_ice_ic.bash
 ```
 
-**Sea-ice files not yet used** (2026-10-26). The IcoswISC30E3r5 files pass
-the preflight (mesh and variables), but their ice state does not vary with the
-date: every date has NH ice area 14.0 and SH 0.03 million km2 and NH ice
-volume 3.3 thousand km3. The BruteForce restarts have NH/SH area 14.0/4.7
-(2015-02-01) and 5.6/16.4 (2015-08-01) million km2 and NH volume 14-24
-thousand km3. The earlier EC30to60E2r2 files show the same pattern, so this is
-in the source data, not the remapping. Every file is time-stamped
-`0001-01-07_00:00:00`, and on every date the NH holds a winter-like ice cover (the whole Arctic, Hudson Bay,
-Okhotsk, Baltic) while the SH is almost ice-free (`05_reanalysis_seaice_check.ipynb`). `ice/nsidc/` is not
-written until this is resolved with the file provider.
+**Sea-ice file status** (2026-11-10). D. Comeau's first files (stamp
+20261027, and the earlier EC30to60E2r2 files) held a winter Arctic and an
+almost ice-free SH on every date; the 20261029 files fix that, and the
+2026-11-01 file (stamp 20261109) arrived on 2026-11-10. All eight dates pass
+the preflight and are staged in `ice/nsidc/`. Hemispheric ice area (million
+km2, NH/SH; `05_reanalysis_seaice_check.ipynb`):
+
+| Date | NSIDCv6 spin-up | JRA55-FOSIRL |
+| --- | --- | --- |
+| 2015-02-01 | 13.17 / 3.41 | 14.03 / 4.73 |
+| 2015-05-01 | 12.18 / 9.21 | 13.07 / 10.27 |
+| 2015-08-01 | 5.23 / 15.87 | 5.63 / 16.37 |
+| 2015-11-01 | 8.15 / 15.32 | 8.21 / 15.25 |
+| 2026-02-01 | 12.64 / 2.80 | - |
+| 2026-05-01 | 11.72 / 7.24 | - |
+| 2026-08-01 | 5.48 / 14.99 | - |
+| 2026-11-01 | 7.22 / 14.07 | - |
+
+Against JRA55-FOSIRL the spin-up files have less NH ice volume on 2015-02,
+05 and 08-01 (7.9-19.8 vs 13.9-29.9 thousand km3; about equal on 2015-11-01)
+and less SH snow on every 2015 date (0.3-1.6 vs 1.2-4.7 thousand km3).
 
 ## 2015 sensitivity test
 

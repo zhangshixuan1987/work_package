@@ -32,9 +32,10 @@ SOURCE_STYLE = {
 }
 
 
-def ice_file(root: Path, pattern: str, date: str) -> Path:
-    """Sea-ice file of ``date`` (YYYY-MM-DD); ``pattern`` takes the YYYYMMDD tag as ``{tag}``."""
-    return Path(root) / pattern.format(tag=date.replace("-", ""))
+def ice_file(root: Path, pattern: str, date: str, stamp: str = "") -> Path:
+    """Sea-ice file of ``date`` (YYYY-MM-DD); ``pattern`` takes the YYYYMMDD tag as ``{tag}``
+    and the file's delivery stamp as ``{stamp}``."""
+    return Path(root) / pattern.format(tag=date.replace("-", ""), stamp=stamp)
 
 
 def read_mesh(path: Path) -> dict[str, np.ndarray]:
