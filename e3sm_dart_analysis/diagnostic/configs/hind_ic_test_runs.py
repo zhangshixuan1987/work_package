@@ -7,8 +7,10 @@ files are given relative to the notebook's ``IC_ROOT``. Only names and relative 
 the roots depend on the machine and are notebook inputs.
 
 The production members are the ones sharing the tests' other initial states:
-* HYB_BASE EN01 is the unperturbed bare-ERA5 reference of the HYB_BASE ensemble (DATM land EN01), the
-  state that ERA5_DARTFILL and ERA5_CLIMFILL complete;
+* HYB_BASE EN01 (ERA5 + DART perturbation EN01, bare: T, U, V, Q, PS, CLDLIQ, CLDICE only; DATM land EN01) is
+  the state that ERA5_DARTFILL and ERA5_CLIMFILL EN01 complete, so each test differs from it only in the fields
+  the ERA5 file lacks. The main comparison is ``clim_fill``: ERA5 + CLIM_BASE aerosols, ozone and other
+  missing fields against the ERA5 initialization of HYB_BASE, same member;
 * DA_COUPLED, DA_ATM and DA_LND EN40 share the DART EN40 atmosphere and/or land with CLIMO_ATM and
   CLIMO_LND, which replace one component of DA_COUPLED EN40 with the CLIM_BASE (FREE_CLIM) state.
 """
@@ -80,6 +82,8 @@ ERA5_FIELDS = ("T", "U", "V", "Q", "PS", "CLDLIQ", "CLDICE")
 
 # Comparisons: (run A, run B, question). Differences are A - B.
 COMPARISONS: dict[str, tuple[str, str, str]] = {
+    "clim_fill": ("ERA5_CLIMFILL", "ERA5_BARE",
+                  "ERA5 + CLIM_BASE aerosol and ozone initialization - ERA5 initialization (HYB_BASE), same member EN01"),
     "tracer_fix": ("ERA5_DARTFILL", "ERA5_BARE",
                    "Does completing the ERA5 state remove the cold start? (ERA5 + DART fill - bare ERA5, DATM land)"),
     "fill_source": ("ERA5_CLIMFILL", "ERA5_DARTFILL",
@@ -94,8 +98,16 @@ COMPARISONS: dict[str, tuple[str, str, str]] = {
                  "Land initial state as run in production DA_ATM: DATM-forced - DART (DART atmosphere)"),
 }
 
+# A test member against the whole ensemble of another configuration (same start): (run, ensemble run, question).
+# The ensemble is every member of the ensemble run's case; the run differs from it in every initial state that differs.
+ENSEMBLE_COMPARISONS: dict[str, tuple[str, str, str]] = {
+    "climfill_vs_dacoupled": ("ERA5_CLIMFILL", "DA_COUPLED",
+                              "ERA5 + CLIM_BASE fill (DATM land) against the DA_COUPLED ensemble (DART atmosphere and land)"),
+}
+
 # Run groups plotted together (one figure per group)
 GROUPS = {
+    "era5_clim_fill": ("ERA5_BARE", "ERA5_CLIMFILL"),
     "era5_completion": ("ERA5_BARE", "ERA5_DARTFILL", "ERA5_CLIMFILL"),
     "component_swap": ("DA_COUPLED", "CLIMO_ATM", "DA_LND", "CLIMO_LND", "DA_ATM"),
 }

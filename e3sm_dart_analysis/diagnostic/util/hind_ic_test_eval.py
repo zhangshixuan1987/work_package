@@ -176,6 +176,11 @@ VARIABLES: dict[str, VarSpec] = {
     "TOZ": VarSpec("atm", "6hourly", "daily_mean", "TCO", "DU", "total column ozone"),
     "FLDS": VarSpec("atm", "6hourly", "daily_mean", "FLDS", "W m-2", "surface downward longwave"),
     "FLDSC": VarSpec("atm", "6hourly", "daily_mean", "FLDSC", "W m-2", "clear-sky surface downward longwave"),
+    "FSDSC": VarSpec("atm", "6hourly", "daily_mean", "FSDSC", "W m-2", "clear-sky surface downward shortwave"),
+    "FSNTOAC": VarSpec("atm", "6hourly", "daily_mean", "FSNTOAC", "W m-2", "clear-sky net TOA shortwave"),
+    "FLUTC": VarSpec("atm", "6hourly", "daily_mean", "FLUTC", "W m-2", "clear-sky outgoing longwave"),
+    "SCO": VarSpec("atm", "daily", "daily_mean", "", "DU", "stratospheric column ozone"),
+    "TCO": VarSpec("atm", "daily", "daily_mean", "", "DU", "tropospheric column ozone"),
     "FSDS": VarSpec("atm", "6hourly", "daily_mean", "FSDS", "W m-2", "surface downward shortwave"),
     "FLUT": VarSpec("atm", "6hourly", "daily_mean", "FLUT", "W m-2", "outgoing longwave"),
     "LHFLX": VarSpec("atm", "6hourly", "daily_mean", "LHFLX", "W m-2", "latent heat flux"),
@@ -186,6 +191,7 @@ VARIABLES: dict[str, VarSpec] = {
     "T500": VarSpec("atm", "daily", "00z", "T500", "K", "500-hPa temperature (00Z)"),
     "T100": VarSpec("atm", "daily", "00z", "T100", "K", "100-hPa temperature (00Z)"),
     "T050": VarSpec("atm", "daily", "00z", "", "K", "50-hPa temperature (00Z)"),
+    "T010": VarSpec("atm", "daily", "00z", "", "K", "10-hPa temperature (00Z)"),
     "Z500": VarSpec("atm", "daily", "00z", "Z500", "m", "500-hPa height (00Z)"),
     "U200": VarSpec("atm", "daily", "00z", "U200", "m s-1", "200-hPa zonal wind (00Z)"),
     "TSA": VarSpec("lnd", "daily", "daily_mean", "TREFHT", "K", "land 2-m temperature (ELM)"),
@@ -354,6 +360,29 @@ def noise_scale(members: xr.DataArray) -> xr.DataArray:
     return np.sqrt(2.0) * members.std("member", ddof=1)
 
 
+def member_vs_ensemble(member: xr.DataArray, ensemble: xr.DataArray, windows: dict) -> pd.DataFrame:
+    """Score one run against the members of another ensemble, by region and lead window.
+
+    ``member`` is (region, lead), ``ensemble`` (member, region, lead): regional bias against ERA5 (or the
+    raw value without a reference). Returns per region and window the run's value, the ensemble mean and
+    spread, their difference, ``z`` = difference / (spread x sqrt(1 + 1/N)), the spread of the difference
+    between a new member and the mean of N members, and ``rank``, the number of members below the run
+    (0 or N: outside every member, probability 1/(N+1) on each side for an exchangeable member)."""
+    m = window_means(member, windows)
+    e = window_means(ensemble, windows)
+    n = ensemble.sizes["member"]
+    mean, sd = e.mean("member"), e.std("member", ddof=1)
+    rank = (e < m).sum("member")
+    rows = []
+    for r in m.region.values:
+        for w in windows:
+            x, mu, s = (float(a.sel(region=r, window=w)) for a in (m, mean, sd))
+            rows.append(dict(region=r, window=w, run=x, ensemble_mean=mu, ensemble_spread=s, difference=x - mu,
+                             z=(x - mu) / (s * np.sqrt(1 + 1 / n)) if s > 0 else np.nan,
+                             rank=int(rank.sel(region=r, window=w)), members=n))
+    return pd.DataFrame(rows)
+
+
 __all__ = ["KEY_FIELDS", "VARIABLES", "REGIONS", "ic_grid", "ic_summary", "era5_field_check", "spec",
            "open_member", "open_era5", "stream_ok", "region_masks", "regional_mean", "window_means",
-           "noise_scale", "lead_days"]
+           "noise_scale", "member_vs_ensemble", "lead_days"]
