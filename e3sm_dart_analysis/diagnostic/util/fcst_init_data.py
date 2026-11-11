@@ -668,8 +668,98 @@ def model_climatology(variable: str, inits, years, *, max_lead: int = MAX_LEAD, 
 
 
 # --------------------------------------------------------------------------
-# Region masks
+# Region selection and masks
 # --------------------------------------------------------------------------
+def _region_box(r: dict) -> dict:
+    return dict(lat=[float(x) for x in r["lat"]], lon=[float(x) for x in r["lon"]], mask=r.get("mask"))
+
+
+def region_catalog(custom: dict | None = None) -> dict[str, dict]:
+    """Named regions: ``configs.s2s_config.TCC_REGIONS`` plus ``custom`` boxes.
+
+    ``custom`` = {name: dict(lat=(lat0, lat1), lon=(lon0, lon1), mask=None | "land" | "ocean")}, longitudes
+    0-360 (lon0 > lon1 wraps through 0E, e.g. lon=(350, 40) for Europe).
+    """
+    from configs.s2s_config import TCC_REGIONS
+
+    catalog = {r["name"]: dict(r) for r in TCC_REGIONS}
+    for name, r in (custom or {}).items():
+        if name in catalog:
+            raise ValueError(f"custom region {name!r} would replace the standard region; choose another name")
+        lat, lon = tuple(r["lat"]), tuple(r["lon"])
+        if not (-90 <= lat[0] < lat[1] <= 90) or not all(0 <= x <= 360 for x in lon) \
+                or r.get("mask") not in (None, "land", "ocean"):
+            raise ValueError(f"custom region {name!r}: need -90 <= lat0 < lat1 <= 90, lon in 0-360, "
+                             f"mask None/'land'/'ocean'; got {r}")
+        catalog[name] = dict(name=name, lat=lat, lon=lon, **({"mask": r["mask"]} if r.get("mask") else {}))
+    return catalog
+
+
+def select_regions(names, custom: dict | None = None) -> list[dict]:
+    """The regions ``names`` (in that order) from :func:`region_catalog`; unknown names raise, listing the choices."""
+    catalog = region_catalog(custom)
+    names = [names] if isinstance(names, str) else list(names)
+    unknown = [n for n in names if n not in catalog]
+    if unknown:
+        raise ValueError(f"unknown regions {unknown}; available: {list(catalog)} (or add them to CUSTOM_REGIONS)")
+    if len(set(names)) != len(names):
+        raise ValueError(f"duplicate regions in {names}")
+    return [catalog[n] for n in names]
+
+
+def _deg(x: float, pos: str, neg: str) -> str:
+    return f"{abs(x):g}°{pos if x >= 0 else neg}" if x else "0°"
+
+
+def region_label(r: dict) -> str:
+    """'CONUS (25°N-50°N, 125°W-66°W)'; 'LAND (global, land)'."""
+    lat, lon = r["lat"], r["lon"]
+    whole_lon = (lon[1] - lon[0]) % 360 == 0
+    if tuple(lat) == (-90, 90) and whole_lon:
+        box = "global"
+    else:
+        lo = [x - 360 if x > 180 else x for x in lon]
+        lon_txt = "all longitudes" if whole_lon else f"{_deg(lo[0], 'E', 'W')}-{_deg(lo[1], 'E', 'W')}"
+        box = f"{_deg(lat[0], 'N', 'S')}-{_deg(lat[1], 'N', 'S')}, {lon_txt}"
+    return f"{r['name']} ({box}{', ' + r['mask'] if r.get('mask') else ''})"
+
+
+def regions_table(regions) -> pd.DataFrame:
+    return pd.DataFrame([dict(region=r["name"], lat=tuple(r["lat"]), lon=tuple(r["lon"]), mask=r.get("mask") or "",
+                              label=region_label(r)) for r in regions]).set_index("region")
+
+
+def region_attrs(regions) -> dict:
+    """NetCDF attribute recording the region boxes a regional file was computed for."""
+    import json
+
+    return {"region_boxes": json.dumps({r["name"]: _region_box(r) for r in regions})}
+
+
+def cache_has_regions(path, regions) -> bool:
+    """True when the regional file ``path`` holds every region of ``regions`` with the same box.
+
+    Files written before ``region_boxes`` was recorded are accepted for the standard regions only.
+    """
+    import json
+
+    from configs.s2s_config import TCC_REGIONS
+
+    path = Path(path)
+    if not path.exists():
+        return False
+    with xr.open_dataset(path) as ds:
+        have = set(ds["region"].values.tolist()) if "region" in ds.coords else set()
+        boxes = json.loads(ds.attrs.get("region_boxes", "{}"))
+    standard = {r["name"]: _region_box(r) for r in TCC_REGIONS}
+    for r in regions:
+        recorded = boxes.get(r["name"], standard.get(r["name"]))
+        if r["name"] not in have or recorded != _region_box(r):
+            print(f"[STALE] {path.name}: region {r['name']} not computed with this box, recomputing")
+            return False
+    return True
+
+
 def region_masks(regions, lat, lon, *, land_support_dir) -> xr.DataArray:
     """(region, lat, lon) boolean masks of ``configs.s2s_config``-style regions (``mask``: land/ocean)."""
     with xr.open_dataset(Path(land_support_dir) / "LANDFRAC_E3SM_180x360.nc") as ds:

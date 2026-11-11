@@ -18,6 +18,8 @@ import pandas as pd
 import xarray as xr
 
 from util.heatwave_case import _date_axis, runs  # noqa: F401  (re-exported helpers)
+from configs.fcst_init_experiment_config import config_label
+from util.fcst_init_plotting import LEGEND_BOX, fig_size, fs, readable
 
 KELVIN = 273.15
 
@@ -62,13 +64,14 @@ def storm_metrics(t_c: np.ndarray, p: np.ndarray, times, window, obs_peak, *, to
 # ---------------------------------------------------------------------------
 # Figures
 # ---------------------------------------------------------------------------
+@readable
 def plot_region_series(panels: dict, obs: dict, window, styles: dict, flagged=(), *, ylabels: dict,
                        title: str, spread=(0.1, 0.9), xlim=None):
     """Rows: regions; columns: variables. ``panels[region][var][config]`` is (member, time) with
     members of all starts stacked; ``obs[region][var]`` the observed series (None: model only)."""
     regions = list(panels)
     variables = list(panels[regions[0]])
-    fig, axes = plt.subplots(len(regions), len(variables), figsize=(5.4 * len(variables), 2.9 * len(regions)),
+    fig, axes = plt.subplots(len(regions), len(variables), figsize=fig_size(5.4 * len(variables), 2.9 * len(regions)),
                              sharex=True, squeeze=False)
     for i, reg in enumerate(regions):
         for j, v in enumerate(variables):
@@ -81,24 +84,24 @@ def plot_region_series(panels: dict, obs: dict, window, styles: dict, flagged=()
                 tt = pd.DatetimeIndex(da.time.values)
                 lo, hi = (da.quantile(q, "member") for q in spread)
                 ax.fill_between(tt, lo, hi, color=st.get("color"), alpha=0.12, lw=0, step="mid")
-                ax.plot(tt, da.mean("member"), drawstyle="steps-mid", label=c + (" (IC defect)" if c in flagged else ""), **st)
+                ax.plot(tt, da.mean("member"), drawstyle="steps-mid", label=config_label(c) + (" (IC defect)" if c in flagged else ""), **st)
             o = obs[reg].get(v)
             if o is not None:
                 ax.plot(pd.DatetimeIndex(o.time.values), o, drawstyle="steps-mid", label="OBS", **styles.get("OBS", {}))
             if v == "TREFHT":
                 ax.axhline(0, color="tab:blue", lw=0.8, ls=":")
-            ax.set_ylabel(ylabels[v], fontsize=8)
+            ax.set_ylabel(ylabels[v])
             if j == 0:
-                ax.text(0.01, 0.95, reg, transform=ax.transAxes, va="top", fontsize=8, weight="bold")
+                ax.text(0.01, 0.95, reg, transform=ax.transAxes, va="top")
             if xlim is not None:
                 ax.set_xlim(pd.Timestamp(xlim[0]), pd.Timestamp(xlim[1]))
             _date_axis(ax)
-    axes[0, 0].legend(fontsize=7, ncol=2, frameon=False, loc="lower left")
-    fig.suptitle(title, fontsize=10)
-    fig.tight_layout()
+    axes[0, 0].legend(ncol=2, **LEGEND_BOX, loc="lower left")
+    fig.suptitle(title)
     return fig
 
 
+@readable
 def plot_event_maps(obs: xr.DataArray, model: dict, regions: list[dict], flagged=(), *, title: str, cmap: str,
                     vmin: float, vmax: float, units: str, extent):
     """Event map of the observations and each configuration (ensemble and start mean)."""
@@ -109,7 +112,7 @@ def plot_event_maps(obs: xr.DataArray, model: dict, regions: list[dict], flagged
     ncol = 3
     nrow = int(np.ceil(len(names) / ncol))
     proj = ccrs.LambertConformal(central_longitude=-120, standard_parallels=(40, 50))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(4.1 * ncol, 3.6 * nrow), subplot_kw=dict(projection=proj), squeeze=False)
+    fig, axes = plt.subplots(nrow, ncol, figsize=fig_size(4.1 * ncol, 3.6 * nrow), subplot_kw=dict(projection=proj), squeeze=False)
     for ax, n, f in zip(axes.flat, names, fields):
         im = ax.pcolormesh(f.lon, f.lat, f, transform=ccrs.PlateCarree(), cmap=cmap, vmin=vmin, vmax=vmax, shading="auto")
         ax.coastlines(lw=0.6)
@@ -118,14 +121,15 @@ def plot_event_maps(obs: xr.DataArray, model: dict, regions: list[dict], flagged
             (a0, a1), (o0, o1) = r["lat"], r["lon"]
             ax.plot([o0, o1, o1, o0, o0], [a0, a0, a1, a1, a0], color="k", lw=1, transform=ccrs.PlateCarree())
         ax.set_extent(extent, ccrs.PlateCarree())
-        ax.set_title(n + (" (IC defect)" if n in flagged else ""), fontsize=9)
+        ax.set_title(config_label(n) + (" (IC defect)" if n in flagged else ""))
     for ax in list(axes.flat)[len(names):]:
         ax.set_visible(False)
     fig.colorbar(im, ax=axes.ravel().tolist(), orientation="horizontal", shrink=0.5, pad=0.04, label=units)
-    fig.suptitle(title, fontsize=10)
+    fig.suptitle(title)
     return fig
 
 
+@readable
 def plot_environment(days, obs: dict, model: dict, flagged=(), *, title: str, extent, z_levels=None,
                      psl_levels=None, ivt_max: float = 600.0, ivt_step: int = 4):
     """Rows: days; columns: OBS and configurations. Shading: IVT magnitude; vectors: IVT; black
@@ -137,7 +141,7 @@ def plot_environment(days, obs: dict, model: dict, flagged=(), *, title: str, ex
     z_levels = np.arange(4800, 6000, 60) if z_levels is None else z_levels
     psl_levels = np.arange(960, 1050, 8) if psl_levels is None else psl_levels
     proj = ccrs.LambertConformal(central_longitude=-135, standard_parallels=(35, 55))
-    fig, axes = plt.subplots(len(days), len(names), figsize=(3.4 * len(names), 2.9 * len(days)),
+    fig, axes = plt.subplots(len(days), len(names), figsize=fig_size(3.4 * len(names), 2.9 * len(days)),
                              subplot_kw=dict(projection=proj), squeeze=False)
     for i, d in enumerate(days):
         for j, n in enumerate(names):
@@ -152,17 +156,17 @@ def plot_environment(days, obs: dict, model: dict, flagged=(), *, title: str, ex
             ax.contour(ds.lon, ds.lat, ds.Z500, levels=z_levels, colors="k", linewidths=0.6, transform=ccrs.PlateCarree())
             cs = ax.contour(ds.lon, ds.lat, ds.PSL, levels=psl_levels, colors="w", linewidths=0.8,
                             transform=ccrs.PlateCarree())
-            ax.clabel(cs, fontsize=5, fmt="%d")
+            ax.clabel(cs, fontsize=fs("cell"), fmt="%d")
             ax.coastlines(lw=0.6, color="0.3")
             ax.set_extent(extent, ccrs.PlateCarree())
             if i == 0:
-                ax.set_title(n + (" (IC defect)" if n in flagged else ""), fontsize=8)
+                ax.set_title(config_label(n) + (" (IC defect)" if n in flagged else ""))
             if j == 0:
                 ax.text(-0.05, 0.5, str(pd.Timestamp(d).date()), transform=ax.transAxes, rotation=90, va="center",
-                        ha="right", fontsize=8)
+                        ha="right")
     fig.colorbar(im, ax=axes.ravel().tolist(), orientation="horizontal", shrink=0.4, pad=0.02,
                  label="integrated vapour transport (kg m-1 s-1)")
-    fig.suptitle(title, fontsize=10)
+    fig.suptitle(title)
     return fig
 
 

@@ -27,9 +27,11 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from configs.fcst_init_experiment_config import init_dates, members as config_members
+from configs.fcst_init_experiment_config import (case_attrs, case_current, config_label, init_dates,
+                                                members as config_members)
 from util.fcst_init_data import model_climatology, open_campaign, open_reference, reference_climatology
 from util.fcst_init_skill import WEEKS, weekly_means
+from util.fcst_init_plotting import LEGEND_BOX, fig_size, readable
 
 ROLE_LABELS = {"E00": "reference atm + reference land", "E10": "DART atm + reference land",
                "E01": "reference atm + DART land", "E11": "DART atm + DART land"}
@@ -67,13 +69,15 @@ def daily_members(config: str, season: str, variable: str, members, region: dict
     key = ",".join(members)
     if cache is not None and cache.exists() and not force:
         da = xr.load_dataarray(cache)
-        if da.attrs.get("members") == key and da.attrs.get("region") == str(region) and da.sizes["lead"] == max_lead:
+        if (da.attrs.get("members") == key and da.attrs.get("region") == str(region) and da.sizes["lead"] == max_lead
+                and case_current(da.attrs, config)):
             return da
     field = open_campaign(config, season, variable, members=list(members), max_lead=max_lead,
                           data_root=data_root, land_support_dir=land_support_dir)
     out = _box(field, region).drop_vars("time").load().transpose("init", "member", "lead", "lat", "lon")
     out = out.astype("float32").rename(variable).assign_attrs(config=config, season=season, members=key,
-                                                              region=str(region), units=field.attrs.get("units", ""))
+                                                              region=str(region), units=field.attrs.get("units", ""),
+                                                              **case_attrs(config))
     if cache is not None:
         out.to_netcdf(cache)
     return out
@@ -243,12 +247,13 @@ def results_table(result: dict, coords, panel: str, label: str, axis: str = "wee
 COLORS = {"atmosphere": "#c9b93d", "land": "#348a43", "interaction": "0.4", "total": "k"}
 
 
+@readable
 def plot_benefit_figure(weeks, panel_b: dict, panel_c: dict | None, *, title: str, ylabel: str = "ΔACC",
                         names=("atmosphere", "land")):
     """Three panels: (a) schematic hypothesis, (b) ERA5 verification, (c) model-member verification."""
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2), constrained_layout=True)
+    fig, axes = plt.subplots(1, 3, figsize=fig_size(15, 4.2), constrained_layout=True)
     x = np.linspace(1, max(weeks), 200)
     ax = axes[0]
     ax.plot(x, np.exp(-(x - 1) / 1.6), color=COLORS["atmosphere"], lw=2.4, label="Atmosphere")
@@ -283,42 +288,44 @@ def plot_benefit_figure(weeks, panel_b: dict, panel_c: dict | None, *, title: st
         ax.set_xlim(min(weeks) - 0.2, max(weeks) + 0.2)
         ax.set_xticks(list(weeks))
         ax.grid(alpha=0.2)
-        ax.legend(frameon=False, fontsize=9)
+        ax.legend(**LEGEND_BOX)
     fig.suptitle(title)
     return fig
 
 
+@readable
 def plot_skill_curves(weeks, panel_b: dict, panel_c: dict | None, roles: dict, styles: dict, *, title: str):
     """Absolute pattern ACC of every role, ERA5 and model-member verification."""
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4), constrained_layout=True, sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=fig_size(10.5, 4), constrained_layout=True, sharey=True)
     for ax, res, ttl in ((axes[0], panel_b, "(a) Verification: ERA5"), (axes[1], panel_c, "(b) Held-out model member")):
         if res is not None:
             for r, v in res["skill"].items():
                 cfg = roles[r]
                 st = styles.get(cfg, {})
                 lo, hi = res["skill_ci"][r]
-                ax.plot(weeks, v, marker="o", label=f"{r} {cfg}", color=st.get("color"), lw=2)
+                ax.plot(weeks, v, marker="o", label=f"{r} {config_label(cfg)}", color=st.get("color"), lw=2)
                 ax.fill_between(weeks, lo, hi, color=st.get("color"), alpha=0.12, lw=0)
         ax.axhline(0, color="k", lw=0.8)
         ax.set_title(ttl, loc="left")
         ax.set_xlabel("Forecast lead week")
         ax.set_xticks(list(weeks))
         ax.grid(alpha=0.2)
-        ax.legend(frameon=False, fontsize=8)
+        ax.legend(**LEGEND_BOX)
     axes[0].set_ylabel("Pattern ACC (ensemble mean)")
     fig.suptitle(title)
     return fig
 
 
+@readable
 def plot_paper_figure(x_weeks, panel_b: dict, panel_c: dict | None, *, names=("atmosphere", "land"),
                       title: str = "", ylabel: str = "ΔACC", window=(2, 4), model_label: str = "E3SM"):
     """The three-panel figure in the style of Richter et al. (2024, Fig. 1): curves at every lead day,
     the area down to zero shaded, the weeks-2-4 window in grey, the legend in panel (b) only."""
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.0), constrained_layout=True)
+    fig, axes = plt.subplots(1, 3, figsize=fig_size(15, 4.0), constrained_layout=True)
     xmax = float(np.nanmax(x_weeks))
     x = np.linspace(0, xmax, 300)
     # schematic shapes of Richter et al. (2024, Fig. 1a): atmospheric benefit high at week 0 and gone after
@@ -331,14 +338,14 @@ def plot_paper_figure(x_weeks, panel_b: dict, panel_c: dict | None, *, names=("a
             c = COLORS.get(name, "k")
             ax.fill_between(x, 0, sketch[name], color=c, alpha=0.15, lw=0)
             ax.plot(x, sketch[name], color=c, lw=2)
-    ax.set_title("(a) Hypothesis", fontweight="bold")
-    ax.set_ylabel("Predictability", fontweight="bold")
+    ax.set_title("(a) Hypothesis")
+    ax.set_ylabel("Predictability")
     ax.set_yticks([])
     lims = [0.0]
     for ax, res, ttl in ((axes[1], panel_b, f"(b) {model_label} (Verif = ERA5)"),
                          (axes[2], panel_c, f"(c) {model_label} (Verif = held-out member)")):
-        ax.set_title(ttl, fontweight="bold")
-        ax.set_ylabel(ylabel, fontweight="bold")
+        ax.set_title(ttl)
+        ax.set_ylabel(ylabel)
         if res is None:
             ax.text(0.5, 0.5, "not computed", ha="center", va="center", transform=ax.transAxes)
             continue
@@ -355,12 +362,12 @@ def plot_paper_figure(x_weeks, panel_b: dict, panel_c: dict | None, *, names=("a
     for ax in axes:
         ax.axvspan(*window, color="0.5", alpha=0.12, lw=0)
         ax.set_xlim(0, xmax)
-        ax.set_xlabel("Week", fontweight="bold")
+        ax.set_xlabel("Week")
         ax.grid(alpha=0.25)
     for ax in axes[1:]:
         ax.set_ylim(lo - pad, hi + pad)
     axes[0].set_ylim(0, None)
-    axes[1].legend(frameon=True, fontsize=9, loc="upper right")
+    axes[1].legend(loc="upper right", **LEGEND_BOX)
     if title:
         fig.suptitle(title)
     return fig

@@ -17,21 +17,23 @@ the start month (lnd). Each member records the check in
 
 Initial states (from each case's ``user_nl_eam`` ncdata and ``user_nl_elm`` finidat):
 
-==========  ==========================================  ============================
-config      atmosphere                                  land
-==========  ==========================================  ============================
-CLIM_BASE   FREE_CLIM free-running ensemble             FREE_CLIM
-HYB_BASE    HYB_DARTPERT20 (ERA5 + DART perturbations)  DATM-forced land (v3-LR.DATM)
-DA_ATM      DART EN40 atmosphere analysis               DATM-forced land
-DA_LND      ERA5 (v3.LR.ne30pg2.ERA5 eam.i)             DART EN40 land analysis
-DA_COUPLED  DART EN40 atmosphere analysis               DART EN40 land analysis
-==========  ==========================================  ============================
+==========  ==========  ==========================================  ============================
+config      in figures  atmosphere                                  land
+==========  ==========  ==========================================  ============================
+CLIM_BASE   CLIM/CLIM   FREE_CLIM free-running ensemble             FREE_CLIM
+HYB_BASE    ERA5/DATM   HYB_DARTPERT20 (ERA5 + DART perturbations)  DATM-forced land (v3-LR.DATM)
+DA_ATM      DART/DATM   DART EN40 atmosphere analysis               DATM-forced land
+DA_LND      ERA5/DART   ERA5 (v3.LR.ne30pg2.ERA5 eam.i)             DART EN40 land analysis
+DA_COUPLED  DART/DART   DART EN40 atmosphere analysis               DART EN40 land analysis
+==========  ==========  ==========================================  ============================
 
 The BASE runs use members EN01-EN20; the DA runs use 20 of the 40 DART members, a different
 20 in each season (``DA_MEMBERS``; use ``members(config, season)``).
 """
 from __future__ import annotations
 
+import json
+import os
 import re
 from pathlib import Path
 
@@ -50,6 +52,29 @@ CONFIGS = {
     "DA_COUPLED": ("DART", "DART"),
 }
 CONFIG_KEYS = tuple(CONFIGS)
+
+# Names shown in figures: <atmosphere initial state>/<land initial state>. The keys above stay in the
+# case, member and saved-file names.
+CONFIG_LABELS = {
+    "CLIM_BASE": "CLIM/CLIM",
+    "HYB_BASE": "ERA5/DATM",
+    "DA_ATM": "DART/DATM",
+    "DA_LND": "ERA5/DART",
+    "DA_COUPLED": "DART/DART",
+}
+
+
+def config_label(key: str) -> str:
+    """Figure name of a configuration key (``CONFIG_LABELS``); other names unchanged."""
+    return CONFIG_LABELS.get(key, key)
+
+
+def relabel(text: str) -> str:
+    """``text`` with every configuration key replaced by its figure name, e.g. a contrast
+    "DA_COUPLED - CLIM_BASE" -> "DART/DART - CLIM/CLIM"."""
+    for key in sorted(CONFIG_LABELS, key=len, reverse=True):
+        text = re.sub(rf"(?<![A-Za-z0-9_]){re.escape(key)}(?![A-Za-z0-9_])", CONFIG_LABELS[key], text)
+    return text
 
 BASE_MEMBERS = tuple(f"EN{k:02d}" for k in range(1, 21))
 # Every configuration has 20 members. The DA runs keep the numbers of the 20 DART members they use,
@@ -121,10 +146,66 @@ def init_dates(seasons=tuple(SEASONS)) -> dict[str, tuple[np.datetime64, ...]]:
     return {s: tuple(np.datetime64(d, "D") for d in SEASONS[s]) for s in seasons}
 
 
+# configuration key -> raw case name, without the start-date suffix: the case of a start is
+# ``<case name>_<YYYYMMDD>00``. Notebooks set their own with ``set_case_names(CONFIGS)``; the mapping is kept in
+# the environment (``CASE_NAMES_ENV``) so that reader processes started afterwards use it too.
+CASE_NAMES = {c: f"{CASE_PREFIX}_{c}" for c in CONFIGS}
+CASE_NAMES_ENV = "HIND_LEAD_EVAL_CASE_NAMES"
+
+
+def case_names() -> dict[str, str]:
+    """The current key -> raw case name mapping (``CASE_NAMES`` updated by ``set_case_names``)."""
+    return {**CASE_NAMES, **json.loads(os.environ.get(CASE_NAMES_ENV, "{}"))}
+
+
+def set_case_names(names: dict[str, str]) -> dict[str, str]:
+    """Use the raw case names ``names`` ({configuration key: case name without ``_<YYYYMMDD>00``}) for the
+    configurations they list, the defaults for the others. Returns the full mapping."""
+    if not isinstance(names, dict):
+        raise TypeError("set_case_names expects a dict {configuration key: raw case name}")
+    check_configs(list(names))
+    bad = [k for k, v in names.items() if not isinstance(v, str) or not v or "/" in v]
+    if bad:
+        raise ValueError(f"Invalid case names for {bad}: give the case directory name without the start date")
+    os.environ[CASE_NAMES_ENV] = json.dumps({**json.loads(os.environ.get(CASE_NAMES_ENV, "{}")), **names})
+    return case_names()
+
+
+def case_attrs(config: str) -> dict[str, str]:
+    """Attributes recording the raw case a saved product of ``config`` was built from."""
+    return {"case_name": case_names()[config]}
+
+
+def case_current(attrs, config: str) -> bool:
+    """True when ``attrs`` (of a saved product) name the current case of ``config``. Products saved before
+    case names were recorded count as built from the default case."""
+    return attrs.get("case_name", CASE_NAMES[config]) == case_names()[config]
+
+
+def case_stamp(configs) -> str:
+    """The non-default case names of ``configs`` (empty with the defaults), for the identity of saved results."""
+    changed = {c: case_names()[c] for c in configs if case_names()[c] != CASE_NAMES[c]}
+    return f"|cases={json.dumps(changed, sort_keys=True)}" if changed else ""
+
+
+def cache_current(path, config: str) -> bool:
+    """True when the NetCDF file ``path`` exists and was built from the current case of ``config``."""
+    path = Path(path)
+    if not path.exists():
+        return False
+    import xarray as xr
+
+    with xr.open_dataset(path) as ds:
+        ok = case_current(ds.attrs, config)
+    if not ok:
+        print(f"[STALE] {path}: built from another case of {config}, recomputing")
+    return ok
+
+
 def case_name(config: str, init) -> str:
-    """``F20TR_ne30pg2_r05_IcoswISC30E3r5_<CONFIG>_<YYYYMMDD>00``."""
+    """``<case name of config>_<YYYYMMDD>00``, by default ``F20TR_ne30pg2_r05_IcoswISC30E3r5_<CONFIG>_<YYYYMMDD>00``."""
     check_configs([config])
-    return CASE_TEMPLATE.format(config=config, init=np.datetime64(init, "D").astype(object))
+    return f"{case_names()[config]}_{np.datetime64(init, 'D').astype(object):%Y%m%d}00"
 
 
 def member_dir(config: str, init, member: str, data_root=DEFAULT_INPUT_DATA_ROOT) -> Path:

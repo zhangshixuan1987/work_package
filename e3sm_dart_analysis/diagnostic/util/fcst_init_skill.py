@@ -26,7 +26,14 @@ one-sided t-test are ported from there):
 * ``gridpoint_acc``: temporal ACC at each gridpoint over the start dates (pooled over
   seasons when several are given), with the critical correlation of the t-test for
   that sample size (8 starts -> r_crit = 0.62 at 95%);
-* ``msss``: 1 - MSE(forecast anomaly) / MSE(climatology forecast), regional.
+* ``msss``: 1 - MSE(forecast anomaly) / MSE(climatology forecast), regional;
+* ``regional_index`` / ``index_skill``: ACC and nRMSE over the starts of the cos-lat weighted
+  regional-mean anomaly (the regional index of ESP-Lab ``3a_sst_skill_ts``), with the one-sided
+  t-test; the area means of the gridpoint skill maps (``window_skill`` + ``window_region_summary``)
+  are the regional curves of ESP-Lab ``2a_regional_acc_skill_ts``;
+* ``window_skill``: gridpoint ACC and normalized RMSE of multi-week means (weeks 1-2, 3-4,
+  5-6, 7-8) over the start dates, the S2S analogue of the ESP-Lab lead-time skill maps
+  (``1a_*_leadtime_acc_skill_map``, ``1b_*_leadtime_rmse_skill_map``).
 """
 from __future__ import annotations
 
@@ -198,6 +205,101 @@ def gridpoint_acc(fa: xr.DataArray, oa: xr.DataArray, sample_dim: str = "init") 
     acc = xr.where(den > 1e-12, cov / den, np.nan).rename("acc")
     acc.attrs.update(n_samples=int(fa.sizes[sample_dim]))
     return acc
+
+
+WINDOWS = ((1, 2), (3, 4), (5, 6), (7, 8))   # two-week lead windows of the lead-time skill maps
+
+
+def window_label(weeks) -> str:
+    """``(1, 2)`` -> "Weeks 1-2" (days 1-14)."""
+    weeks = tuple(weeks)
+    return f"Week {weeks[0]}" if len(weeks) == 1 else f"Weeks {weeks[0]}-{weeks[-1]}"
+
+
+def window_means(field: xr.DataArray, windows=WINDOWS) -> xr.DataArray:
+    """(window, ...) mean of a weekly field (dim ``week``) over the weeks of each window; a window
+    needs all its weeks (a missing week gives NaN)."""
+    parts = [field.reindex(week=list(w)).mean("week", skipna=False) for w in windows]
+    return xr.concat(parts, pd.Index([window_label(w) for w in windows], name="window"))
+
+
+def window_skill(fa: xr.DataArray, oa: xr.DataArray, windows=WINDOWS, *, sample_dim: str = "init",
+                 min_obs_fraction: float = 0.01) -> xr.Dataset:
+    """(window, lat, lon) gridpoint skill of the window means over ``sample_dim`` (the start dates).
+
+    * ``acc``: Pearson correlation of the ensemble-mean and observed anomalies (``gridpoint_acc``);
+    * ``rmse``: RMSE of the ensemble-mean anomaly; ``rmse_clim``: RMSE of the climatology forecast
+      (the RMS of the observed anomaly);
+    * ``nrmse`` = ``rmse / rmse_clim``: below 1 the forecast beats climatology (nRMSE^2 = 1 - MSSS at
+      the gridpoint). ESP-Lab divides by the standard deviation of its detrended observed anomalies; with
+      anomalies from a multi-year climatology and only a few starts the RMS is the matching scale (it keeps
+      the observed mean anomaly of the starts). Cells where ``rmse_clim`` is below ``min_obs_fraction`` x
+      its median over the map are left out (ESP-Lab ``min_obs_std_fraction``), e.g. dry desert precipitation.
+    """
+    fw, ow = window_means(fa, windows), window_means(oa, windows)
+    acc = gridpoint_acc(fw, ow, sample_dim)
+    rmse = np.sqrt(((fw - ow) ** 2).mean(sample_dim))
+    clim = np.sqrt((ow ** 2).mean(sample_dim))
+    floor = min_obs_fraction * clim.median(("lat", "lon"))
+    nrmse = (rmse / clim).where(clim > floor)
+    n = int(fa.sizes[sample_dim])
+    return xr.Dataset(dict(acc=acc.drop_attrs(), rmse=rmse, rmse_clim=clim, nrmse=nrmse)).assign_attrs(
+        n_samples=n, acc_critical_95=critical_acc(n) if n > 2 else np.nan,
+        windows=";".join(window_label(w) for w in windows), nrmse_definition="RMSE / RMS of the observed anomaly")
+
+
+def area_fraction(mask: xr.DataArray, valid: xr.DataArray | None = None) -> float:
+    """cos-lat weighted fraction (%) of the valid cells of a (lat, lon) map where ``mask`` is true."""
+    valid = mask.notnull() if valid is None else valid
+    w = np.cos(np.deg2rad(mask.lat)).broadcast_like(mask).where(valid)
+    tot = float(w.sum())
+    return 100.0 * float(w.where(mask.fillna(False).astype(bool)).sum()) / tot if tot > 0 else np.nan
+
+
+def window_region_summary(skill: xr.Dataset, masks: xr.DataArray) -> pd.DataFrame:
+    """Per region and window, from the ``window_skill`` maps: cos-lat weighted mean ACC, the area (%) with ACC
+    above the 95% critical value, the regional nRMSE sqrt(sum w RMSE^2 / sum w RMSE_clim^2) and the area (%)
+    with nRMSE < 1 (beating climatology)."""
+    rc = skill.attrs.get("acc_critical_95", np.nan)
+    w = (masks.astype(float) * np.cos(np.deg2rad(skill.lat))).transpose("region", "lat", "lon")   # (region, lat, lon)
+    dims = ("lat", "lon")
+
+    def wsum(x, valid):
+        return xr.dot(w, (x.where(valid, 0.0) if x.dtype.kind == "f" else x.astype(float).where(valid, 0.0)), dim=dims)
+
+    ok_a = skill.acc.notnull()
+    ok_r = skill.nrmse.notnull()
+    na, nr = xr.dot(w, ok_a.astype(float), dim=dims), xr.dot(w, ok_r.astype(float), dim=dims)
+    out = xr.Dataset(dict(
+        acc_mean=wsum(skill.acc, ok_a) / na,
+        acc_sig_area_pct=100 * wsum(skill.acc > rc, ok_a) / na if np.isfinite(rc) else np.nan * na,
+        nrmse_region=np.sqrt(wsum(skill.rmse ** 2, ok_r) / wsum(skill.rmse_clim ** 2, ok_r)),
+        nrmse_lt1_area_pct=100 * wsum(skill.nrmse < 1, ok_r) / nr,
+    ))
+    df = out.to_dataframe().reset_index()[["region", "window", "acc_mean", "acc_sig_area_pct", "nrmse_region",
+                                           "nrmse_lt1_area_pct"]]
+    return df.astype({"region": str, "window": str})
+
+def regional_index(field: xr.DataArray, masks: xr.DataArray) -> xr.DataArray:
+    """(region, ...) cos-lat weighted mean of a (..., lat, lon) field over each region's valid cells."""
+    w = (masks.astype(float) * np.cos(np.deg2rad(field.lat))).transpose("region", "lat", "lon")
+    valid = field.notnull()
+    num = xr.dot(w, field.where(valid, 0.0), dim=("lat", "lon"))
+    return num / xr.dot(w, valid.astype(float), dim=("lat", "lon"))
+
+
+def index_skill(fi: xr.DataArray, oi: xr.DataArray, sample_dim: str = "init") -> xr.Dataset:
+    """Skill over ``sample_dim`` of a regional index (``regional_index`` of the ensemble-mean and observed
+    anomalies): ``acc`` (Pearson), ``acc_sig`` (above the one-sided 95% critical value), ``nrmse`` = RMSE /
+    RMS of the observed index (below 1 beats climatology), ``rmse``, and ``n``."""
+    n = int(fi.sizes[sample_dim])
+    acc = gridpoint_acc(fi, oi, sample_dim).drop_attrs()
+    rmse = np.sqrt(((fi - oi) ** 2).mean(sample_dim))
+    clim = np.sqrt((oi ** 2).mean(sample_dim))
+    nrmse = xr.where(clim > 0, rmse / clim, np.nan)
+    rc = critical_acc(n) if n > 2 else np.nan
+    return xr.Dataset(dict(acc=acc, acc_sig=acc > rc, rmse=rmse, rmse_clim=clim, nrmse=nrmse)).assign_attrs(
+        n_samples=n, acc_critical_95=rc)
 
 
 def critical_acc(n_samples: int, alpha: float = 0.05) -> float:

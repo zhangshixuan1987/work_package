@@ -22,9 +22,11 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from configs.fcst_init_experiment_config import init_dates
+from configs.fcst_init_experiment_config import (case_attrs, case_current, case_names, config_label, init_dates, relabel,
+                                                set_case_names)
 from util.fcst_init_data import (_reference_series, _convert, model_climatology,
                                  open_member_daily, reference_climatology)
+from util.fcst_init_plotting import LEGEND_BOX, fig_size, fs, readable
 
 _DAY = np.timedelta64(1, "D")
 
@@ -71,7 +73,8 @@ def coverage_table(inits, n_days: int, window: tuple[str, str]) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 def _load_member_box(args):
     """One (start, member) daily field on the box, loaded: (lead, lat, lon) (a process-pool task)."""
-    config, init, member, variable, n_days, box, data_root, land_support_dir = args
+    config, init, member, variable, n_days, box, data_root, land_support_dir, names = args
+    set_case_names(names)   # the caller's case names, whatever the worker start method
     da = open_member_daily(config, init, member, variable, max_lead=n_days, data_root=data_root,
                            land_support_dir=land_support_dir, box=box)
     return to_box(da, box).drop_vars("time", errors="ignore").load()
@@ -107,11 +110,13 @@ def model_box(config: str, season: str, variable: str, members, box: dict, *, n_
     key = ",".join(members)
     if cache is not None and cache.exists() and not force:
         da = xr.load_dataarray(cache)
-        if da.attrs.get("members") == key and da.attrs.get("box") == str(box) and da.sizes["lead"] == n_days:
+        if (da.attrs.get("members") == key and da.attrs.get("box") == str(box) and da.sizes["lead"] == n_days
+                and case_current(da.attrs, config)):
             return da
     inits = list(init_dates([season])[season])
     members = list(members)
-    jobs = [(config, i, m, variable, n_days, box, data_root, land_support_dir) for i in inits for m in members]
+    names = {config: case_names()[config]}
+    jobs = [(config, i, m, variable, n_days, box, data_root, land_support_dir, names) for i in inits for m in members]
     fields = _parallel_map(_load_member_box, jobs, workers)
     units = fields[0].attrs.get("units", "")
     per_init = [xr.concat(fields[k * len(members):(k + 1) * len(members)], pd.Index(members, name="member"),
@@ -119,7 +124,7 @@ def model_box(config: str, season: str, variable: str, members, box: dict, *, n_
     out = xr.concat(per_init, pd.Index(np.array(inits, dtype="datetime64[ns]"), name="init"), coords="minimal",
                     compat="override").transpose("init", "member", "lead", "lat", "lon")
     out = out.astype("float32").rename(variable).assign_attrs(config=config, season=season, members=key, box=str(box),
-                                                              units=units)
+                                                              units=units, **case_attrs(config))
     if cache is not None:
         out.to_netcdf(cache)
     return out
@@ -303,9 +308,10 @@ def _date_axis(ax):
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
 
 
+@readable
 def plot_coverage(cov: pd.DataFrame, window, obs_series: xr.DataArray, threshold: xr.DataArray, *, title: str):
     """Observed regional anomaly with its threshold and the window, and each start's simulated span."""
-    fig, (ax, bx) = plt.subplots(2, 1, figsize=(10, 5.2), sharex=True, gridspec_kw=dict(height_ratios=(3, 1.3)))
+    fig, (ax, bx) = plt.subplots(2, 1, figsize=fig_size(10, 5.2), sharex=True, gridspec_kw=dict(height_ratios=(3, 1.3)))
     t = pd.DatetimeIndex(obs_series.time.values)
     ax.plot(t, obs_series, color="k", lw=2, label="ERA5 anomaly (regional mean)")
     ax.plot(t, threshold, color="firebrick", lw=1.2, ls="--", label="90th percentile minus climatology")
@@ -314,18 +320,18 @@ def plot_coverage(cov: pd.DataFrame, window, obs_series: xr.DataArray, threshold
         a.axvspan(pd.Timestamp(window[0]), pd.Timestamp(window[1]), color="0.85", zorder=0)
     ax.axhline(0, color="0.4", lw=0.8)
     ax.set_ylabel("TREFHT anomaly (K)")
-    ax.legend(loc="upper left", fontsize=8, frameon=False)
-    ax.set_title(title, fontsize=10)
+    ax.legend(loc="upper left", **LEGEND_BOX)
+    ax.set_title(title)
     for k, r in cov.iterrows():
         bx.plot([pd.Timestamp(r.init), pd.Timestamp(r.last_day)], [k, k], lw=6, color="tab:purple", solid_capstyle="butt")
-        bx.text(pd.Timestamp(r.last_day), k, f"  lead {r.lead_at_onset}-{r.lead_at_end}", va="center", fontsize=8)
-    bx.set_yticks(range(len(cov)), [f"start {r.init[5:]}" for _, r in cov.iterrows()], fontsize=8)
+        bx.text(pd.Timestamp(r.last_day), k, f"  lead {r.lead_at_onset}-{r.lead_at_end}", va="center")
+    bx.set_yticks(range(len(cov)), [f"start {r.init[5:]}" for _, r in cov.iterrows()])
     bx.set_ylim(-0.7, len(cov) - 0.3)
     _date_axis(bx)
-    fig.tight_layout()
     return fig
 
 
+@readable
 def plot_series(panels: dict, obs: dict, window, styles: dict, flagged=(), *, ylabels: dict, title: str,
                 spread=(0.1, 0.9)):
     """Rows: starts; columns: variables. ``panels[var][init][config]`` is (member, time) on calendar days;
@@ -333,7 +339,7 @@ def plot_series(panels: dict, obs: dict, window, styles: dict, flagged=(), *, yl
     (e.g. precipitation accumulated from the start)."""
     variables = list(panels)
     inits = list(panels[variables[0]])
-    fig, axes = plt.subplots(len(inits), len(variables), figsize=(6.2 * len(variables), 2.6 * len(inits)),
+    fig, axes = plt.subplots(len(inits), len(variables), figsize=fig_size(6.2 * len(variables), 2.6 * len(inits)),
                              sharex=True, squeeze=False)
     for i, init in enumerate(inits):
         for j, v in enumerate(variables):
@@ -346,16 +352,15 @@ def plot_series(panels: dict, obs: dict, window, styles: dict, flagged=(), *, yl
                 t = pd.DatetimeIndex(da.time.values)
                 lo, hi = (da.quantile(q, "member") for q in spread)
                 ax.fill_between(t, lo, hi, color=st.get("color"), alpha=0.12, lw=0)
-                ax.plot(t, da.mean("member"), label=c + (" (IC defect)" if c in flagged else ""), **st)
+                ax.plot(t, da.mean("member"), label=config_label(c) + (" (IC defect)" if c in flagged else ""), **st)
             o = obs[v][init] if isinstance(obs[v], dict) else obs[v].sel(time=slice(pd.Timestamp(init), None))
             ax.plot(pd.DatetimeIndex(o.time.values), o, **styles.get("OBS", dict(color="k")), label="OBS")
-            ax.set_ylabel(ylabels[v], fontsize=8)
+            ax.set_ylabel(ylabels[v])
             if j == 0:
-                ax.text(0.01, 0.95, f"start {str(init)[:10]}", transform=ax.transAxes, va="top", fontsize=8)
+                ax.text(0.01, 0.95, f"start {str(init)[:10]}", transform=ax.transAxes, va="top")
             _date_axis(ax)
-    axes[0, 0].legend(fontsize=7, ncol=3, frameon=False, loc="lower left")
-    fig.suptitle(title, fontsize=10)
-    fig.tight_layout()
+    axes[0, 0].legend(ncol=3, **LEGEND_BOX, loc="lower left")
+    fig.suptitle(title)
     return fig
 
 
@@ -364,6 +369,7 @@ def _metric_title(m: str, units: dict | None) -> str:
     return m.replace("_", " ") + (f" ({u})" if u else "")
 
 
+@readable
 def plot_by_start(table: pd.DataFrame, obs_metrics: dict, metrics: list[str], configs: list[str], styles: dict, *,
                   title: str, units: dict | None = None, spread=(0.1, 0.9)):
     """Start-resolved metrics: for each start (x) and configuration, the member median (point) and the
@@ -371,7 +377,7 @@ def plot_by_start(table: pd.DataFrame, obs_metrics: dict, metrics: list[str], co
     inits = sorted(table.init.unique())
     ncol = min(3, len(metrics))
     nrow = int(np.ceil(len(metrics) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(4.3 * ncol, 3.0 * nrow), squeeze=False)
+    fig, axes = plt.subplots(nrow, ncol, figsize=fig_size(4.3 * ncol, 3.0 * nrow), squeeze=False)
     for ax, m in zip(axes.flat, metrics):
         for k, c in enumerate(configs):
             col = styles.get(c, {}).get("color")
@@ -382,26 +388,26 @@ def plot_by_start(table: pd.DataFrame, obs_metrics: dict, metrics: list[str], co
                     continue
                 lo, hi = v.quantile(spread[0]), v.quantile(spread[1])
                 ax.plot([x + off] * 2, [lo, hi], color=col, lw=1.2)
-                ax.plot(x + off, v.median(), "o", color=col, ms=4, label=c if x == 0 else None)
+                ax.plot(x + off, v.median(), "o", color=col, ms=4, label=config_label(c) if x == 0 else None)
         if m in obs_metrics:
             ax.axhline(obs_metrics[m], color="k", lw=1.4, label="OBS")
-        ax.set_xticks(range(len(inits)), [f"start {str(i)[5:10]}" for i in inits], fontsize=8)
-        ax.set_title(_metric_title(m, units), fontsize=9)
+        ax.set_xticks(range(len(inits)), [f"start {str(i)[5:10]}" for i in inits])
+        ax.set_title(_metric_title(m, units))
     for ax in list(axes.flat)[len(metrics):]:
         ax.set_visible(False)
-    axes[0, 0].legend(fontsize=7, frameon=False)
-    fig.suptitle(title, fontsize=10)
-    fig.tight_layout()
+    axes[0, 0].legend(**LEGEND_BOX)
+    fig.suptitle(title)
     return fig
 
 
+@readable
 def plot_lead_scores(scores: pd.DataFrame, configs: list[str], styles: dict, columns: dict, *, title: str,
                      event_leads: dict | None = None):
     """Rows: scores (``columns``: {column: y label}); columns: starts; x: lead windows. Windows that
     overlap the observed event's leads of a start (``event_leads[init] = (first, last)``) are shaded."""
     inits = sorted(scores.init.unique())
     wins = list(dict.fromkeys(scores.sort_values("lead_first").window))
-    fig, axes = plt.subplots(len(columns), len(inits), figsize=(3.4 * len(inits), 2.5 * len(columns)),
+    fig, axes = plt.subplots(len(columns), len(inits), figsize=fig_size(3.4 * len(inits), 2.5 * len(columns)),
                              sharex=True, sharey="row", squeeze=False)
     for j, init in enumerate(inits):
         s = scores[scores.init == init]
@@ -415,49 +421,49 @@ def plot_lead_scores(scores: pd.DataFrame, configs: list[str], styles: dict, col
                         ax.axvspan(x - 0.5, x + 0.5, color="0.9", zorder=0)
             for c in configs:
                 r = s[s.config == c].set_index("window").reindex(wins)
-                ax.plot(range(len(wins)), r[col], marker="o", ms=4, label=c, **styles.get(c, {}))
+                ax.plot(range(len(wins)), r[col], marker="o", ms=4, label=config_label(c), **styles.get(c, {}))
             if col == "ens_mean_error":
                 ax.axhline(0, color="0.5", lw=0.8)
             if j == 0:
-                ax.set_ylabel(ylab, fontsize=8)
+                ax.set_ylabel(ylab)
             if i == 0:
-                ax.set_title(f"start {str(init)[:10]}", fontsize=9)
-            ax.set_xticks(range(len(wins)), wins, rotation=30, fontsize=7)
-    axes[0, 0].legend(fontsize=7, frameon=False)
-    fig.suptitle(title, fontsize=10)
-    fig.tight_layout()
+                ax.set_title(f"start {str(init)[:10]}")
+            ax.set_xticks(range(len(wins)), wins, rotation=30)
+    axes[0, 0].legend(**LEGEND_BOX)
+    fig.suptitle(title)
     return fig
 
 
+@readable
 def plot_event_probability(prob: pd.DataFrame, configs: list[str], styles: dict, *, title: str):
     """Grouped bars: the member fraction with the event (``p_event``) per start and configuration;
     the Brier score of each bar is written above it."""
     inits = sorted(prob.init.unique())
-    fig, ax = plt.subplots(figsize=(2.2 * len(inits) + 2, 3.4))
+    fig, ax = plt.subplots(figsize=fig_size(2.2 * len(inits) + 2, 3.4))
     width = 0.8 / len(configs)
     for k, c in enumerate(configs):
         r = prob[prob.config == c].set_index("init").reindex(inits)
         x = np.arange(len(inits)) + (k - (len(configs) - 1) / 2) * width
-        ax.bar(x, r.p_event, width * 0.9, color=styles.get(c, {}).get("color"), label=c)
+        ax.bar(x, r.p_event, width * 0.9, color=styles.get(c, {}).get("color"), label=config_label(c))
         for xi, (p, bs) in zip(x, zip(r.p_event, r.brier)):
             if np.isfinite(p):
-                ax.text(xi, p + 0.02, f"{bs:.2f}", ha="center", fontsize=6.5, rotation=90)
-    ax.set_xticks(range(len(inits)), [f"start {str(i)[:10]}" for i in inits], fontsize=8)
+                ax.text(xi, p + 0.02, f"{bs:.2f}", ha="center", fontsize=fs("cell"), rotation=90)
+    ax.set_xticks(range(len(inits)), [f"start {str(i)[:10]}" for i in inits])
     ax.set_ylim(0, 1.15)
-    ax.set_ylabel("member fraction with the event", fontsize=8)
-    ax.legend(fontsize=7, frameon=False, ncol=len(configs), loc="upper left")
-    ax.set_title(title, fontsize=9)
-    fig.tight_layout()
+    ax.set_ylabel("member fraction with the event")
+    ax.legend(**LEGEND_BOX, ncol=len(configs), loc="upper left")
+    ax.set_title(title)
     return fig
 
 
+@readable
 def plot_contrasts(table: pd.DataFrame, metrics: list[str], *, title: str, units: dict | None = None):
     """One panel per metric: each contrast (y) and start (marker), the difference and its bootstrap
     interval; zero marked."""
     contrasts = list(dict.fromkeys(table.contrast))
     inits = sorted(table.init.unique())
     markers = dict(zip(inits, "o^sDvP"))
-    fig, axes = plt.subplots(1, len(metrics), figsize=(4.0 * len(metrics), 0.55 * len(contrasts) + 1.6),
+    fig, axes = plt.subplots(1, len(metrics), figsize=fig_size(4.0 * len(metrics), 0.55 * len(contrasts) + 1.6),
                              sharey=True, squeeze=False)
     for ax, m in zip(axes[0], metrics):
         for y, con in enumerate(contrasts):
@@ -470,15 +476,15 @@ def plot_contrasts(table: pd.DataFrame, metrics: list[str], *, title: str, units
                 ax.plot(r["diff"].iloc[0], yy, markers[init], color="tab:blue", ms=4,
                         label=f"start {str(init)[:10]}" if y == 0 else None)
         ax.axvline(0, color="k", lw=0.8)
-        ax.set_title(_metric_title(m, units), fontsize=9)
-        ax.set_yticks(range(len(contrasts)), contrasts, fontsize=8)
+        ax.set_title(_metric_title(m, units))
+        ax.set_yticks(range(len(contrasts)), [relabel(str(c)) for c in contrasts])
         ax.invert_yaxis()
-    axes[0, 0].legend(fontsize=7, frameon=False)
-    fig.suptitle(title, fontsize=10)
-    fig.tight_layout()
+    axes[0, 0].legend(**LEGEND_BOX)
+    fig.suptitle(title)
     return fig
 
 
+@readable
 def plot_metrics(table: pd.DataFrame, obs_metrics: dict, metrics: list[str], configs: list[str], styles: dict,
                  flagged=(), *, title: str, units: dict | None = None):
     """Member values (points, one marker per start) and the observed value (black line) of each metric."""
@@ -486,7 +492,7 @@ def plot_metrics(table: pd.DataFrame, obs_metrics: dict, metrics: list[str], con
     markers = dict(zip(inits, "o^sDvP"))
     ncol = min(3, len(metrics))
     nrow = int(np.ceil(len(metrics) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(4.3 * ncol, 3.2 * nrow), squeeze=False)
+    fig, axes = plt.subplots(nrow, ncol, figsize=fig_size(4.3 * ncol, 3.2 * nrow), squeeze=False)
     for ax, m in zip(axes.flat, metrics):
         for x, c in enumerate(configs):
             col = styles.get(c, {}).get("color")
@@ -499,16 +505,16 @@ def plot_metrics(table: pd.DataFrame, obs_metrics: dict, metrics: list[str], con
             ax.hlines(ens.median(), x - 0.32, x + 0.32, color=col, lw=2.5)
         if m in obs_metrics:
             ax.axhline(obs_metrics[m], color="k", lw=1.6)
-        ax.set_xticks(range(len(configs)), [c + ("*" if c in flagged else "") for c in configs], rotation=30, fontsize=8)
-        ax.set_title(_metric_title(m, units), fontsize=9)
+        ax.set_xticks(range(len(configs)), [config_label(c) + ("*" if c in flagged else "") for c in configs], rotation=30)
+        ax.set_title(_metric_title(m, units))
     for ax in list(axes.flat)[len(metrics):]:
         ax.set_visible(False)
-    axes[0, 0].legend(fontsize=7, frameon=False, title="start", title_fontsize=7)
-    fig.suptitle(title + ("  (* IC defect: missing radiative tracers)" if flagged else ""), fontsize=10)
-    fig.tight_layout()
+    axes[0, 0].legend(**LEGEND_BOX, title="start")
+    fig.suptitle(title + ("  (* IC defect: missing radiative tracers)" if flagged else ""))
     return fig
 
 
+@readable
 def plot_maps(obs_map: xr.DataArray, model_maps: dict, region: dict, flagged=(), *, title: str, vmax: float = 6.0,
               units: str = "K"):
     """Event-window mean anomaly: observations and each configuration's ensemble mean."""
@@ -520,7 +526,7 @@ def plot_maps(obs_map: xr.DataArray, model_maps: dict, region: dict, flagged=(),
     ncol = 3
     nrow = int(np.ceil(len(names) / ncol))
     proj = ccrs.LambertConformal(central_longitude=-97, standard_parallels=(33, 45))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(4.6 * ncol, 3.2 * nrow), subplot_kw=dict(projection=proj), squeeze=False)
+    fig, axes = plt.subplots(nrow, ncol, figsize=fig_size(4.6 * ncol, 3.2 * nrow), subplot_kw=dict(projection=proj), squeeze=False)
     for ax, n, f in zip(axes.flat, names, fields):
         im = ax.pcolormesh(f.lon, f.lat, f, transform=ccrs.PlateCarree(), cmap="RdBu_r", vmin=-vmax, vmax=vmax,
                            shading="auto")
@@ -529,14 +535,15 @@ def plot_maps(obs_map: xr.DataArray, model_maps: dict, region: dict, flagged=(),
         (a0, a1), (o0, o1) = region["lat"], region["lon"]
         ax.plot([o0, o1, o1, o0, o0], [a0, a0, a1, a1, a0], color="k", lw=1, transform=ccrs.PlateCarree())
         ax.set_extent([float(f.lon.min()), float(f.lon.max()), float(f.lat.min()), float(f.lat.max())], ccrs.PlateCarree())
-        ax.set_title(n + (" (IC defect)" if n in flagged else ""), fontsize=9)
+        ax.set_title(config_label(n) + (" (IC defect)" if n in flagged else ""))
     for ax in list(axes.flat)[len(names):]:
         ax.set_visible(False)
     fig.colorbar(im, ax=axes.ravel().tolist(), orientation="horizontal", shrink=0.5, pad=0.04, label=f"anomaly ({units})")
-    fig.suptitle(title, fontsize=10)
+    fig.suptitle(title)
     return fig
 
 
+@readable
 def plot_maps_by_start(obs_map: xr.DataArray, maps: dict, region: dict, *, title: str, vmax: float = 6.0,
                        units: str = "K"):
     """Rows: starts; columns: OBS (first row only) and each configuration's ensemble-mean map
@@ -548,7 +555,7 @@ def plot_maps_by_start(obs_map: xr.DataArray, maps: dict, region: dict, *, title
     configs = list(maps[inits[0]])
     ncol = len(configs) + 1
     proj = ccrs.LambertConformal(central_longitude=-97, standard_parallels=(33, 45))
-    fig, axes = plt.subplots(len(inits), ncol, figsize=(3.6 * ncol, 2.5 * len(inits)),
+    fig, axes = plt.subplots(len(inits), ncol, figsize=fig_size(3.6 * ncol, 2.5 * len(inits)),
                              subplot_kw=dict(projection=proj), squeeze=False)
     im = None
     for i, init in enumerate(inits):
@@ -565,9 +572,9 @@ def plot_maps_by_start(obs_map: xr.DataArray, maps: dict, region: dict, *, title
             ax.plot([o0, o1, o1, o0, o0], [a0, a0, a1, a1, a0], color="k", lw=1, transform=ccrs.PlateCarree())
             ax.set_extent([float(f.lon.min()), float(f.lon.max()), float(f.lat.min()), float(f.lat.max())],
                           ccrs.PlateCarree())
-            ax.set_title(n if n == "OBS" else f"{n}, start {str(init)[5:10]}", fontsize=8)
+            ax.set_title(n if n == "OBS" else f"{config_label(n)}, start {str(init)[5:10]}")
     fig.colorbar(im, ax=axes.ravel().tolist(), orientation="horizontal", shrink=0.5, pad=0.03, label=f"anomaly ({units})")
-    fig.suptitle(title, fontsize=10)
+    fig.suptitle(title)
     return fig
 
 
