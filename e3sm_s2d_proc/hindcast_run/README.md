@@ -44,6 +44,7 @@ except the RTENSO2026 2026 sets (`custom-9_1x2_nyears`, a 270-node bundle of
 | `RTENSO2026/{clim,obs}_2026/` | `RTENSO2026` | 2026 | Feb, May, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | short-spinup chain, `custom-9_1x2_nyears` (270 nodes) |
 | `RTENSO2026/obs_ice_nsidc_2015/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | `obs_2015/` with NSIDCv6 sea ice (`ice/nsidc/`); short-spinup chain |
 | `RTENSO2026/obs_ice_nsidc_2026/` | `RTENSO2026` | 2026 | Feb, May, Aug | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | `obs_2026/` with NSIDCv6 sea ice (`ice/nsidc/`); short-spinup chain |
+| `RTENSO2026/all_ic_20261101/` | `RTENSO2026` | 2026 | Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | `clim/`, `obs/`, `obs_ice_nsidc/` (copies of the `*_2026/` sets for 2026-11-01, 90 nodes each) run side by side in one 270-node job by `run_all_ic.sh` (`./run_all_ic.sh setup`, then `sbatch run_all_ic.sh`); short-spinup chain, `custom-9_1x2_nyears` |
 | `RTENSO2026/hybrid_ic/` | `RTENSO2026` | 2015 | Feb, May, Aug, Nov | `v3.LR.amip_0101.HICCUP.atm_era5` / `20251024_s2d_spinup` | initial compile/setup (on hold) |
 
 `4DEnVarOcn.AnomalyDA/` and `BruteForce/` use the current driver; their
