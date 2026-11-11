@@ -1,4 +1,4 @@
-# ERA5 initial-condition tests
+# ERA5 initial-condition tests: data and methods
 
 Evaluates the test hindcasts that address the issues found in the ERA5-initialized F20TR hindcasts.
 Every test is a single member started on 16 Dec 2011 00Z and run for 2 months. Each is compared with the
@@ -16,7 +16,7 @@ production members (`INPUT_DATA_ROOT`, eam_hindcast) that share its other initia
    (DATM-forced land) mix the IC defect, or a different land spin-up, into the atmosphere and land contrasts.
    The CLIMO tests replace one component of DA_COUPLED EN40 with the complete CLIM_BASE state (Berner-style).
 
-## Runs (`ic_util/ic_test_runs.py`)
+## Runs (`configs/hind_ic_test_runs.py`)
 
 | Key | Case (`_2011121600`) / member | Atmosphere IC | Land IC |
 |---|---|---|---|
@@ -36,12 +36,12 @@ sqrt(2) x the member spread of the 20 DA_COUPLED members of the same start.
 
 ## Notebooks
 
-1. `01_initial_state_completeness.ipynb` - which fields each atmosphere initial file holds, their global
+1. `01_compute_and_plot_initial_state_completeness.ipynb` - which fields each atmosphere initial file holds, their global
    means and zonal profiles (total ozone, radiative water vapour, N2O/CH4, aerosol burdens, droplet number,
    50-hPa temperature), and a check that the completed files keep the ERA5 fields unchanged.
-2. `02_drift_and_bias_timeseries.ipynb` - daily regional bias against ERA5 (lead days 1-56) of every run
+2. `02_compute_and_plot_drift_and_bias.ipynb` - daily regional bias against ERA5 (lead days 1-56) of every run
    with the DA_COUPLED ensemble range, and the window means of each comparison with their ratio to the noise scale.
-3. `03_lead_window_difference_maps.ipynb` - maps of each comparison for days 1-3, 4-10, 11-28 and 29-56,
+3. `03_compute_and_plot_lead_window_maps.ipynb` - maps of each comparison for days 1-3, 4-10, 11-28 and 29-56,
    stippled where |A - B| > 2 x noise.
 
 ## Results (16 Dec 2011 start)
@@ -65,7 +65,7 @@ The notebooks read the 1-degree time series that `post_process/regen_f20tr_ts.sh
 `<member>/post/`. For the tests (on scratch), run:
 
 ```bash
-cd post_process
+cd ../../../post_process   # e3sm_dart_analysis/post_process
 ROOT=/pscratch/sd/z/zhan391/e3sm_dart/simulation STREAMS="atm_6hourly atm_daily lnd_daily" \
 CASES="ERA5COMPLETE_TEST_2011121600 ERA5CLIMFILL_TEST_2011121600 CLIMO_ATM_TEST_2011121600 CLIMO_LND_TEST_2011121600" \
 sbatch --nodes=1 --qos=debug --time=00:30:00 submit_regen_f20tr_ts.sbatch
@@ -73,15 +73,15 @@ sbatch --nodes=1 --qos=debug --time=00:30:00 submit_regen_f20tr_ts.sbatch
 
 Paths are set in each notebook's user-setup cell: `INPUT_DATA_ROOT` (production), `TEST_DATA_ROOT` (tests),
 `IC_ROOT` (initial-file library), `OBSERVATION_ROOT`. Outputs go to
-`DIAGNOSTIC_OUTPUT_ROOT/{data,figure}/era5_ic_test/<topic>/`. Products are cached with the settings they were
+`DIAGNOSTIC_OUTPUT_ROOT/{data,figure}/hind_ic_test/<topic>/`. Products are cached with the settings they were
 built from and recomputed when those change or `FORCE_COMPUTE = True`.
 
 ## Code
 
-* `ic_util/ic_test_runs.py`: the runs, their initial files and the comparisons. It keeps names and relative
+* `configs/hind_ic_test_runs.py`: the runs, their initial files and the comparisons. It keeps names and relative
   layouts only; the roots are notebook inputs.
-* `ic_util/ic_test_eval.py`: initial-file summaries, the daily readers (model and ERA5), regions, regional
+* `util/hind_ic_test_eval.py`: initial-file summaries, the daily readers (model and ERA5), regions, regional
   means, lead windows and the noise scale. The model time handling and the product caching are reused,
   unchanged, from `diagnostic/util/model_daily.py`, `time_labels.py` and `hind_case_io.py`.
 
-Add a test by adding a `Run` (and, where useful, a comparison and a group) in `ic_util/ic_test_runs.py`.
+Add a test by adding a `Run` (and, where useful, a comparison and a group) in `configs/hind_ic_test_runs.py`.

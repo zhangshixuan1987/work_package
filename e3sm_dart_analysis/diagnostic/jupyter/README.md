@@ -198,6 +198,16 @@ Initialization-strategy hindcasts on Perlmutter (`INPUT_DATA_ROOT/F20TR_ne30pg2_
 
 The case notebooks 05-07 are split into small notebooks that each read the data they need, compute, save and plot, independently of each other. Their case definitions are dataclass defaults in `configs/hind_lead_eval_cases.py` (one per series, changed per notebook with `CASE_OVERRIDES`), and their shared products come from `util/init_benefit_workflow.py`, `util/heatwave_workflow.py` and `util/winter_storm_workflow.py`. Every product is saved with the settings it was computed from and read back when they are unchanged (`util/hind_case_io.py`); `FORCE_COMPUTE` recomputes a notebook's results, and `FORCE_INPUTS` also re-reads the model output and observations.
 
+## `hind_ic_test/`
+
+Data, methods and results: [`hind_ic_test/METHODS.md`](hind_ic_test/METHODS.md).
+
+Single-member test hindcasts started 16 Dec 2011 00Z that address the ERA5 initial-condition issues of the `hind_lead_eval` hindcasts: ERA5 atmosphere states completed with DART-mean or CLIM_BASE fields (the bare ERA5 file lacks the radiative tracers, ozone, aerosols and hydrometeor numbers), and DA_COUPLED EN40 with its atmosphere or land replaced by the CLIM_BASE state. Each test is compared with the production members that share its other initial states. The tests are read from `TEST_DATA_ROOT` (scratch), the production members from `INPUT_DATA_ROOT`, the initial files from `IC_ROOT`; their time series must first be regenerated with `post_process/submit_regen_f20tr_ts.sbatch`. Runs and comparisons (A - B): `configs/hind_ic_test_runs.py`; readers and metrics: `util/hind_ic_test_eval.py`. A single-member difference is judged against sqrt(2) x the spread of the 20 DA_COUPLED members of the same start.
+
+1. `01_compute_and_plot_initial_state_completeness.ipynb` - fields, global means and zonal profiles of every atmosphere initial file, and a check that the completed files keep the ERA5 fields unchanged.
+2. `02_compute_and_plot_drift_and_bias.ipynb` - daily regional bias against ERA5 (lead days 1-56) with the DA_COUPLED ensemble range, and lead-window means of each comparison with their ratio to the noise scale.
+3. `03_compute_and_plot_lead_window_maps.ipynb` - maps of each comparison for days 1-3, 4-10, 11-28 and 29-56, stippled where |A - B| > 2 x noise.
+
 ## `hind_atm_mjo/`
 
 MJO in the AMIP hindcasts (same diagnostics as `fcst_atm_mjo/`, for continuous runs; `util/mjo_hovmoller_coupling.py`, `util/mjo_rmm_projection.py`).
