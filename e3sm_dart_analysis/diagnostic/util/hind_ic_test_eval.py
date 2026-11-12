@@ -179,6 +179,8 @@ VARIABLES: dict[str, VarSpec] = {
     "FSDSC": VarSpec("atm", "6hourly", "daily_mean", "FSDSC", "W m-2", "clear-sky surface downward shortwave"),
     "FSNTOAC": VarSpec("atm", "6hourly", "daily_mean", "FSNTOAC", "W m-2", "clear-sky net TOA shortwave"),
     "FLUTC": VarSpec("atm", "6hourly", "daily_mean", "FLUTC", "W m-2", "clear-sky outgoing longwave"),
+    "SWCF": VarSpec("atm", "6hourly", "daily_mean", "", "W m-2", "shortwave cloud forcing"),
+    "LWCF": VarSpec("atm", "6hourly", "daily_mean", "", "W m-2", "longwave cloud forcing"),
     "SCO": VarSpec("atm", "daily", "daily_mean", "", "DU", "stratospheric column ozone"),
     "TCO": VarSpec("atm", "daily", "daily_mean", "", "DU", "tropospheric column ozone"),
     "FSDS": VarSpec("atm", "6hourly", "daily_mean", "FSDS", "W m-2", "surface downward shortwave"),
@@ -383,6 +385,82 @@ def member_vs_ensemble(member: xr.DataArray, ensemble: xr.DataArray, windows: di
     return pd.DataFrame(rows)
 
 
+# ---------------------------------------------------------------------------------------------------------
+# 5. Monthly (eam.h0) fields on the native grid
+# ---------------------------------------------------------------------------------------------------------
+# Chemistry and aerosol fields the daily and 6-hourly streams do not carry. Each h0 file averages one calendar
+# month of a run, so the first file covers the start date to the month's end (lead days 1-16 for a 16 Dec
+# start) and the next one the following month. CH4LNZ is in no history stream.
+@dataclass(frozen=True)
+class H0Spec:
+    name: str          # eam.h0 field
+    factor: float      # to the units below
+    units: str
+    long_name: str
+    zonal: bool        # (lev, ncol) field shown as a zonal-mean latitude-level section
+
+
+H0_VARIABLES: dict[str, H0Spec] = {
+    "O3": H0Spec("O3", 1.0e9, "ppbv", "ozone", True),
+    "O3_SRF": H0Spec("O3_SRF", 1.0e9, "ppbv", "ozone in the bottom layer", False),
+    "CO_SRF": H0Spec("CO_SRF", 1.0e9, "ppbv", "carbon monoxide in the bottom layer", False),
+    "AODVIS": H0Spec("AODVIS", 1.0, "1", "aerosol optical depth at 550 nm", False),
+}
+
+
+class AaveMap:
+    """ESMF/ncremap weight file (``S``, ``row``, ``col``) applied in memory, ``ncol`` to (lat, lon)."""
+
+    def __init__(self, map_file):
+        from scipy.sparse import csr_matrix
+
+        with xr.open_dataset(map_file) as m:
+            nlon, nlat = (int(n) for n in m["dst_grid_dims"].values)
+            self.matrix = csr_matrix((m["S"].values, (m["row"].values - 1, m["col"].values - 1)),
+                                     shape=(m.sizes["n_b"], m.sizes["n_a"]))
+            self.lat = m["yc_b"].values.reshape(nlat, nlon)[:, 0]
+            self.lon = m["xc_b"].values.reshape(nlat, nlon)[0]
+
+    def __call__(self, field: xr.DataArray) -> xr.DataArray:
+        x = field.transpose(..., "ncol")
+        rest = x.dims[:-1]
+        flat = np.asarray(x.values, dtype=float).reshape(-1, x.shape[-1])
+        y = (self.matrix @ flat.T).T.reshape(*x.shape[:-1], len(self.lat), len(self.lon))
+        coords = {d: x[d] for d in rest if d in x.coords}
+        return xr.DataArray(y, dims=(*rest, "lat", "lon"), coords={**coords, "lat": self.lat, "lon": self.lon},
+                            attrs=x.attrs)
+
+
+def h0_windows(member_path, init) -> dict[str, Path]:
+    """{"days a-b (Mon YYYY)": h0 file} of one member, from each file's time bounds."""
+    t0 = pd.Timestamp(np.datetime64(init, "D"))
+    out = {}
+    for f in sorted((Path(member_path) / "archive" / "atm" / "hist").glob("*.eam.h0.*.nc")):
+        with xr.open_dataset(f) as ds:
+            b0, b1 = (pd.Timestamp(str(t)) for t in ds["time_bnds"].values[0])
+        out[f"days {(b0 - t0).days + 1}-{(b1 - t0).days} ({b0:%b %Y})"] = f
+    if not out:
+        raise FileNotFoundError(f"no eam.h0 files under {member_path}/archive/atm/hist")
+    return out
+
+
+def open_h0(member_path, init, variable: str, regrid: AaveMap) -> xr.DataArray:
+    """(window, lat, lon) monthly mean on the 1-degree grid, or (window, lev, lat) zonal mean for 3-D fields."""
+    s = H0_VARIABLES[variable]
+    windows = h0_windows(member_path, init)
+    fields = []
+    for f in windows.values():
+        with xr.open_dataset(f) as ds:
+            fields.append(ds[s.name].isel(time=0).load() * s.factor)
+    field = regrid(xr.concat(fields, pd.Index(list(windows), name="window")))
+    if s.zonal:
+        field = field.mean("lon")
+    field = field.astype("float32")
+    field.attrs = dict(units=s.units, long_name=s.long_name)
+    return field.rename(variable)
+
+
 __all__ = ["KEY_FIELDS", "VARIABLES", "REGIONS", "ic_grid", "ic_summary", "era5_field_check", "spec",
            "open_member", "open_era5", "stream_ok", "region_masks", "regional_mean", "window_means",
-           "noise_scale", "member_vs_ensemble", "lead_days"]
+           "noise_scale", "member_vs_ensemble", "lead_days", "H0_VARIABLES", "AaveMap",
+           "h0_windows", "open_h0"]
