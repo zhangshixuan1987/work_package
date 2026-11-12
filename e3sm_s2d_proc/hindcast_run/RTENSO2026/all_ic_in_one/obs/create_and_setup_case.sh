@@ -8,7 +8,7 @@ export my_machine=pm-cpu
 export my_project="e3sm"
 export my_jobqueue="regular"
 export my_task_per_node=128 # pm-cpu
-export my_job_nnodes=90     # this set's share of the all_ic_20261101 job: 1 date x 10 members x 9 nodes
+export my_job_nnodes=90     # this set's share of the all_ic_in_one job: 1 date x 10 members x 9 nodes
 export my_layout="custom-9_1x2_nyears"
 export my_min_nodes_per_sim=9
 #export my_layout="custom-28_1x2_nyears"
@@ -36,7 +36,7 @@ export do_skip_completed_spinup=true # skip members with complete spinup restart
 # For final simulation stage, when short spinup is turned on this is phase 2  
 export do_ensemble_run=true #run simulation
 
-# all_ic_20261101: ../run_all_ic.sh sets the phase for all three sets
+# all_ic_in_one: ../run_all_ic.sh sets the phase for all three sets
 case "${ALL_IC_PHASE:-}" in
   setup) do_compile_setup_only=true;  do_ensemble_run=false ;;
   run)   do_compile_setup_only=false; do_ensemble_run=true ;;
@@ -77,7 +77,7 @@ export my_leadhh=`echo "${my_leadtod}" / 3600 | bc`
 # my_ice_method: sea-ice method, the same by default or nsidc (ice/nsidc/, make_ice_ic.bash)
 export my_leadref="RTENSO2026"
 export my_ic_method="obs"
-export my_ice_method="nsidc"
+export my_ice_method="${my_ic_method}"
 export my_leadcase="${my_compset}_${my_resolution}_${my_leadref}_${my_ic_method}"
 [[ ${my_ice_method} == "${my_ic_method}" ]] || my_leadcase="${my_leadcase}_ice_${my_ice_method}"
 export my_refdir="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/initial_conditions"
@@ -93,3 +93,9 @@ export my_spinup_runopt="nmonths"      # spinup stop option
 export my_spinup_runn="1"            # spinup length
 export my_spinup_restopt="nmonths"     # spinup restart option
 export my_spinup_restn="1"           # spinup restart N
+###################################################################
+
+#diagnotic configuration
+export my_eami_rgdmap="/global/homes/z/zhan391/maps/map_ne30np4_to_cmip6_180x360_aave.20181001.nc"
+export my_e3sm_rgdmap="/global/homes/z/zhan391/maps/map_ne30pg2_to_cmip6_180x360_aave.20200201.nc"
+export my_elm_rgdmap="/global/homes/z/zhan391/maps/map_r05_to_cmip6_180x360_aave.20200901.nc"

@@ -2,7 +2,7 @@
 #SBATCH -q xfer
 #SBATCH -t 2-00:00:00
 #SBATCH -J rtenso_mv_hist
-#SBATCH -o move_hist_to_cfs.%j.out
+#SBATCH -o /global/cfs/cdirs/e3sm/zhan391/s2d_diag/post_process_logs/move_hist_to_cfs.%x.%j.out
 #
 # Move the RTENSO2026 history output from pscratch to the shared CFS space, as for the earlier start dates:
 #   <SRC_ROOT>/<case>/EN*/archive/{atm,cpl,ice,lnd,ocn,rof}/hist  ->  <DST_ROOT>/<case>/EN*/archive/<comp>/hist
