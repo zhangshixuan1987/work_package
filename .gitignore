@@ -5,6 +5,8 @@
 *.log.*
 nohup.out
 slurm-*.out
+move_hist_to_cfs.*.out
+zstash_*.out
 err_*.[0-9]*
 out_*.[0-9]*
 myjob.e[0-9]*

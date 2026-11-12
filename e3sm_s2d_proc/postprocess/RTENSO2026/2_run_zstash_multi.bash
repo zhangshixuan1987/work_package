@@ -1,12 +1,19 @@
 #!/bin/bash -el
-#SBATCH --job-name=post_process
-#SBATCH --account=e3sm
-#SBATCH --nodes=1
-#SBATCH --output=post_process.o%j
-#SBATCH --exclusive
-#SBATCH --time=24:00:00
-#SBATCH --qos=regular
-#SBATCH --constraint=cpu
+#SBATCH --job-name=rtenso_zstash
+#SBATCH --qos=xfer
+#SBATCH --time=2-00:00:00
+#SBATCH --output=/global/cfs/cdirs/e3sm/zhan391/s2d_diag/post_process_logs/zstash_%x_%j.out
+#
+# Archive RTENSO2026 cases to HPSS (HPSS_PTH/<case>) in three stages:
+#   1. zstash create/update from run1_dir (pscratch: restarts, logs, run/, case_scripts/)
+#   2. copy the index to run2_dir (CFS) and zstash update with the moved history
+#   3. zstash check of the combined archive
+# Resumable: a case with an index.db is updated, so a killed job can be resubmitted as is.
+# Runs on the xfer queue (login nodes, 2-day limit) so a login-node restart does not kill it.
+#
+#   IC_METHOD=obs LEADS="2015020100 2015050100" sbatch 2_run_zstash_multi.bash
+#
+# Run stage 1 only after the case's history has been moved off pscratch.
 
 source /global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh
 
@@ -16,17 +23,18 @@ run2_dir="/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/simulation"   # 1_run_mov_arch
 work_dir="/global/cfs/cdirs/e3sm/zhan391/s2d_diag"
 export HPSS_PTH="/home/projects/e3sm/www/RTENSO2026"   # read by zstash_S2D.sh
 
-ic_method="clim" #"${IC_METHOD:-clim}"   # clim | obs | obs_ice_nsidc | hybrid_ic
+ic_method="${IC_METHOD:?set IC_METHOD (clim | obs | obs_ice_nsidc)}"
 exp="WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_${ic_method}"
 max_jobs=1
 
-leads=(2026020100 2026050100 2026080100)
+leads=(${LEADS:?set LEADS, space-separated start dates, e.g. "2026020100 2026050100"})
 
 log_dir="${work_dir}/post_process_logs"
 mkdir -p "${log_dir}"
 
-main_log="${log_dir}/post_process_${SLURM_JOB_ID:-manual}.log"
-fail_log="${log_dir}/post_process_${SLURM_JOB_ID:-manual}.failed"
+tag="zstash_${ic_method}_${SLURM_JOB_ID:-manual$$}"     # one log per job, so parallel jobs do not share it
+main_log="${log_dir}/${tag}.log"
+fail_log="${log_dir}/${tag}.failed"
 
 : > "${main_log}"
 : > "${fail_log}"
@@ -70,6 +78,7 @@ log_msg "run2_dir=${run2_dir}"
 log_msg "work_dir=${work_dir}"
 log_msg "HPSS_PTH=${HPSS_PTH}"
 log_msg "max_jobs=${max_jobs}"
+log_msg "ic_method=${ic_method} leads=${leads[*]}"
 
 # =========================================================
 # Stage 1:
