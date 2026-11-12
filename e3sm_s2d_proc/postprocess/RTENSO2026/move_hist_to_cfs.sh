@@ -7,6 +7,7 @@
 # Move the RTENSO2026 history output from pscratch to the shared CFS space, as for the earlier start dates:
 #   <SRC_ROOT>/<case>/EN*/archive/{atm,cpl,ice,lnd,ocn,rof}/hist  ->  <DST_ROOT>/<case>/EN*/archive/<comp>/hist
 # Restarts (archive/rest), logs, run/, case_scripts/ and build/ stay on pscratch.
+# Same move as 1_run_mov_archive.bash, one case per argument, with a separate check before each deletion.
 #
 #   sbatch move_hist_to_cfs.sh <case_dir_name> [<case_dir_name> ...]
 # e.g. sbatch move_hist_to_cfs.sh WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_obs_2026110100
