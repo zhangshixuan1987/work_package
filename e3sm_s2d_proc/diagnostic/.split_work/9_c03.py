@@ -11,10 +11,10 @@ ERA5_DAILY_DIR = OBSERVATION_ROOT / "ERA5" / "1x1" / "daily"                    
 SIMULATION_ROOT = Path("/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/simulation")         # raw eam.h1 history
 
 YEAR = 2026
-INIT_MONTHS = (2, 5, 8)
+INIT_MONTHS = (2, 5, 8, 11)
 MONTH_NAMES = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug",
                9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
-INIT_COLORS = {2: "#1f77b4", 5: "#2ca02c", 8: "#d62728"}
+INIT_COLORS = {2: "#1f77b4", 5: "#2ca02c", 8: "#d62728", 11: "#9467bd"}
 MODEL_PREFIX = rc.MODEL_PREFIX
 POOL = {
     "Reanalysis-CLIM": f"{MODEL_PREFIX}_RTENSO2026_clim",

@@ -11,10 +11,10 @@ MAP_FILE = Path("/global/cfs/cdirs/e3sm/diagnostics/maps/map_ne30pg2_to_cmip6_18
 
 YEAR = 2026
 EVENT_LABEL = "2026/27 polar vortex"
-INIT_MONTHS = (2, 5, 8)
+INIT_MONTHS = (2, 5, 8, 11)
 MONTH_NAMES = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug",
                9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
-INIT_COLORS = {2: "#1f77b4", 5: "#2ca02c", 8: "#d62728"}   # one colour per start (as notebook 8)
+INIT_COLORS = {2: "#1f77b4", 5: "#2ca02c", 8: "#d62728", 11: "#9467bd"}   # one colour per start (as notebook 8)
 MODEL_PREFIX = rc.MODEL_PREFIX
 POOL = {
     "Reanalysis-CLIM": f"{MODEL_PREFIX}_RTENSO2026_clim",
@@ -24,7 +24,7 @@ POOL = {
 
 # One fixed member per start, chosen before looking at the results (here the first member of the clim case,
 # present in every start); change it here, not according to what the member does.
-MEMBERS = {2: "Reanalysis-CLIM:0", 5: "Reanalysis-CLIM:0", 8: "Reanalysis-CLIM:0"}
+MEMBERS = {2: "Reanalysis-CLIM:0", 5: "Reanalysis-CLIM:0", 8: "Reanalysis-CLIM:0", 11: "Reanalysis-CLIM:0"}
 
 FRAMES = ("2026-10-01", "2027-04-30")      # first and last frame day
 FRAME_STEP = 2                             # days between frames

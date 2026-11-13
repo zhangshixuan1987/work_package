@@ -30,7 +30,7 @@ from util import strat_case as sc
 
 MONTH_NAMES = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug",
                9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
-INIT_COLORS = {2: "#1f77b4", 5: "#2ca02c", 8: "#d62728"}      # as notebook 8
+INIT_COLORS = {2: "#1f77b4", 5: "#2ca02c", 8: "#d62728", 11: "#9467bd"}      # as notebook 8
 DJF = ((0, 12), (1, 1), (1, 2))                                   # (years after the winter year, month)
 DJF_DAYS = np.array([31.0, 31.0, 28.0])                          # day weights (no-leap model calendar)
 
@@ -49,7 +49,7 @@ class StratConfig:
     simulation_root: Path                      # raw eam.h1 history (cache keys; read only by 9a)
     pool: dict = field(default_factory=default_pool)
     year: int = 2026
-    init_months: tuple = (2, 5, 8)
+    init_months: tuple = (2, 5, 8, 11)
     clim_method: str = "direct"                # "direct", "lead_drift" or "target_month"
     clim_years: tuple = rc.CLIM_YEARS
     era5_first_year: int = 1979

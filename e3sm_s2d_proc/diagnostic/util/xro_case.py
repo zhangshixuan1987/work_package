@@ -83,7 +83,7 @@ ALPHA_GRID = np.round(np.arange(0.5, 3.501, 0.05), 2)   # candidate factors for 
 EVENTS = {
     2015: {"label": "2015/16 El Niño", "init_months": (2, 5, 8, 11), "train": (1981, 2014),
            "peak_season": {"label": "DJF 2015/16", "months": [(2015, 12), (2016, 1), (2016, 2)]}},
-    2026: {"label": "2026/27 El Niño", "init_months": (2, 5, 8), "train": (1981, 2025),
+    2026: {"label": "2026/27 El Niño", "init_months": (2, 5, 8, 11), "train": (1981, 2025),
            "peak_season": {"label": "DJF 2026/27", "months": [(2026, 12), (2027, 1), (2027, 2)]}},
 }
 

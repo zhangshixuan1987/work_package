@@ -3,7 +3,7 @@
 Diagnostics for the RTENSO2026 hindcasts (`../hindcast_run/RTENSO2026/`,
 post-processed by `../postprocess/RTENSO2026/`), treated as case studies of the
 2015/16 El Nino (2015 Feb/May/Aug/Nov starts) and the 2026/27 El Nino (2026
-Feb/May/Aug starts; no Reanalysis-FOSIRL runs). Each notebook's `EVENTS` lists the events. The notebooks follow the layout and conventions of the ESP-Lab
+Feb/May/Aug/Nov starts; no Reanalysis-FOSIRL runs). Each notebook's `EVENTS` lists the events. The notebooks follow the layout and conventions of the ESP-Lab
 suite (`~/code/ESP-Lab/jupyter`): a run-control block at the top, cache-first
 products under `S2D_DIAG_ROOT`, and figures named with `figure_filename`. ESP-Lab
 measures skill over many start years; here one event is followed through 4 starts.
@@ -59,8 +59,8 @@ These e3sm_diags time series end in 2022 (HadISST2), 2019 (ERA5) and 2017 (GPCP)
 later years, such as the 2026 starts, `obs_anomaly(field, years=(2026, 2027))` switches to
 the 1x1 archive products under `/global/cfs/cdirs/e3sm/zhan391/data` (`OBS_ARCHIVE`), which
 then also supply the 1981-2010 climatology: NOAA OISST v2.1 for `TS` (to Oct 2026; Jan-Aug
-climatology 1982-2010), GPCP v2.3 for `PRECT` (to Jun 2026) and NOAA/NSIDC CDR v6 for `SICE`
-(to Sep 2026), and NOAA CDR for `FLUT` (OLR, to Sep 2026). There is no archive product yet for
+climatology 1982-2010), GPCP v2.3 for `PRECT` (to Oct 2026) and NOAA/NSIDC CDR v6 for `SICE`
+(to Oct 2026), and NOAA CDR for `FLUT` (OLR, to Oct 2026). There is no archive product yet for
 `PSL`, `U850`, `Z500`, `T925` or the 200-hPa winds after 2019; `TREFHT` over land comes from
 ERA5-Land (`product="ERA5_Land"`, to Sep 2026).
 
@@ -160,7 +160,7 @@ mean 0-700 m heat content anomaly as the recharge *h* (instead of the 20 C isoth
 MPAS-O writes `oceanHeatContentSfcTo700m` per native cell (J, integrated with T in K);
 `rc.open_member` divides it by the native cell area remapped with the file's own `map_file`
 weights (`rc.mpas_cell_area`), giving GJ m-2. Observations are EN4.2.2 OHC700
-(`data/ENv4.2.2/1x1`, 1979 to Jul 2026). Anomalies remove the 1981-2010 climatology as for
+(`data/ENv4.2.2/1x1`, 1979 to Sep 2026). Anomalies remove the 1981-2010 climatology as for
 the other fields; the constant offset between K- and C-based integrals cancels at fixed depth
 (if MPAS integrates from the moving sea surface, sea-level anomalies add about 0.1 GJ m-2 per
 0.1 m in phase with recharge; not yet checked). The XRO state vectors and rolling hindcasts are

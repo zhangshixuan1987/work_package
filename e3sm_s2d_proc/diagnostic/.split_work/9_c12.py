@@ -17,7 +17,7 @@ for k, init in enumerate(INIT_MONTHS, start=1):
         cs = ax.contour(ov["time"], ov["plev"], ov.T, levels=[-20, -10, 0, 10], colors="k", linewidths=0.8)
         ax.clabel(cs, fmt="%d", fontsize=fontz * 0.55)
     ax.axvline(np.datetime64(f"{YEAR}-{init:02d}-01"), color="k", lw=1.5)
-    ax.set_title(f"({'abcdefgh'[2 * k - 1]}) E3SM {MONTH_NAMES[init]} {YEAR} start, ensemble mean "
+    ax.set_title(f"({'abcdefghijklmnop'[2 * k - 1]}) E3SM {MONTH_NAMES[init]} {YEAR} start, ensemble mean "
                  f"({monthly[init].sizes['member']} members; contours: ERA5)", loc="left", fontsize=fontz * 0.85)
     ax2 = axes[k, 1]
     q50 = qt.sel(plev=QBO_LEVEL)
@@ -28,7 +28,7 @@ for k, init in enumerate(INIT_MONTHS, start=1):
     ax2.plot(e50["time"], e50, "k-", lw=2)
     ax2.axhline(0, color="0.4", lw=0.8)
     ax2.set_ylim(-35, 25)
-    ax2.set_title(f"({'abcdefgh'[2 * k]}) U {QBO_LEVEL:g} hPa, 5°S-5°N", loc="left", fontsize=fontz * 0.85)
+    ax2.set_title(f"({'abcdefghijklmnop'[2 * k]}) U {QBO_LEVEL:g} hPa, 5°S-5°N", loc="left", fontsize=fontz * 0.85)
     ax2.grid(alpha=0.3)
 for ax in axes[:, 0]:
     ax.set_yscale("log")
