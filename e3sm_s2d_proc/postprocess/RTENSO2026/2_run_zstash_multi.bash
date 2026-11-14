@@ -1,6 +1,7 @@
 #!/bin/bash -el
 #SBATCH --job-name=rtenso_zstash
 #SBATCH --qos=xfer
+#SBATCH --constraint=cron
 #SBATCH --time=2-00:00:00
 #SBATCH --output=/global/cfs/cdirs/e3sm/zhan391/s2d_diag/post_process_logs/zstash_%x_%j.out
 #
@@ -8,7 +9,14 @@
 #   1. zstash create/update from run1_dir (pscratch: restarts, logs, run/, case_scripts/)
 #   2. copy the index to run2_dir (CFS) and zstash update with the moved history
 #   3. zstash check of the combined archive
-# Resumable: a case with an index.db is updated, so a killed job can be resubmitted as is.
+# One index.db per case, kept in sync between pscratch and CFS (cp -pu: the newer copy wins).
+# Stage 1 starts from the CFS copy and Stage 2 copies the Stage 1 index back, so new tars always
+# continue after the last tar on HPSS
+# (a stale pscratch index would reuse tar names and overwrite tars already on HPSS).
+# Any zstash failure (e.g. an HPSS outage) marks the case failed and stops the job after that stage;
+# a check passes only if its log says "No failures detected".
+# Resumable: a case with an index.db is updated, so a failed or killed job can be resubmitted as is
+# (delete leftover un-uploaded *.tar files in the case zstash/ directories first).
 # Runs on the xfer queue (login nodes, 2-day limit) so a login-node restart does not kill it.
 #
 #   IC_METHOD=obs LEADS="2015020100 2015050100" sbatch 2_run_zstash_multi.bash
@@ -96,12 +104,18 @@ for lead in "${leads[@]}"; do
         (
             log_msg "Stage 1 start: ${case_name}"
 
+            master="${run2_dir}/${case_name}/zstash/index.db"
+            if [[ -f "${master}" ]]; then
+                log_msg "Syncing CFS index for ${case_name} (newer copy wins)"
+                mkdir -p "${case_name}/zstash" && cp -pu "${master}" "${case_name}/zstash/index.db" || exit 1
+            fi
+
             if [[ -f "${case_name}/zstash/index.db" ]]; then
                 log_msg "Existing zstash metadata found for ${case_name} → running update"
-                "${zstash_scp}" update "${case_name}"
+                "${zstash_scp}" update "${case_name}" || exit 1
             else
                 log_msg "No existing zstash metadata found for ${case_name} → running create"
-                "${zstash_scp}" create "${case_name}"
+                "${zstash_scp}" create "${case_name}" || exit 1
             fi
 
             log_msg "Stage 1 complete: ${case_name}"
@@ -142,27 +156,22 @@ for lead in "${leads[@]}"; do
         (
             log_msg "Stage 2 start: ${case_name}"
 
-            mkdir -p "${case_name}/zstash"
+            mkdir -p "${case_name}/zstash" || exit 1
+
+            # Stage 1 started from the CFS index, so its index is the newest: copy it back.
+            if [[ -f "${run1_dir}/${case_name}/zstash/index.db" ]]; then
+                log_msg "Syncing Stage 1 index for ${case_name} (newer copy wins)"
+                cp -pu "${run1_dir}/${case_name}/zstash/index.db" "${case_name}/zstash/index.db" || exit 1
+            else
+                log_msg "Stage 2 warning: missing zstash metadata in ${run1_dir}/${case_name}"
+            fi
 
             if [[ -f "${case_name}/zstash/index.db" ]]; then
-                log_msg "Existing local zstash metadata found for ${case_name} -> running update"
-                "${zstash_scp}" update "${case_name}"
+                log_msg "zstash metadata found for ${case_name} -> running update"
+                "${zstash_scp}" update "${case_name}" || exit 1
             else
-                if [[ -d "${run1_dir}/${case_name}/zstash" ]]; then
-                    log_msg "Copying zstash metadata from Stage 1 for ${case_name}"
-                    cp -rp "${run1_dir}/${case_name}/zstash/"* \
-                        "${case_name}/zstash/" 2>/dev/null || true
-                else
-                    log_msg "Stage 2 warning: missing zstash metadata in ${run1_dir}/${case_name}"
-                fi
-
-                if [[ -f "${case_name}/zstash/index.db" ]]; then
-                    log_msg "Copied zstash metadata found for ${case_name} -> running update"
-                    "${zstash_scp}" update "${case_name}"
-                else
-                    log_msg "No zstash index.db found for ${case_name} -> running create"
-                    "${zstash_scp}" create "${case_name}"
-                fi
+                log_msg "No zstash index.db found for ${case_name} -> running create"
+                "${zstash_scp}" create "${case_name}" || exit 1
             fi
 
             log_msg "Stage 2 complete: ${case_name}"
@@ -200,7 +209,9 @@ for lead in "${leads[@]}"; do
         wait_for_slot
         (
             log_msg "Stage 3 check start: ${case_name}"
-            "${zstash_scp}" check "${case_name}"
+            "${zstash_scp}" check "${case_name}" || exit 1
+            check_log=$(ls -t "${case_name}"/zstash/zstash_check_*.log | head -1)
+            grep -q 'No failures detected' "${check_log}" || { log_msg "Stage 3 check FAILED: ${check_log}"; exit 1; }
             log_msg "Stage 3 check complete: ${case_name}"
         ) || echo "Stage 3 check failed: ${case_name}" >> "${fail_log}" &
     else
