@@ -99,14 +99,15 @@ DA_COUPLED for the component swaps).
 
 ## Before running
 
-The notebooks read the 1-degree time series that `post_process/regen_f20tr_ts.sh` writes under
+The notebooks read the 1-degree time series that `post_process/submit_process_e3sm_post.sbatch` writes under
 `<member>/post/`. For the tests (on scratch), run:
 
 ```bash
 cd ../../../post_process   # e3sm_dart_analysis/post_process
-ROOT=/pscratch/sd/z/zhan391/e3sm_dart/simulation STREAMS="atm_6hourly atm_daily lnd_daily" \
+ROOT=/pscratch/sd/z/zhan391/e3sm_dart/simulation \
+KINDS="ts_atm_6hourly_180x360_aave ts_atm_daily_180x360_aave ts_lnd_daily_180x360_aave" \
 CASES="ERA5COMPLETE_TEST_2011121600 ERA5CLIMFILL_TEST_2011121600 CLIMO_ATM_TEST_2011121600 CLIMO_LND_TEST_2011121600" \
-sbatch --nodes=1 --qos=debug --time=00:30:00 submit_regen_f20tr_ts.sbatch
+sbatch --nodes=1 --qos=debug --time=00:30:00 submit_process_e3sm_post.sbatch
 ```
 
 Paths are set in each notebook's user-setup cell: `INPUT_DATA_ROOT` (production), `TEST_DATA_ROOT` (tests),

@@ -1,6 +1,6 @@
 """Initial-state checks, daily regional drift and lead-window maps of the ERA5 initial-condition tests.
 
-Model output: the 1-degree time series written by ``post_process/regen_f20tr_ts.sh`` under
+Model output: the 1-degree time series written by ``post_process/submit_process_e3sm_post.sbatch`` under
 ``<member dir>/post/{atm,lnd}/180x360_aave/ts/{daily,6hourly}/0yr`` (the same files the hind_lead_eval
 notebooks read). Daily values per lead day (lead 1 = the start date), as in ``diagnostic/util/fcst_init_data.py``:
 00Z-00Z means of the 6-hourly output for the surface, flux and column fields, and the 00Z state ending each
@@ -255,7 +255,7 @@ def ts_file(member_path, variable: str) -> Path:
 
 
 def stream_ok(member_path, stream: str) -> bool:
-    """True when ``regen_f20tr_ts.sh`` finished the member's stream (``atm_daily``, ``atm_6hourly``, ``lnd_daily``)."""
+    """True when the post-processing (``post_process/submit_process_e3sm_post.sbatch``) finished the member's stream (``atm_daily``, ``atm_6hourly``, ``lnd_daily``)."""
     f = Path(member_path) / "post" / "scripts" / f"regen_ts_{stream}.status"
     return f.is_file() and f.read_text().startswith("OK")
 

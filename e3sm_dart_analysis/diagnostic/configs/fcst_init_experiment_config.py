@@ -10,7 +10,7 @@ per member::
         post/<comp>/180x360_aave/ts/<freq>/0yr/<VAR>_<YYYYMM>_<YYYYMM>.nc
 
 ``post`` holds one file per variable over the whole forecast (atm daily and 6-hourly,
-lnd and rof daily), written by ``post_process/regen_f20tr_ts.sh``; the zppy-style
+lnd and rof daily), written by ``post_process/submit_process_e3sm_post.sbatch``; the zppy-style
 ``ncclimo --split`` files they replace stopped after 4 days (atm) or at the end of
 the start month (lnd). Each member records the check in
 ``post/scripts/regen_ts_<stream>.status`` (``OK files=... records=...``).
@@ -235,7 +235,7 @@ def ts_file(config: str, init, member: str, variable: str, component: str = "atm
 
 def stream_ready(config: str, init, member: str, component: str = "atm", freq: str = "daily",
                  data_root=DEFAULT_INPUT_DATA_ROOT) -> bool:
-    """True when ``regen_f20tr_ts.sh`` finished this member's stream (status OK)."""
+    """True when the post-processing (``post_process/submit_process_e3sm_post.sbatch``) finished this member's stream (status OK)."""
     status = member_dir(config, init, member, data_root) / "post/scripts" / f"regen_ts_{_STATUS[component, freq]}.status"
     return status.is_file() and status.read_text().startswith("OK")
 

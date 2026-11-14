@@ -32,8 +32,8 @@ Members are never paired across configurations by number.
 
 Lead day 1 is the start date (00-24Z of the initial day); scores use lead days 1-56 (8 weeks). A
 configuration-season is used only when all 20 members report a finished post-processing
-(`regen_ts_<stream>.status` OK; the zppy files stop after 4 days, so `post_process/regen_f20tr_ts.sh`
-regenerates them). Every configuration must be ready in both seasons (`balanced_runs`); otherwise the
+(`regen_ts_<stream>.status` OK; zppy's own files stop after 4 days, so `post_process/submit_process_e3sm_post.sbatch`
+makes full-length ones). Every configuration must be ready in both seasons (`balanced_runs`); otherwise the
 notebooks stop rather than pool an unbalanced set.
 
 ### Ocean and sea-ice boundary
