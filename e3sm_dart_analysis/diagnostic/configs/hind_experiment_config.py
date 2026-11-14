@@ -27,8 +27,18 @@ EXPERIMENTS = {
     "DARTBL": ("DARTBL", "DART atm + piControl lnd"),
     "DARTBA": ("DARTBA", "piControl atm + DART lnd"),
     "DARTAE": ("DARTAE", "DART atm + ERA5-forced lnd"),
+    # Revised ERA5-based run (2026-11-13): ERA5OP's Betacast ERA5 eam.i lacks the radiative/chemical
+    # tracers and is far too warm near the ground over high terrain (zero O3 at start; lower
+    # stratosphere -11 K for months). CAPTOP instead starts atm and lnd from the CAPT run
+    # CAPTEN10_15day (EN01, 2012-01-01), full model states. Not part of the 8-run factorial.
+    "CAPTOP": ("CAPT01", "CAPT atm + CAPT lnd (CAPTEN10_15day EN01)"),
 }
 EXPERIMENT_KEYS = tuple(EXPERIMENTS)
+
+# Runs whose case name does not follow CASE_TEMPLATE (a later case date).
+CASE_NAMES = {
+    "CAPTOP": "20261113.v3-LR-AMIP-CAPT01.ne30pg2_r05_IcoswISC30E3r5",
+}
 
 # Factorial design: key -> (atmosphere initial state, land initial state). The 8 runs fill
 # 8 of the 3 x 3 cells (piControl atm + ERA5-forced lnd is not run); see util.hind_factorial.
@@ -52,6 +62,7 @@ STYLE_MAP = {
     "CTRL": dict(color="0.55", linestyle="-", linewidth=2.2, zorder=5),
     "DARTOP": dict(color="tab:red", linestyle="-", linewidth=2.4, zorder=6),
     "ERA5OP": dict(color="tab:red", linestyle="--", linewidth=2.4, zorder=6),
+    "CAPTOP": dict(color="tab:red", linestyle="--", linewidth=2.4, zorder=6),   # replaces ERA5OP in figures
     "ERA5DL": dict(color="tab:blue", linestyle="-", linewidth=1.8, zorder=4),
     "ERA5BL": dict(color="tab:blue", linestyle=":", linewidth=2.0, zorder=4),
     "DARTBL": dict(color="tab:purple", linestyle="-", linewidth=1.8, zorder=4),
@@ -78,7 +89,7 @@ def case_name(experiment: str) -> str:
     """Full case name of an experiment key (``CTRL`` -> ``20260114.v3-LR-AMIP-CTRL1...``)."""
     if experiment not in EXPERIMENTS:
         raise KeyError(f"Unknown experiment {experiment!r}; choose from {list(EXPERIMENTS)}")
-    return CASE_TEMPLATE.format(tag=EXPERIMENTS[experiment][0])
+    return CASE_NAMES.get(experiment) or CASE_TEMPLATE.format(tag=EXPERIMENTS[experiment][0])
 
 
 def experiment_dir(experiment: str, data_root=DEFAULT_INPUT_DATA_ROOT) -> Path:
