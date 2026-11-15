@@ -1,6 +1,6 @@
 """Experiments of the F20TR initialization-strategy hindcasts (``hind_lead_eval`` workflow).
 
-Five ways of initializing the same E3SMv3 LR F20TR (prescribed SST/sea ice) model,
+Several ways of initializing the same E3SMv3 LR F20TR (prescribed SST/sea ice) model,
 each run as a 20-member, 2-month ensemble from 8 start dates (4 lagged starts per
 season, 5 days apart). One case per configuration and start date, one directory
 per member::
@@ -17,18 +17,42 @@ the start month (lnd). Each member records the check in
 
 Initial states (from each case's ``user_nl_eam`` ncdata and ``user_nl_elm`` finidat):
 
-==========  ==========  ==========================================  ============================
-config      in figures  atmosphere                                  land
-==========  ==========  ==========================================  ============================
-CLIM_BASE   CLIM/CLIM   FREE_CLIM free-running ensemble             FREE_CLIM
-HYB_BASE    ERA5/DATM   HYB_DARTPERT20 (ERA5 + DART perturbations)  DATM-forced land (v3-LR.DATM)
-DA_ATM      DART/DATM   DART EN40 atmosphere analysis               DATM-forced land
-DA_LND      ERA5/DART   ERA5 (v3.LR.ne30pg2.ERA5 eam.i)             DART EN40 land analysis
-DA_COUPLED  DART/DART   DART EN40 atmosphere analysis               DART EN40 land analysis
-==========  ==========  ==========================================  ============================
+===============  ============  ================================================  =========================
+config           in figures    atmosphere                                        land
+===============  ============  ================================================  =========================
+CLIM_BASE        CLIM/CLIM     FREE_CLIM free-running ensemble                   FREE_CLIM
+ERA5CLIMFILL     ERA5/DATM     ERA5CLIMFILL_DARTPERT20: ERA5 completed with      DATM-forced land
+                               CLIM_BASE fields, + DART perturbations            (v3-LR.DATM)
+DA_ATM           DART/DATM     DART EN40 atmosphere analysis                     DATM-forced land
+DA_LND_CLIMFILL  ERA5/DART     ERA5CLIMFILL_DARTPERT20 (as ERA5CLIMFILL)         DART EN40 land analysis
+DA_COUPLED       DART/DART     DART EN40 atmosphere analysis                     DART EN40 land analysis
+CLIMO_ATM        CLIM/DART     CLIMOATM_DARTPERT20: CLIM_BASE + DART pert.       DART EN40 land analysis
+CLIMO_LND        DART/CLIM     DART EN40 atmosphere analysis                     FREE_CLIM
+HYB_BASE         ERA5inc/DATM  HYB_DARTPERT20: incomplete ERA5 eam.i             DATM-forced land
+                               + DART perturbations (superseded)
+===============  ============  ================================================  =========================
 
-The BASE runs use members EN01-EN20; the DA runs use 20 of the 40 DART members, a different
-20 in each season (``DA_MEMBERS``; use ``members(config, season)``).
+``EXPERIMENTS`` holds every experiment: figure label, initial states, short codes of the atmosphere and land
+initial states (``atm_ic``, ``lnd_ic``: CLIM, ERA5, ERA5inc, DART, DATM), whether the initial state was
+complete (``complete_ic``), member set and case name; the other tables derive from it.
+
+``CONFIG_GROUPS`` organizes the experiments by the question a diagnostic addresses; a notebook picks one
+with ``select_configs(group or list of keys)``, and ``design_grid(group)`` lays a group out as an
+atmosphere x land table for factorial contrasts:
+
+* ``tracer_init`` (a) tracer initialization: HYB_BASE (ERA5 eam.i without the radiative/chemical tracers)
+  vs ERA5CLIMFILL (the same ERA5 state completed with CLIM_BASE fields, same land and perturbations), with
+  DA_ATM (complete DART model state, same land) and CLIM_BASE as references.
+* ``lnd_vs_atm`` (b) land vs atmosphere initialization: the 2 x 2 of {CLIM, DART} atmosphere x land,
+  CLIM_BASE, CLIMO_LND (DART atm), CLIMO_ATM (DART lnd), DA_COUPLED.
+* ``dart_vs_capt`` (c) DART vs CAPT-like initialization: the 2 x 2 of {ERA5, DART} atmosphere x
+  {DATM-forced, DART} land (ERA5CLIMFILL = CAPT-like, DA_ATM, DA_LND_CLIMFILL, DA_COUPLED) plus CLIM_BASE.
+* ``coupling_consistency`` (d) land-atmosphere consistency: every complete-IC run, consistent pairs
+  (CLIM/CLIM, ERA5/DATM, DART/DART) and mixed ones (DART/DATM, ERA5/DART, CLIM/DART, DART/CLIM).
+* ``all``.
+
+CLIM_BASE, ERA5CLIMFILL and HYB_BASE use members EN01-EN20; the DART-based runs (DA_*, CLIMO_*) use 20
+of the 40 DART members, a different 20 in each season (``DA_MEMBERS``; use ``members(config, season)``).
 """
 from __future__ import annotations
 
@@ -43,26 +67,98 @@ DEFAULT_INPUT_DATA_ROOT = Path("/global/cfs/cdirs/m4849/zhan391/eam_hindcast")
 CASE_PREFIX = "F20TR_ne30pg2_r05_IcoswISC30E3r5"
 CASE_TEMPLATE = CASE_PREFIX + "_{config}_{init:%Y%m%d}00"
 
-# key -> (atmosphere initial state, land initial state)
-CONFIGS = {
-    "CLIM_BASE": ("FREE_CLIM", "FREE_CLIM"),
-    "HYB_BASE": ("ERA5+DART pert.", "DATM-forced"),
-    "DA_ATM": ("DART", "DATM-forced"),
-    "DA_LND": ("ERA5", "DART"),
-    "DA_COUPLED": ("DART", "DART"),
+# Every experiment: one entry per configuration key (the key stays in the case, member and saved-file
+# names). label: name in figures, <atm_ic>/<lnd_ic>; atm, lnd: the initial states in words; atm_ic, lnd_ic:
+# their short codes (the factors of design_grid); complete_ic: False when the initial state lacked the
+# radiative/chemical tracers; members: "base" (EN01-EN20) or "dart" (DA_MEMBERS, the DART member numbers);
+# case: raw case name, one case per start: INPUT_DATA_ROOT/<case>_<YYYYMMDD>00/<ENxx>.
+EXPERIMENTS = {
+    "CLIM_BASE": dict(atm="FREE_CLIM", lnd="FREE_CLIM", atm_ic="CLIM", lnd_ic="CLIM", members="base"),
+    "ERA5CLIMFILL": dict(atm="ERA5 (CLIM-filled) + DART pert.", lnd="DATM-forced", atm_ic="ERA5", lnd_ic="DATM",
+                         members="base"),
+    "DA_ATM": dict(atm="DART", lnd="DATM-forced", atm_ic="DART", lnd_ic="DATM", members="dart"),
+    "DA_LND_CLIMFILL": dict(atm="ERA5 (CLIM-filled) + DART pert.", lnd="DART", atm_ic="ERA5", lnd_ic="DART",
+                            members="dart"),
+    "DA_COUPLED": dict(atm="DART", lnd="DART", atm_ic="DART", lnd_ic="DART", members="dart"),
+    "CLIMO_ATM": dict(atm="FREE_CLIM + DART pert.", lnd="DART", atm_ic="CLIM", lnd_ic="DART", members="dart"),
+    "CLIMO_LND": dict(atm="DART", lnd="FREE_CLIM", atm_ic="DART", lnd_ic="CLIM", members="dart"),
+    "HYB_BASE": dict(atm="ERA5 (incomplete) + DART pert.", lnd="DATM-forced", atm_ic="ERA5inc", lnd_ic="DATM",
+                     members="base", complete_ic=False),   # superseded by ERA5CLIMFILL
 }
+for _k, _e in EXPERIMENTS.items():
+    _e.setdefault("case", f"{CASE_PREFIX}_{_k}")
+    _e.setdefault("complete_ic", True)
+    _e.setdefault("label", f"{_e['atm_ic']}/{_e['lnd_ic']}")
+    _e["consistent_ic"] = (_e["atm_ic"], _e["lnd_ic"]) in {("CLIM", "CLIM"), ("DART", "DART"), ("ERA5", "DATM")}
+
+# Experiments grouped by the question a diagnostic addresses (``select_configs``, ``design_grid``); a notebook
+# picks one with CONFIG_GROUP. "configs" sets the order of tables and legends.
+CONFIG_GROUPS = {
+    "tracer_init": dict(
+        question="(a) tracer initialization: incomplete (no radiative/chemical tracers) vs completed ERA5 state",
+        configs=("CLIM_BASE", "HYB_BASE", "ERA5CLIMFILL", "DA_ATM")),
+    "lnd_vs_atm": dict(
+        question="(b) land vs atmosphere initialization: {CLIM, DART} atmosphere x land",
+        configs=("CLIM_BASE", "CLIMO_LND", "CLIMO_ATM", "DA_COUPLED")),
+    "dart_vs_capt": dict(
+        question="(c) DART vs CAPT-like: {ERA5, DART} atmosphere x {DATM-forced, DART} land",
+        configs=("CLIM_BASE", "ERA5CLIMFILL", "DA_ATM", "DA_LND_CLIMFILL", "DA_COUPLED")),
+    "coupling_consistency": dict(
+        question="(d) land-atmosphere consistency: consistent vs mixed atmosphere/land initial states",
+        configs=("CLIM_BASE", "ERA5CLIMFILL", "DA_COUPLED", "DA_ATM", "DA_LND_CLIMFILL", "CLIMO_ATM", "CLIMO_LND")),
+    "all": dict(question="every experiment", configs=tuple(EXPERIMENTS)),
+}
+
+# Tables derived from EXPERIMENTS (kept for the readers and older notebooks).
+CONFIGS = {k: (e["atm"], e["lnd"]) for k, e in EXPERIMENTS.items()}   # key -> (atmosphere, land)
 CONFIG_KEYS = tuple(CONFIGS)
+CONFIG_LABELS = {k: e["label"] for k, e in EXPERIMENTS.items()}
+MEMBER_SETS = {k: e["members"] for k, e in EXPERIMENTS.items()}
 
-# Names shown in figures: <atmosphere initial state>/<land initial state>. The keys above stay in the
-# case, member and saved-file names.
-CONFIG_LABELS = {
-    "CLIM_BASE": "CLIM/CLIM",
-    "HYB_BASE": "ERA5/DATM",
-    "DA_ATM": "DART/DATM",
-    "DA_LND": "ERA5/DART",
-    "DA_COUPLED": "DART/DART",
-}
 
+def select_configs(selection="dart_vs_capt", case_names_override=None) -> dict[str, str]:
+    """{configuration key: raw case name} of the experiments a diagnostic uses.
+
+    ``selection``: a group name of ``CONFIG_GROUPS`` ("tracer_init", "lnd_vs_atm", "dart_vs_capt",
+    "coupling_consistency", "all") or a list/tuple of configuration keys (in the order wanted). ``case_names_override`` ({key: raw case name})
+    replaces the default case of a selected experiment. The result is what ``set_case_names``,
+    ``check_configs`` and ``readiness`` take.
+    """
+    if isinstance(selection, str):
+        if selection not in CONFIG_GROUPS:
+            raise ValueError(f"Unknown group {selection!r}; choose from {list(CONFIG_GROUPS)} or give a list of keys")
+        keys = CONFIG_GROUPS[selection]["configs"]
+    else:
+        keys = tuple(selection)
+    check_configs(keys)
+    override = dict(case_names_override or {})
+    extra = [k for k in override if k not in keys]
+    if extra:
+        raise ValueError(f"case_names_override names {extra}, which are not selected ({list(keys)})")
+    return {k: override.get(k, EXPERIMENTS[k]["case"]) for k in keys}
+
+
+def design_grid(selection="dart_vs_capt"):
+    """The experiments of a group (or list of keys) as an atmosphere x land table of configuration keys
+    (rows ``atm_ic``, columns ``lnd_ic``; empty where no experiment), e.g. for factorial contrasts."""
+    import pandas as pd
+
+    keys = list(select_configs(selection))
+    grid = pd.DataFrame("", index=dict.fromkeys(EXPERIMENTS[k]["atm_ic"] for k in keys),
+                        columns=dict.fromkeys(EXPERIMENTS[k]["lnd_ic"] for k in keys))
+    for k in keys:
+        grid.loc[EXPERIMENTS[k]["atm_ic"], EXPERIMENTS[k]["lnd_ic"]] = k
+    grid.index.name, grid.columns.name = "atm_ic", "lnd_ic"
+    return grid
+
+
+def experiments_table(selection="all"):
+    """One row per experiment of a group (or list of keys): label, initial states and flags."""
+    import pandas as pd
+
+    keys = list(select_configs(selection))
+    cols = ["label", "atm_ic", "lnd_ic", "complete_ic", "consistent_ic", "atm", "lnd", "members", "case"]
+    return pd.DataFrame({k: {c: EXPERIMENTS[k][c] for c in cols} for k in keys}).T.rename_axis("config")
 
 def config_label(key: str) -> str:
     """Figure name of a configuration key (``CONFIG_LABELS``); other names unchanged."""
@@ -98,10 +194,13 @@ STYLE_MAP = {
     "ERA5": dict(color="k", linestyle="-", linewidth=2.4, zorder=6),
     "OBS": dict(color="k", linestyle="-", linewidth=2.4, zorder=6),
     "CLIM_BASE": dict(color="0.55", linestyle="-", linewidth=2.0, zorder=3),
-    "HYB_BASE": dict(color="tab:blue", linestyle="-", linewidth=2.0, zorder=4),
+    "ERA5CLIMFILL": dict(color="tab:blue", linestyle="-", linewidth=2.0, zorder=4),
     "DA_ATM": dict(color="tab:orange", linestyle="-", linewidth=2.0, zorder=4),
-    "DA_LND": dict(color="tab:green", linestyle="-", linewidth=2.0, zorder=4),
+    "DA_LND_CLIMFILL": dict(color="tab:green", linestyle="-", linewidth=2.0, zorder=4),
     "DA_COUPLED": dict(color="tab:red", linestyle="-", linewidth=2.4, zorder=5),
+    "CLIMO_ATM": dict(color="tab:purple", linestyle="-", linewidth=2.0, zorder=4),
+    "CLIMO_LND": dict(color="tab:brown", linestyle="-", linewidth=2.0, zorder=4),
+    "HYB_BASE": dict(color="tab:blue", linestyle="--", linewidth=1.6, zorder=3),   # superseded
 }
 
 # post-processed streams: (component, frequency) -> ts subdirectory
@@ -126,7 +225,8 @@ def members(config: str, season: str) -> tuple[str, ...]:
     """Member directories of ``config`` in ``season``."""
     if season not in SEASONS:
         raise ValueError(f"Unknown season {season!r}; choose from {list(SEASONS)}")
-    return DA_MEMBERS[season] if config.startswith("DA_") else BASE_MEMBERS
+    check_configs([config])
+    return DA_MEMBERS[season] if MEMBER_SETS[config] == "dart" else BASE_MEMBERS
 
 
 def season_of(init) -> str:
@@ -149,7 +249,7 @@ def init_dates(seasons=tuple(SEASONS)) -> dict[str, tuple[np.datetime64, ...]]:
 # configuration key -> raw case name, without the start-date suffix: the case of a start is
 # ``<case name>_<YYYYMMDD>00``. Notebooks set their own with ``set_case_names(CONFIGS)``; the mapping is kept in
 # the environment (``CASE_NAMES_ENV``) so that reader processes started afterwards use it too.
-CASE_NAMES = {c: f"{CASE_PREFIX}_{c}" for c in CONFIGS}
+CASE_NAMES = {c: e["case"] for c, e in EXPERIMENTS.items()}
 CASE_NAMES_ENV = "HIND_LEAD_EVAL_CASE_NAMES"
 
 

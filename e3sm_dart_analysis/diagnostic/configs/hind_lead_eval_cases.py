@@ -36,12 +36,13 @@ class InitBenefitSettings(_Settings):
     """Notebook series 05: DART initialization benefits for subseasonal 2-m temperature.
 
     A 2 x 2 of the atmosphere and land initial states (first digit atmosphere, second land; 1 = DART):
-    E00 HYB_BASE (CAPT-like reference: ERA5 atmosphere + DATM-forced land), E11 DA_COUPLED (coupled DART
+    E00 ERA5CLIMFILL (CAPT-like reference: ERA5 atmosphere + DATM-forced land), E11 DA_COUPLED (coupled DART
     analyses), and the two mixed, land-atmosphere-inconsistent experiments E10 DA_ATM (DART atmosphere +
-    DATM-forced land) and E01 DA_LND (ERA5 atmosphere + DART land). CLIM_BASE (no assimilation) is outside it.
+    DATM-forced land) and E01 DA_LND_CLIMFILL (ERA5 atmosphere + DART land). CLIM_BASE (no assimilation) is
+    outside it.
     """
     paths: RunPaths
-    roles: dict = field(default_factory=lambda: {"E00": "HYB_BASE", "E10": "DA_ATM", "E01": "DA_LND",
+    roles: dict = field(default_factory=lambda: {"E00": "ERA5CLIMFILL", "E10": "DA_ATM", "E01": "DA_LND_CLIMFILL",
                                                  "E11": "DA_COUPLED"})
     # name: (roles added, roles subtracted). Centred on the full (coupled) initialization:
     # atmosphere S11 - S01, land S11 - S10, interaction (land-atmosphere consistency) S11 - S10 - S01 + S00,
@@ -73,9 +74,9 @@ class InitBenefitSettings(_Settings):
 class HeatwaveSettings(_Settings):
     """Notebook series 06: the summer 2012 central U.S. heat wave (May 2012 starts)."""
     paths: RunPaths
-    configs: tuple = ("CLIM_BASE", "HYB_BASE", "DA_COUPLED", "DA_ATM", "DA_LND")  # Q1/Q2, then Q3
-    primary: tuple = ("CLIM_BASE", "HYB_BASE", "DA_COUPLED")                     # Q1 and Q2
-    ic_defect: tuple = ("HYB_BASE", "DA_LND")   # started without radiative tracers: QC only; () once rerun
+    configs: tuple = ("CLIM_BASE", "ERA5CLIMFILL", "DA_COUPLED", "DA_ATM", "DA_LND_CLIMFILL")  # Q1/Q2, then Q3
+    primary: tuple = ("CLIM_BASE", "ERA5CLIMFILL", "DA_COUPLED")                               # Q1 and Q2
+    ic_defect: tuple = ()                       # configs started without radiative tracers: QC only (none now)
     season: str = "JJA"
     n_days: int = 61                            # simulated days used (lead 1 = start date)
     max_members: int | None = None              # e.g. 4 for a quick test
@@ -97,7 +98,8 @@ class HeatwaveSettings(_Settings):
     lead_windows: dict = field(default_factory=lambda: {"week 1": (1, 7), "week 2": (8, 14), "weeks 3-4": (15, 28),
                                                         "weeks 5-6": (29, 42), "weeks 7-8": (43, 56)})
     contrasts: tuple = (("DA_COUPLED", "CLIM_BASE"), ("DA_ATM", "CLIM_BASE"), ("DA_COUPLED", "DA_ATM"),
-                        ("HYB_BASE", "CLIM_BASE"), ("DA_COUPLED", "HYB_BASE"), ("DA_LND", "CLIM_BASE"))  # a minus b
+                        ("ERA5CLIMFILL", "CLIM_BASE"), ("DA_COUPLED", "ERA5CLIMFILL"),
+                        ("DA_LND_CLIMFILL", "CLIM_BASE"))  # a minus b
     n_boot: int = 2000
     sens_threshold_years: tuple = ((2001, 2014), (1991, 2020))   # threshold periods tested (exclude_years left out)
     sens_percentiles: tuple = (0.85, 0.9, 0.95)
@@ -108,9 +110,9 @@ class HeatwaveSettings(_Settings):
 class WinterStormSettings(_Settings):
     """Notebook series 07: the January 2012 Pacific Northwest storm (Dec 2011 starts)."""
     paths: RunPaths
-    configs: tuple = ("CLIM_BASE", "HYB_BASE", "DA_COUPLED", "DA_ATM", "DA_LND")
-    primary: tuple = ("CLIM_BASE", "HYB_BASE", "DA_COUPLED")
-    ic_defect: tuple = ("HYB_BASE", "DA_LND")   # started without radiative tracers; () once rerun
+    configs: tuple = ("CLIM_BASE", "ERA5CLIMFILL", "DA_COUPLED", "DA_ATM", "DA_LND_CLIMFILL")
+    primary: tuple = ("CLIM_BASE", "ERA5CLIMFILL", "DA_COUPLED")
+    ic_defect: tuple = ()                       # configs started without radiative tracers (none now)
     season: str = "DJF"                         # the Dec 2011 starts
     n_days: int = 61
     max_members: int | None = None
