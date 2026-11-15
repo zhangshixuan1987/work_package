@@ -155,8 +155,8 @@ def pooled_skill(summary: xr.Dataset) -> xr.Dataset:
     """(region, lead) ensemble-mean bias, RMSE, spread (unbiased member variance x (N+1)/N) and spread/RMSE,
     pooled over the starts of a summary with ``err``, ``sqerr``, ``var``."""
     n = summary.sizes["member"]
-    ds = xr.Dataset({"bias": summary.err.mean("init"), "rmse": np.sqrt(summary.sqerr.mean("init")),
-                     "spread": np.sqrt(summary.var.mean("init") * (n + 1) / n)})
+    ds = xr.Dataset({"bias": summary["err"].mean("init"), "rmse": np.sqrt(summary["sqerr"].mean("init")),
+                     "spread": np.sqrt(summary["var"].mean("init") * (n + 1) / n)})
     ds["spread_ratio"] = ds.spread / ds.rmse
     return ds.transpose("region", "lead")
 
