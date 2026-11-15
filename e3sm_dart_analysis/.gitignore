@@ -72,6 +72,7 @@ diagnostic/**/*.eps
 # regen_f20tr_ts.* from earlier versions of it)
 post_process/process_e3sm_post.o*
 post_process/process_e3sm_post.tasks.*
+post_process/process_e3sm_post.interactive.*.log
 post_process/f20tr_post.o*
 post_process/f20tr_post.tasks.*
 post_process/regen_f20tr_ts.o*

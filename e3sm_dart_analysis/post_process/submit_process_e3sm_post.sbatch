@@ -24,6 +24,10 @@
 #   CASES="DA_LND_CLIMFILL_2011121600 ..." sbatch submit_process_e3sm_post.sbatch
 #   CASES="DA_COUPLED_2011121600" KINDS="ts_atm_daily_180x360_aave" sbatch submit_process_e3sm_post.sbatch
 #   ROOT=/pscratch/sd/z/zhan391/e3sm_dart/simulation CASES="..." sbatch ...   # cases on scratch
+#
+# Or on interactive nodes (up to 4 nodes, 4 h), from this directory:
+#   CASES="..." salloc -N 4 -C cpu -q interactive -t 04:00:00 -A e3sm \
+#       bash submit_process_e3sm_post.sbatch > process_e3sm_post.interactive.$(date +%Y%m%d_%H%M).log 2>&1
 
 ROOT=${ROOT:-/global/cfs/cdirs/m4849/zhan391/eam_hindcast}
 PREFIX=F20TR_ne30pg2_r05_IcoswISC30E3r5
@@ -33,11 +37,12 @@ KINDS=${KINDS:-"ts_atm_6hourly_180x360_aave ts_atm_daily_180x360_aave ts_lnd_dai
   ts_rof_monthly_native"}   # longest first
 PARALLEL=${PARALLEL:-24}
 export THREADS=${THREADS:-4}
-SCRIPT=${SCRIPT:-$SLURM_SUBMIT_DIR/run_process_e3sm_post.sh}
+SUBMIT_DIR=${SLURM_SUBMIT_DIR:-$PWD}   # salloc may not set SLURM_SUBMIT_DIR
+SCRIPT=${SCRIPT:-$SUBMIT_DIR/run_process_e3sm_post.sh}
 
 source /global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh
 
-tasks=$SLURM_SUBMIT_DIR/process_e3sm_post.tasks.$SLURM_JOB_ID
+tasks=$SUBMIT_DIR/process_e3sm_post.tasks.$SLURM_JOB_ID
 : > "$tasks"
 if [[ -n "${CASES:-}" ]]; then
   case_dirs=(); for c in $CASES; do case_dirs+=("$ROOT/${PREFIX}_$c"); done
