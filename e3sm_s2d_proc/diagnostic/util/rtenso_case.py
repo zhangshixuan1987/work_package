@@ -1,16 +1,18 @@
-"""Shared helpers for the RTENSO2026 2015/16 El Nino case-study notebooks.
+"""Shared helpers for the RTENSO2026 case-study notebooks (2015/16 and 2026/27 El Nino).
 
-The RTENSO2026 2015 hindcasts (``clim`` and ``obs`` land/sea-ice/river ICs,
-Feb/May/Aug/Nov starts, 10 members, 24 months) use the same ERA5 atmosphere
+The RTENSO2026 hindcasts (``clim``, ``obs`` and ``obs_ice_nsidc`` land/sea-ice/river ICs,
+Feb/May/Aug/Nov starts of 2015 and 2026, 10 members, 24 months) use the same ERA5 atmosphere
 and CFSR ocean ICs as the Reanalysis (BruteForce) set, so Reanalysis provides
 the lead-time climatology that removes model drift:
 
 * May and Nov starts use the Reanalysis 1981-2010 climatology for the same
   start month and lead.
-* Feb and Aug starts have no Reanalysis climatology (only 1980 and 1985), so
-  each lead uses the May/Nov climatology for the same target calendar month at
-  the nearest lead; when a May and a Nov lead are equally near (3 months either
-  side) the two are averaged.
+* Feb and Aug starts have no Reanalysis 1981-2010 climatology; the default
+  ``lead_drift`` method uses the observed target-month climatology plus the
+  Reanalysis May/Nov drift at the same lead (see ``matched_climatology``).
+
+``EVENTS`` and ``CASES`` are the one registry of events, hindcast sets and their starts;
+every notebook and the ``xro_case``/``strat_diag`` helpers read them from here.
 
 Paths follow ``esp_lab.env_paths``; caches are written with
 ``atomic_to_netcdf`` and reused only when their provenance attributes match
@@ -49,34 +51,71 @@ MODEL_PREFIX = "WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5"
 # RTENSO2026 post-processing has its own root; other sets stay under env_paths.raw_model_root().
 RTENSO2026_POST_ROOT = Path("/global/cfs/cdirs/e3sm/S2S2D/RTENSO2026/post_process")
 
-# Display name -> case settings. "source" is the s2d_diag folder/file prefix.
+# Events: one case study per start year. "init_months" are the hindcast starts, "peak_season" the
+# target season scored in summaries and mapped (DJF of the event winter).
+EVENTS = {
+    2015: {"label": "2015/16 El Niño", "init_months": (2, 5, 8, 11),
+           "peak_season": {"label": "DJF 2015/16", "months": [(2015, 12), (2016, 1), (2016, 2)]}},
+    2026: {"label": "2026/27 El Niño", "init_months": (2, 5, 8, 11),
+           "peak_season": {"label": "DJF 2026/27", "months": [(2026, 12), (2027, 1), (2027, 2)]}},
+}
+
+# Display name -> case settings. Each case reads <post_root>/<case_prefix>_<year><MM>0100/ENxx/post/...
+# (post_root: RTENSO2026/post_process for RTENSO2026 cases, raw_model_root otherwise). "source" is the
+# s2d_diag folder/file prefix of its caches, "years" the events the case has, "init_months" its starts,
+# "short" the label in tight figure space.
 CASES = {
     "Reanalysis-CLIM": {
         "case_prefix": f"{MODEL_PREFIX}_RTENSO2026_clim",
         "source": "RTENSO2026_clim",
+        "years": (2015, 2026),
         "init_months": (2, 5, 8, 11),
         "color": "tab:blue",
+        "short": "CLIM",
     },
     "Reanalysis-OBS": {
         "case_prefix": f"{MODEL_PREFIX}_RTENSO2026_obs",
         "source": "RTENSO2026_obs",
+        "years": (2015, 2026),
         "init_months": (2, 5, 8, 11),
         "color": "tab:orange",
+        "short": "OBS",
     },
-    # Placeholder: obs ICs with NSIDCv6 sea ice; set init_months once the runs are post-processed.
     "Reanalysis-NSIDC": {
         "case_prefix": f"{MODEL_PREFIX}_RTENSO2026_obs_ice_nsidc",
         "source": "RTENSO2026_obs_ice_nsidc",
-        "init_months": (),
+        "years": (2015, 2026),
+        "init_months": (2, 5, 8, 11),
         "color": "tab:red",
+        "short": "NSIDC",
     },
+    # The actual BruteForce restarts; the Reanalysis set ends in 2015, so there is no 2026 run.
     "Reanalysis-FOSIRL": {
         "case_prefix": f"{MODEL_PREFIX}_BruteForce",
         "source": "Reanalysis",
+        "years": (2015,),
         "init_months": (2, 5, 8, 11),
         "color": "tab:green",
+        "short": "FOSIRL",
     },
 }
+# Cases pooled into one ensemble (outlooks, animations, inter-member regressions, stratosphere series).
+# A case whose members repeat an already pooled case member for member (the 1 Feb 2026 clim and obs
+# runs) is counted once by the notebooks.
+POOLED_CASES = ("Reanalysis-CLIM", "Reanalysis-OBS", "Reanalysis-NSIDC")
+
+
+def has_start(case, year, init_month):
+    """True when ``case`` has a hindcast started on 1 ``init_month`` ``year``."""
+    cfg = CASES[case]
+    return year in cfg["years"] and init_month in cfg["init_months"]
+
+
+def cases_for(year, init_month, cases=None):
+    """Case names (registry order) with a start on 1 ``init_month`` ``year``."""
+    return [c for c in (cases or CASES) if has_start(c, year, init_month)]
+
+
 REFERENCE = {"case_prefix": f"{MODEL_PREFIX}_BruteForce", "source": "Reanalysis", "init_months": (5, 11)}
 # The Reanalysis also has Feb and Aug starts every five years (1980-2015, 10 members): 1985-2010 inside
 # CLIM_YEARS give a direct (60 member-year) climatology for those starts (matched_climatology method "direct").
@@ -131,6 +170,9 @@ OBS_ALT_PRODUCTS = {
     },
     "TREFHT": {
         "ERA5_Land": ("ERA5_LND/1x1/monthly/t2m_*.nc", "t2m"),                    # land only, 1950 on, K
+    },
+    "SICE": {
+        "NSIDCv6": ("NOAA_NSIDC/1x1/monthly/ICEFRAC.monthly.*.nc", "ICEFRAC"),    # NOAA/NSIDC CDR v6, 1978-11 on, fraction
     },
 }
 
@@ -761,7 +803,7 @@ def welch_t(a, b, dim="member"):
 
 
 __all__ = [
-    "CASES", "FIELDS", "REGIONS", "NINO_REGIONS", "REFERENCE", "CASE_YEAR", "CLIM_YEARS", "NENS", "NLEAD",
+    "EVENTS", "CASES", "POOLED_CASES", "has_start", "cases_for", "FIELDS", "REGIONS", "NINO_REGIONS", "REFERENCE", "CASE_YEAR", "CLIM_YEARS", "NENS", "NLEAD",
     "open_hindcast", "leadtime_climatology", "matched_climatology", "nearest_reference_leads",
     "hindcast_anomaly", "obs_monthly", "obs_anomaly", "match_obs", "box_mean", "nino_indices", "pattern_acc", "pattern_rmse",
     "seasonal_leads", "target_mean", "obs_target_mean", "hemispheric_area", "target_season_label",

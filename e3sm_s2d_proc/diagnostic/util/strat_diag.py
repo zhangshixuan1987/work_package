@@ -35,10 +35,9 @@ DJF = ((0, 12), (1, 1), (1, 2))                                   # (years after
 DJF_DAYS = np.array([31.0, 31.0, 28.0])                          # day weights (no-leap model calendar)
 
 
-def default_pool(prefix=rc.MODEL_PREFIX):
-    return {"Reanalysis-CLIM": f"{prefix}_RTENSO2026_clim",
-            "Reanalysis-OBS": f"{prefix}_RTENSO2026_obs",
-            "Reanalysis-NSIDC": f"{prefix}_RTENSO2026_obs_ice_nsidc"}
+def default_pool():
+    """{case: case_prefix} of the pooled cases (rc.POOLED_CASES)."""
+    return {name: rc.CASES[name]["case_prefix"] for name in rc.POOLED_CASES}
 
 
 @dataclass

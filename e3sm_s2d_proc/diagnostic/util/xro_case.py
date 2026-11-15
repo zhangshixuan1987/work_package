@@ -78,27 +78,14 @@ def calibration_method(var, method=None):
     return m[var] if isinstance(m, dict) else m
 ALPHA_GRID = np.round(np.arange(0.5, 3.501, 0.05), 2)   # candidate factors for the CRPS objective
 
-# Events: "init_months" are the hindcast starts, "train" the XRO training years (all before the event),
-# "peak_season" the target season of the summaries and sensitivity experiments.
-EVENTS = {
-    2015: {"label": "2015/16 El Niño", "init_months": (2, 5, 8, 11), "train": (1981, 2014),
-           "peak_season": {"label": "DJF 2015/16", "months": [(2015, 12), (2016, 1), (2016, 2)]}},
-    2026: {"label": "2026/27 El Niño", "init_months": (2, 5, 8, 11), "train": (1981, 2025),
-           "peak_season": {"label": "DJF 2026/27", "months": [(2026, 12), (2027, 1), (2027, 2)]}},
-}
+# Events (rc.EVENTS) with the XRO training years ("train", all before the event).
+XRO_TRAIN = {2015: (1981, 2014), 2026: (1981, 2025)}
+EVENTS = {year: {**event, "train": XRO_TRAIN[year]} for year, event in rc.EVENTS.items()}
 
-# Hindcast cases (as in 1_enso_plume). Missing runs (e.g. Reanalysis-FOSIRL in 2026) are skipped.
+# Hindcast cases: the shared registry (rc.CASES); starts a case does not have (Reanalysis-FOSIRL in 2026)
+# are skipped.
 MODEL_PREFIX = rc.MODEL_PREFIX
-CASES = {
-    "Reanalysis-CLIM": {"case_prefix": f"{MODEL_PREFIX}_RTENSO2026_clim", "source": "RTENSO2026_clim",
-                        "init_months": (2, 5, 8, 11), "color": "#1f77b4", "short": "CLIM"},
-    "Reanalysis-OBS": {"case_prefix": f"{MODEL_PREFIX}_RTENSO2026_obs", "source": "RTENSO2026_obs",
-                       "init_months": (2, 5, 8, 11), "color": "#ff7f0e", "short": "OBS"},
-    "Reanalysis-NSIDC": {"case_prefix": f"{MODEL_PREFIX}_RTENSO2026_obs_ice_nsidc", "source": "RTENSO2026_obs_ice_nsidc",
-                         "init_months": (2, 5, 8, 11), "color": "#d62728", "short": "NSIDC"},
-    "Reanalysis-FOSIRL": {"case_prefix": f"{MODEL_PREFIX}_BruteForce", "source": "Reanalysis",
-                          "init_months": (2, 5, 8, 11), "color": "#2ca02c", "short": "FOSIRL"},
-}
+CASES = rc.CASES
 OBS_STYLE = {"color": "k", "label": "Observed"}
 XRO_STYLE = {"color": "#7b2cbf", "ls": "--", "label": "XRO"}
 MONTH_NAMES = {m: pd.Timestamp(2000, m, 1).strftime("%b") for m in range(1, 13)}
@@ -146,7 +133,7 @@ def short(var):
 
 
 def available_cases(year, init):
-    return [case for case, cfg in CASES.items() if init in cfg["init_months"]]
+    return rc.cases_for(year, init)
 
 
 def state_vector(sst, hc):
@@ -277,7 +264,7 @@ def hindcast_states(years=None, method="lead_drift", mode="auto", verbose=True):
             continue
         for case in CASES:
             for init in event["init_months"]:
-                if init not in CASES[case]["init_months"]:
+                if not rc.has_start(case, year, init):
                     continue
                 X = hindcast_state(case, year, init, method=method, mode=mode)
                 if X is None:
