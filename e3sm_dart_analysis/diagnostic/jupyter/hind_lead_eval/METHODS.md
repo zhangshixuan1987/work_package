@@ -4,27 +4,50 @@ How the notebooks turn the F20TR initialization hindcasts and the observations i
 and why each choice was made. Code: `util/fcst_init_data.py` (fields and climatologies),
 `util/fcst_init_skill.py` (scores), `util/fcst_init_plotting.py` (figures),
 `configs/fcst_init_experiment_config.py` (experiments), `util/init_benefit.py` (05a-05c), `util/heatwave_case.py`
-(06a-06h), `util/winter_storm_case.py` (07a-07d); the case settings of 05-07 are in `configs/hind_lead_eval_cases.py`
-and their shared, cached products in `util/*_workflow.py`. Last revised 2026-11-08.
+(06a-06h), `util/winter_storm_case.py` (07a-07d), `util/tracer_init.py` (08); the case settings of 05-08 are in `configs/hind_lead_eval_cases.py`
+and their shared, cached products in `util/*_workflow.py`. Last revised 2026-11-15.
 
 ## 1. Hindcasts
 
-Five initialization configurations, 20 members each, run for about 62 days from 4 start dates per season
-(16, 21, 26, 31 December 2011 and 16, 21, 26, 31 May 2012):
+Eight initialization configurations, 20 members each, run for about 62 days from 4 start dates per season
+(16, 21, 26, 31 December 2011 and 16, 21, 26, 31 May 2012). Every one is listed in `EXPERIMENTS`
+(`configs/fcst_init_experiment_config.py`: figure label, initial states, members, case name); figures name them
+by `<atmosphere>/<land>` initial state:
 
-| Configuration | Atmosphere | Land |
+| Configuration | Label | Atmosphere | Land | Members |
+|---|---|---|---|---|
+| CLIM_BASE | CLIM/CLIM | free-running climate state (FREE_CLIM) + DART perturbations | one FREE_CLIM state in every member | BASE |
+| ERA5CLIMFILL | ERA5/DATM | ERA5 completed with CLIM_BASE fields + DART perturbations (CAPT-like) | DATM-forced | BASE |
+| DA_ATM | DART/DATM | DART analysis | DATM-forced | DA |
+| DA_LND_CLIMFILL | ERA5/DART | as ERA5CLIMFILL | DART analysis | DA |
+| DA_COUPLED | DART/DART | DART analysis | DART analysis | DA |
+| CLIMO_ATM | CLIM/DART | FREE_CLIM + DART perturbations | DART analysis | DA |
+| CLIMO_LND | DART/CLIM | DART analysis | one FREE_CLIM state in every member | DA |
+| HYB_BASE | ERA5inc/DATM | ERA5 without the radiative/chemical tracers + DART perturbations (superseded) | DATM-forced | BASE |
+
+The ERA5 states of ERA5CLIMFILL and DA_LND_CLIMFILL hold the ERA5 T, U, V, Q, PS, CLDLIQ and CLDICE and take
+every other field (ozone, linoz gases, aerosols, chemistry, surface fields) from the CLIM_BASE state
+(`ensemble_perturbations/04_ic_era5_climfill_dartpert.ipynb`); HYB_BASE lacks those fields (section 8) and is kept only for question (a). The DA_LND
+run (the incomplete ERA5 atmosphere over the DART land) was removed and replaced by DA_LND_CLIMFILL. CLIMO_ATM and
+CLIMO_LND replace one component of DA_COUPLED with the CLIM_BASE state (`ic_climoatm_dartpert20`,
+`ic_climolnd_dartpert20`).
+
+The notebooks pick a group of experiments by question with `CONFIG_GROUP` (`CONFIG_GROUPS`; `select_configs`,
+`design_grid`, `experiments_table`); `CASE_NAMES_OVERRIDE` points a selected configuration to another case:
+
+| Group | Question | Configurations |
 |---|---|---|
-| CLIM_BASE | free-running climate state | free-running |
-| HYB_BASE | ERA5-based | DATM-forced |
-| DA_ATM | DART analysis | as HYB_BASE |
-| DA_LND | as HYB_BASE | DART analysis |
-| DA_COUPLED | DART analysis | DART analysis |
+| `tracer_init` | (a) incomplete vs completed ERA5 initial state | CLIM_BASE, HYB_BASE, ERA5CLIMFILL, DA_ATM |
+| `lnd_vs_atm` | (b) land vs atmosphere initialization: {CLIM, DART} atmosphere x land | CLIM_BASE, CLIMO_LND, CLIMO_ATM, DA_COUPLED |
+| `dart_vs_capt` (default) | (c) DART vs CAPT-like: {ERA5, DART} atmosphere x {DATM, DART} land, + CLIM | CLIM_BASE, ERA5CLIMFILL, DA_ATM, DA_LND_CLIMFILL, DA_COUPLED |
+| `coupling_consistency` | (d) consistent vs mixed land-atmosphere initial states | every complete-IC configuration |
+| `all` | | all eight |
 
-Both start sets hold the same experiments: 5 configurations x 4 starts x 20 members. The members of each
-ensemble are exchangeable and their numbers are labels only. The BASE configurations are EN01-EN20, with EN01
+Both start sets hold the same experiments: each configuration x 4 starts x 20 members. The members of each
+ensemble are exchangeable and their numbers are labels only. The BASE configurations (CLIM_BASE, ERA5CLIMFILL, HYB_BASE) are EN01-EN20, with EN01
 the unperturbed control and EN02-EN20 the control plus the centred perturbations of 19 of a season's 20
-selected DART members (`ensemble_perturbations/02_ic_free_clim_dartpert.ipynb` and `03_ic_era5_dartfill_dartpert.ipynb`). The DA
-configurations keep the DART numbers of the same 20 members, a different subset of the 40 in each season
+selected DART members (`ensemble_perturbations/02_ic_free_clim_dartpert.ipynb` and `03_ic_era5_dartfill_dartpert.ipynb`, `04_ic_era5_climfill_dartpert.ipynb`). The DA
+configurations (DA_*, CLIMO_*) keep the DART numbers of the same 20 members, a different subset of the 40 in each season
 (Dec 2011, `DARTEN40`: EN01 EN03 EN04 EN07 EN08 EN09 EN10 EN14 EN17 EN18 EN20 EN21 EN25 EN26 EN28 EN31 EN35
 EN36 EN37 EN40; May 2012, `DARTEN40S1`: EN02 EN03 EN05 EN07 EN11 EN12 EN13 EN14 EN15 EN16 EN20 EN22 EN24
 EN26 EN27 EN28 EN31 EN32 EN34 EN38), so each configuration's list comes from `members(config, season)`.
@@ -41,8 +64,9 @@ notebooks stop rather than pool an unbalanced set.
 All runs are AMIP-type (interactive atmosphere and land) hybrid starts with the same prescribed SST: DOCN
 `SSTDATA` mode, the NOAA AVHRR 1x1 file, identical stream settings and records; no run reads a DOCN restart.
 Open-ocean TS on the first days is identical across configurations in 99 % of the fully ocean cells within
-45S-45N. The reference case differs: the DATM case for HYB_BASE, DA_ATM and DA_LND, the DART case for
-DA_COUPLED, so DA_COUPLED's sea-ice state also comes from DART; the remaining TS differences are in
+45S-45N. The reference case differs: the DATM case for ERA5CLIMFILL, HYB_BASE, DA_ATM and DA_LND_CLIMFILL, the DART
+case for DA_COUPLED (and the CLIMO sets built on it), FREE_CLIM for CLIM_BASE, so the sea-ice state differs
+with it; the remaining TS differences are in
 sea-ice and marginal-ice cells (prognostic sea-ice surface temperature).
 
 ### What the model output contains
@@ -132,12 +156,13 @@ overlapping days, so it leaks their observed anomalies into the forecast.
 | Notebook | Scores |
 |---|---|
 | 01 lead-day performance | per lead day and region, pooled over the 4 starts of a season: ensemble-mean RMSE and bias, spread (unbiased member variance x (N+1)/N), spread/RMSE, fair CRPS; window means (days 1-3, 4-10, weeks 3-4, 5-8). Full fields, no anomalies. |
-| 02 weekly S2S skill | per bias treatment: pattern ACC (centred, cos-lat weighted) and MSSS by region and week; gridpoint ACC over the starts (pooled over the available seasons) with a one-sided t-test; ΔACC against `HYB_BASE`; scorecard; bias impact. |
+| 02 weekly S2S skill | per bias treatment: pattern ACC (centred, cos-lat weighted) and MSSS by region and week; gridpoint ACC over the starts (pooled over the available seasons) with a one-sided t-test; ΔACC against `CLIM_BASE`; scorecard; bias impact. |
 | 03 land | lead-day scores over land; weekly skill as in 02 for both bias treatments; soil-moisture memory (week-1 with week-w soil moisture) and SM-TSA, SM-LHFLX coupling, correlations over the 80 member-starts of a season (departures from the ensemble mean, so independent of the climatology). |
 | 04 MJO | RMM index of each member (section 7); bivariate COR and RMSE of the ensemble mean by lead (Rashid et al. 2011), spread, amplitude error, lead-window skill. |
-| 05a-05c initialization benefits | 2 x 2 roles (atmosphere, land DART-initialized: E00 HYB_BASE, E10 DA_ATM, E01 DA_LND, E11 DA_COUPLED): pattern ACC of TREFHT over 30-60N land and the contrasts E11-E01 (atmosphere), E11-E10 (land) and E11-E10-E01+E00 (land-atmosphere consistency), weekly and on 7-day running means, both bias treatments; paired bootstrap over starts and members; panel against a held-out E11 member. Incremental benefits of DART over the reference initialization, not total component contributions. |
-| 06a-06h heat wave 2012 | case study of the central U.S. heat wave (35-45N, 105-85W land; May starts): event from ERA5 daily-mean TREFHT above its calendar-day 90th percentile (2001-2014, +-7 days) for 3+ days (27 Jun-7 Jul 2012, peak 4 Jul, +5.1 K); coverage (leads 28-53); regional series of all members; member metrics (event-mean and peak anomaly, peak-date error, exceedance days, longest run, accumulated exceedance, area fraction, event precipitation), both bias treatments; maps. Organized as Q1 (HYB_BASE, DA_COUPLED vs CLIM_BASE), Q2 (DA_COUPLED vs HYB_BASE), Q3 (DA_ATM, DA_LND). |
+| 05a-05c initialization benefits | 2 x 2 roles (atmosphere, land DART-initialized), one design per `CONFIG_GROUP` (`INIT_BENEFIT_DESIGNS`): `dart_vs_capt` E00 ERA5CLIMFILL, E10 DA_ATM, E01 DA_LND_CLIMFILL, E11 DA_COUPLED; `lnd_vs_atm` E00 CLIM_BASE, E10 CLIMO_LND, E01 CLIMO_ATM, E11 DA_COUPLED: pattern ACC of TREFHT over 30-60N land and the contrasts E11-E01 (atmosphere), E11-E10 (land) and E11-E10-E01+E00 (land-atmosphere consistency), weekly and on 7-day running means, both bias treatments; paired bootstrap over starts and members; panel against a held-out E11 member. Benefits of DART over the design's reference E00: incremental over the CAPT-like states in `dart_vs_capt`, close to total component contributions over free-running states in `lnd_vs_atm`. |
+| 06a-06h heat wave 2012 | case study of the central U.S. heat wave (35-45N, 105-85W land; May starts): event from ERA5 daily-mean TREFHT above its calendar-day 90th percentile (2001-2014, +-7 days) for 3+ days (27 Jun-7 Jul 2012, peak 4 Jul, +5.1 K); coverage (leads 28-53); regional series of all members; member metrics (event-mean and peak anomaly, peak-date error, exceedance days, longest run, accumulated exceedance, area fraction, event precipitation), both bias treatments; maps. Organized as Q1 (ERA5CLIMFILL, DA_COUPLED vs CLIM_BASE), Q2 (DA_COUPLED vs ERA5CLIMFILL), Q3 (DA_ATM, DA_LND_CLIMFILL). |
 | 07a-07d winter storm 2012 | case study of the 16-20 Jan 2012 Pacific Northwest storm (Dec starts; WEST_WA_OR and INLAND_PNW land): regional series of the 80 pooled members, member metrics (event and maximum daily precipitation, peak date, event-mean and minimum temperature, precipitation on freezing and near-freezing days, pattern scores), event maps, storm environment (IVT, Z500, PSL); both bias treatments. |
+| 08 tracer initialization | `tracer_init` group; contrasts HYB_BASE - ERA5CLIMFILL (the tracer defect), DA_ATM - ERA5CLIMFILL and ERA5CLIMFILL - CLIM_BASE for the variables of `TRACER_CHAIN` (TOZ, SCO, TCO; FLDSC, FSDSC, FLUTC, FSNTOAC; T010, T050, T100; T850, Z500, TMQ, PRECT; TREFHT, TS), by region and lead day, zonal mean and lead window: difference of the ensemble means averaged over the starts, standard error sqrt(sum over starts of var_a/n_a + var_b/n_b) / n_starts (members unpaired, starts independent), member spread, z; recovery = the day after \|Δ\| last exceeds `recovery_k` x member spread; skill (bias, RMSE, spread/RMSE) of the verifiable variables and the lead-window RMSE change against ERA5CLIMFILL. |
 
 ## 7. MJO: winds for the RMM index
 
@@ -169,7 +194,7 @@ Z500, T850) in the daily stream would give true model daily means at little cost
 
 ## 8. Limitations
 
-* **Incomplete ERA5 initial atmosphere (HYB_BASE, DA_LND): their results are not valid as they stand.** The
+* **Incomplete ERA5 initial atmosphere (HYB_BASE; the removed DA_LND).** The
   ERA5 file `DART_INIT/ATM/v3.LR.ne30pg2.ERA5.eam.i.<date>.nc`, and the `HYB_DARTPERT20` files built from it,
   hold 13 variables (U, V, T, Q, PS, CLDLIQ, CLDICE and coordinates) against 129 in the DART and FREE_CLIM
   files: no ozone, no linoz gases (H2OLNZ, CH4LNZ, N2OLNZ), no chemistry, no aerosols, no sea-ice surface
@@ -179,15 +204,16 @@ Z500, T850) in the daily stream would give true model daily means at little cost
   ozone). Global clear-sky downward longwave at the surface (FLDSC) is then
   94 W m-2 on day 1 against 318 in DA_ATM, recovers only over about 8 weeks, and the lower stratosphere
   (50 hPa) cools by 11 K. Over land TREFHT is 6-7 K too cold for 2-4 weeks in both seasons (water vapour
-  is normal; the ocean is held by the prescribed SST). Contrasts with HYB_BASE or DA_LND, including
-  notebook 05's contrasts involving E00 or E01 (atmosphere, consistency, total), mostly measure this defect, not the initialization.
-  Found 2026-11-06. The completed files (ERA5 fields plus the DART-mean of every other field, H2OLNZ from
-  ERA5 Q) are built by `ensemble_perturbations/03_ic_era5_dartfill_dartpert.ipynb` (step 3a); these two
-  configurations need new runs from them.
+  is normal; the ocean is held by the prescribed SST). Found 2026-11-06 (`hind_ic_test`). The ERA5 runs were
+  redone from states completed with CLIM_BASE fields (ERA5CLIMFILL, DA_LND_CLIMFILL), which every default now
+  uses; HYB_BASE remains only in `tracer_init` (question a), where this defect is the subject.
+* **No initial land spread in the CLIM land**: CLIM_BASE and CLIMO_LND start every member from the same FREE_CLIM
+  land state (only their atmosphere is perturbed). In `lnd_vs_atm` the land benefit therefore compares the DART
+  land ensemble with one climate land state; the interaction is unaffected to first order (E00 and E10 share it).
 * **Drift**: not removed by either bias treatment (section 5); week 1-2 comparisons between configurations
   include it.
-* **Verifying analysis**: ERA5 also provides the initial atmosphere of HYB_BASE and DA_LND, which favours them
-  in week 1.
+* **Verifying analysis**: ERA5 also provides the initial atmosphere of ERA5CLIMFILL and DA_LND_CLIMFILL (and
+  HYB_BASE), which favours them in week 1.
 * **Significance**: the t-test treats the 8 starts as independent, but starts 5 days apart verify on
   overlapping periods, so significance is overstated. Lead with gridpoint ACC within a season and ΔACC.
 * **00Z fields**: verified at 00Z only (no model daily means), with all-hours climatologies (section 4).
@@ -198,7 +224,7 @@ Z500, T850) in the daily stream would give true model daily means at little cost
 ## 9. Outputs and caches
 
 Under `DIAGNOSTIC_OUTPUT_ROOT/{data,figure}/hind_lead_eval/`: `lead_skill/` (01), `s2s_weekly/` (02),
-`land/` (03), `mjo/` (04), `init_benefit/` (05), `heatwave_2012/` (06), `winter_storm_2012/` (07). In 05-07 every product
+`land/` (03), `mjo/` (04), `init_benefit/` (05; scores, maps and figures in `init_benefit/<design>/`), `heatwave_2012/` (06), `winter_storm_2012/` (07), `tracer_init/` (08). In 05-08 every product
 (model and observed fields, metrics, scores) is saved with the settings it was computed from and read back when they are
 unchanged; `FORCE_COMPUTE` recomputes a notebook's results and `FORCE_INPUTS` also re-reads the model output and
 observations. In 01-04 climatologies and anomalies are cached and reused unless `FORCE_COMPUTE`; a cached

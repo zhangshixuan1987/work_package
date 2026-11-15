@@ -22,12 +22,14 @@ temperature. The other runs and comparisons below stay in `configs/hind_ic_test_
 
 1. **Incomplete ERA5 atmosphere.** `DART_INIT/ATM/v3.LR.ne30pg2.ERA5.eam.i.<date>.nc` holds only T, U, V, Q, PS,
    CLDLIQ and CLDICE, and EAM starts every missing field from zero. The radiation reads its gases from tracers
-   (`rad_climate = 'A:H2OLNZ:H2O', 'A:O3:O3', 'A:N2OLNZ:N2O', 'A:CH4LNZ:CH4'`), so HYB_BASE and DA_LND start
-   radiatively dry and without ozone, aerosols or hydrometeor numbers, about 6 K too cold over land.
+   (`rad_climate = 'A:H2OLNZ:H2O', 'A:O3:O3', 'A:N2OLNZ:N2O', 'A:CH4LNZ:CH4'`), so HYB_BASE and the former DA_LND
+   started radiatively dry and without ozone, aerosols or hydrometeor numbers, about 6 K too cold over land.
 2. **Source of the filled fields.** The completed ERA5 states (`ensemble_perturbations/util/complete_era5_ic.py`)
    take the missing fields from the DART ensemble mean or from the free-running CLIM_BASE (FREE_CLIM) state.
-3. **Component contrasts confounded by the defect.** The production DA_LND (bare ERA5 atmosphere) and DA_ATM
-   (DATM-forced land) mix the IC defect, or a different land spin-up, into the atmosphere and land contrasts.
+   The CLIM_BASE fill was adopted in production: ERA5CLIMFILL and DA_LND_CLIMFILL (`hind_lead_eval`) start from
+   it, and the DA_LND run (bare ERA5 atmosphere) was removed.
+3. **Component contrasts confounded by the defect.** The former production DA_LND (bare ERA5 atmosphere) and DA_ATM
+   (DATM-forced land) mixed the IC defect, or a different land spin-up, into the atmosphere and land contrasts.
    The CLIMO tests replace one component of DA_COUPLED EN40 with the complete CLIM_BASE state (Berner-style).
 
 ## Runs (`configs/hind_ic_test_runs.py`)
@@ -39,12 +41,12 @@ temperature. The other runs and comparisons below stay in `configs/hind_ic_test_
 | ERA5_CLIMFILL | ERA5CLIMFILL_TEST / EN01 | ERA5 + CLIM_BASE fields | DATM EN01 |
 | DA_COUPLED | DA_COUPLED / EN40 (production) | DART EN40 | DART EN40 |
 | DA_ATM | DA_ATM / EN40 (production) | DART EN40 | DATM EN40 |
-| DA_LND | DA_LND / EN40 (production) | bare ERA5 | DART EN40 |
+| DA_LND_CLIMFILL | DA_LND_CLIMFILL / EN40 (production) | ERA5 + CLIM_BASE fields (control EN01, as ERA5_CLIMFILL) | DART EN40 |
 | CLIMO_ATM | CLIMO_ATM_TEST / EN40 | CLIM_BASE + (DART EN40 - DART mean) | DART EN40 |
 | CLIMO_LND | CLIMO_LND_TEST / EN40 | DART EN40 | CLIM_BASE |
 
 Comparisons (A - B): `clim_fill` ERA5_CLIMFILL - ERA5_BARE (the focus), `tracer_fix` ERA5_DARTFILL - ERA5_BARE, `fill_source` ERA5_CLIMFILL - ERA5_DARTFILL,
-`atm_clim` CLIMO_ATM - DA_COUPLED, `atm_bare_era5` DA_LND - DA_COUPLED, `lnd_clim` CLIMO_LND - DA_COUPLED,
+`atm_clim` CLIMO_ATM - DA_COUPLED, `atm_era5` DA_LND_CLIMFILL - DA_COUPLED (completed ERA5 vs DART atmosphere, both over DART land), `lnd_clim` CLIMO_LND - DA_COUPLED,
 `lnd_datm` DA_ATM - DA_COUPLED. A single-member difference is judged against the noise scale
 sqrt(2) x the member spread of the 20 members of `ENSEMBLE_RUN` of the same start (HYB_BASE for the focus;
 DA_COUPLED for the component swaps).
@@ -86,14 +88,17 @@ DA_COUPLED for the component swaps).
 5. Ozone and the stratosphere differ throughout: total ozone bias -14 DU globally vs -5 DU for DA_COUPLED
    (NH land -23 vs +5 DU; better only in the tropics), the CLIM_BASE ozone being lower than DART's. 50 hPa is
    1-2.5 K warmer after day 10 and Z500 about 17 m higher in every window (rank 19-20 of 20). These come from
-   the fill source, not from ERA5 vs DART, and will carry into the rerun HYB_BASE/DA_LND vs DA_COUPLED contrasts.
+   the fill source, not from ERA5 vs DART, and carry into the ERA5CLIMFILL and DA_LND_CLIMFILL vs DA_COUPLED
+   contrasts of `hind_lead_eval`.
 
 **Other tests** (not run by default; noise from DA_COUPLED):
 
 6. The DART-mean fill gives the same near-surface result as the CLIM_BASE fill (difference within noise);
    ozone is 8-15 DU higher and 50 hPa about 1.5 K colder. Its CH4 column mean is 1048 ppbv vs 1722 for CLIM_BASE.
-7. The production DA_LND - DA_COUPLED contrast is the same defect (-6.3 K over land in days 1-10), so
-   HYB_BASE and DA_LND must both be rerun from completed states. With complete states, CLIMO_ATM - DA_COUPLED
+7. The former production DA_LND - DA_COUPLED contrast (`atm_bare_era5`, before DA_LND was removed) was the
+   same defect (-6.3 K over land in days 1-10), so both ERA5 configurations were rerun from completed states
+   (ERA5CLIMFILL, DA_LND_CLIMFILL); its replacement `atm_era5` (DA_LND_CLIMFILL - DA_COUPLED) has not been
+   evaluated here yet. With complete states, CLIMO_ATM - DA_COUPLED
    is +0.18 K globally in days 1-3 (9 x noise) and within noise later; CLIMO_LND and DA_ATM minus DA_COUPLED
    are within noise in every window. One member and one start are too few to detect the land-initialization benefit.
 

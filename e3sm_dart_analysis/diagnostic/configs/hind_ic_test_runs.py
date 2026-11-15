@@ -11,8 +11,9 @@ The production members are the ones sharing the tests' other initial states:
   the state that ERA5_DARTFILL and ERA5_CLIMFILL EN01 complete, so each test differs from it only in the fields
   the ERA5 file lacks. The main comparison is ``clim_fill``: ERA5 + CLIM_BASE aerosols, ozone and other
   missing fields against the ERA5 initialization of HYB_BASE, same member;
-* DA_COUPLED, DA_ATM and DA_LND EN40 share the DART EN40 atmosphere and/or land with CLIMO_ATM and
+* DA_COUPLED, DA_ATM and DA_LND_CLIMFILL EN40 share the DART EN40 atmosphere and/or land with CLIMO_ATM and
   CLIMO_LND, which replace one component of DA_COUPLED EN40 with the CLIM_BASE (FREE_CLIM) state.
+  DA_LND_CLIMFILL EN40 starts from the ERA5CLIMFILL control (EN01), the atmosphere of ERA5_CLIMFILL.
 """
 from __future__ import annotations
 
@@ -61,9 +62,12 @@ RUNS: dict[str, Run] = {
                       _DART40, "DA_COUPLED (DART/DART)", "tab:red"),
     "DA_ATM": Run(f"{CASE_PREFIX}_DA_ATM", "EN40", "production", "DART EN40", "DATM EN40",
                   _DART40, "DA_ATM (DART/DATM)", "tab:orange"),
-    "DA_LND": Run(f"{CASE_PREFIX}_DA_LND", "EN40", "production",
-                  "bare ERA5 (T, U, V, Q, PS, CLDLIQ, CLDICE only)", "DART EN40",
-                  "DART_INIT/ATM/v3.LR.ne30pg2.ERA5.eam.i.{date}.nc", "DA_LND (bare ERA5/DART)", "tab:green"),
+    # the DA_LND run (bare ERA5 atmosphere over DART land) was removed; its rerun from the completed state
+    # (ERA5CLIMFILL control EN01, as ERA5_CLIMFILL) replaces it
+    "DA_LND_CLIMFILL": Run(f"{CASE_PREFIX}_DA_LND_CLIMFILL", "EN40", "production",
+                           "ERA5 + CLIM_BASE fields (control EN01)", "DART EN40",
+                           "e3sm_dart/ic_atm_era5climfill_dartpert20/{date}/ERA5CLIMFILL_DARTPERT20.EN01.eam.i.{date}.nc",
+                           "DA_LND_CLIMFILL (ERA5/DART)", "tab:green"),
     "CLIMO_ATM": Run(f"{CASE_PREFIX}_CLIMO_ATM_TEST", "EN40", "test",
                      "CLIM_BASE + (DART EN40 - DART mean)", "DART EN40",
                      "e3sm_dart/ic_climoatm_dartpert20/{date}/CLIMOATM_DARTPERT20.EN40.eam.i.{date}.nc",
@@ -90,8 +94,8 @@ COMPARISONS: dict[str, tuple[str, str, str]] = {
                     "Does the source of the filled fields matter? (CLIM_BASE fill - DART-mean fill)"),
     "atm_clim": ("CLIMO_ATM", "DA_COUPLED",
                  "Atmosphere initial state, complete states: CLIM_BASE - DART (both over DART land)"),
-    "atm_bare_era5": ("DA_LND", "DA_COUPLED",
-                      "Atmosphere initial state as run in production DA_LND: bare ERA5 - DART (DART land)"),
+    "atm_era5": ("DA_LND_CLIMFILL", "DA_COUPLED",
+                 "Atmosphere initial state as run in production DA_LND_CLIMFILL: completed ERA5 - DART (DART land)"),
     "lnd_clim": ("CLIMO_LND", "DA_COUPLED",
                  "Land initial state: CLIM_BASE - DART (both under the DART atmosphere)"),
     "lnd_datm": ("DA_ATM", "DA_COUPLED",
@@ -109,7 +113,7 @@ ENSEMBLE_COMPARISONS: dict[str, tuple[str, str, str]] = {
 GROUPS = {
     "era5_clim_fill": ("ERA5_BARE", "ERA5_CLIMFILL"),
     "era5_completion": ("ERA5_BARE", "ERA5_DARTFILL", "ERA5_CLIMFILL"),
-    "component_swap": ("DA_COUPLED", "CLIMO_ATM", "DA_LND", "CLIMO_LND", "DA_ATM"),
+    "component_swap": ("DA_COUPLED", "CLIMO_ATM", "DA_LND_CLIMFILL", "CLIMO_LND", "DA_ATM"),
 }
 
 

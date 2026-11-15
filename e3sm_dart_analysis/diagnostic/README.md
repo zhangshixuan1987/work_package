@@ -115,7 +115,8 @@ They run on Perlmutter and write under
 `/global/cfs/cdirs/e3sm/www/zhan391/e3sm_dart/diag_dart_2026`.
 
 The F20TR initialization-strategy hindcasts (`F20TR_ne30pg2_r05_IcoswISC30E3r5_*`:
-CLIM_BASE, HYB_BASE, DA_ATM, DA_LND, DA_COUPLED; 20 members, 8 starts) are
+CLIM_BASE, ERA5CLIMFILL, DA_ATM, DA_LND_CLIMFILL, DA_COUPLED, CLIMO_ATM,
+CLIMO_LND and the superseded HYB_BASE; 20 members, 8 starts) are
 evaluated in `jupyter/hind_lead_eval/` (lead-day performance, weekly S2S skill,
 land skill and coupling, MJO), with `configs/fcst_init_experiment_config.py`,
 `util/fcst_init_data.py`, `util/fcst_init_skill.py`, and

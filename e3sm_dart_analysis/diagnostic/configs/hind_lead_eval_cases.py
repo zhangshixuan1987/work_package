@@ -1,5 +1,5 @@
 """Case settings of the hind_lead_eval case notebooks: 05 (initialization benefits), 06 (summer 2012
-heat wave) and 07 (January 2012 Pacific Northwest storm).
+heat wave), 07 (January 2012 Pacific Northwest storm) and 08 (tracer initialization).
 
 Every notebook of a series builds its settings from these defaults plus its parameter cell (paths, run
 options and ``CASE_OVERRIDES``), so a definition changed here changes it in every notebook of the series.
@@ -31,19 +31,39 @@ class _Settings:
         return json.dumps({n: getattr(self, n) for n in names}, sort_keys=True, default=str)
 
 
+# Notebook series 05: the 2 x 2 designs (roles: first digit atmosphere, second land; 1 = DART), one per
+# question of CONFIG_GROUPS (configs/fcst_init_experiment_config.py). "reference": the E00 initial states the
+# DART benefits are measured against.
+INIT_BENEFIT_DESIGNS = {
+    "dart_vs_capt": dict(   # (c) DART vs a CAPT-like initialization
+        roles={"E00": "ERA5CLIMFILL", "E10": "DA_ATM", "E01": "DA_LND_CLIMFILL", "E11": "DA_COUPLED"},
+        reference="CAPT-like (ERA5 atmosphere + DATM-forced land)"),
+    "lnd_vs_atm": dict(     # (b) land vs atmosphere initialization against the free-running climate states
+        roles={"E00": "CLIM_BASE", "E10": "CLIMO_LND", "E01": "CLIMO_ATM", "E11": "DA_COUPLED"},
+        reference="free-running climate (CLIM_BASE atmosphere + land)"),
+}
+
+
 @dataclass(frozen=True)
 class InitBenefitSettings(_Settings):
     """Notebook series 05: DART initialization benefits for subseasonal 2-m temperature.
 
-    A 2 x 2 of the atmosphere and land initial states (first digit atmosphere, second land; 1 = DART):
-    E00 ERA5CLIMFILL (CAPT-like reference: ERA5 atmosphere + DATM-forced land), E11 DA_COUPLED (coupled DART
-    analyses), and the two mixed, land-atmosphere-inconsistent experiments E10 DA_ATM (DART atmosphere +
-    DATM-forced land) and E01 DA_LND_CLIMFILL (ERA5 atmosphere + DART land). CLIM_BASE (no assimilation) is
-    outside it.
+    A 2 x 2 of the atmosphere and land initial states (first digit atmosphere, second land; 1 = DART), one of
+    ``INIT_BENEFIT_DESIGNS`` (``design``; build with ``for_design``):
+
+    * ``dart_vs_capt`` (default, question c): E00 ERA5CLIMFILL (CAPT-like reference: ERA5 atmosphere +
+      DATM-forced land), E11 DA_COUPLED (coupled DART analyses), and the two mixed, land-atmosphere-inconsistent
+      experiments E10 DA_ATM (DART atmosphere + DATM-forced land) and E01 DA_LND_CLIMFILL (ERA5 atmosphere +
+      DART land). CLIM_BASE (no assimilation) is outside it.
+    * ``lnd_vs_atm`` (question b): E00 CLIM_BASE (free-running climate states), E10 CLIMO_LND (DART atmosphere
+      + CLIM_BASE land), E01 CLIMO_ATM (CLIM_BASE atmosphere + DART perturbations, DART land), E11 DA_COUPLED.
+
+    The scores, maps and figures of a design go to its own subdirectory (``<design>/``); the daily member
+    caches are per configuration and shared.
     """
     paths: RunPaths
-    roles: dict = field(default_factory=lambda: {"E00": "ERA5CLIMFILL", "E10": "DA_ATM", "E01": "DA_LND_CLIMFILL",
-                                                 "E11": "DA_COUPLED"})
+    design: str = "dart_vs_capt"            # name of the product set (subdirectory); roles set the experiments
+    roles: dict = field(default_factory=lambda: dict(INIT_BENEFIT_DESIGNS["dart_vs_capt"]["roles"]))
     # name: (roles added, roles subtracted). Centred on the full (coupled) initialization:
     # atmosphere S11 - S01, land S11 - S10, interaction (land-atmosphere consistency) S11 - S10 - S01 + S00,
     # total S11 - S00 = atmosphere + land - interaction. Without E01 (e.g. roles["E01"] = None) use the
@@ -68,6 +88,21 @@ class InitBenefitSettings(_Settings):
     smooth_days: int = 7                    # running mean over lead days for the daily curves
     window_weeks: tuple = (2, 4)            # shaded subseasonal window
     map_weeks: tuple = (3, 4)               # weeks averaged in the gridpoint-contrast maps
+
+    @classmethod
+    def for_design(cls, design: str, paths: RunPaths, **overrides) -> "InitBenefitSettings":
+        """Settings of a design of ``INIT_BENEFIT_DESIGNS`` (its roles), with ``overrides`` applied on top."""
+        if design not in INIT_BENEFIT_DESIGNS:
+            raise ValueError(f"No 05-series design {design!r}; choose from {list(INIT_BENEFIT_DESIGNS)} "
+                             f"(CONFIG_GROUP of notebooks 05a-05c)")
+        return cls(paths=paths, **{"design": design, "roles": dict(INIT_BENEFIT_DESIGNS[design]["roles"]),
+                                   **overrides})
+
+    @property
+    def reference(self) -> str:
+        """The E00 initial states the benefits are measured against (``INIT_BENEFIT_DESIGNS``)."""
+        d = INIT_BENEFIT_DESIGNS.get(self.design)
+        return d["reference"] if d and d["roles"] == self.roles else f"E00 {self.roles.get('E00')}"
 
 
 @dataclass(frozen=True)
@@ -136,4 +171,56 @@ class WinterStormSettings(_Settings):
     workers: int = 4
 
 
-__all__ = ["RunPaths", "InitBenefitSettings", "HeatwaveSettings", "WinterStormSettings"]
+# Notebook 08: the variables of each step of the chain from the missing tracers to the forecast (variable, region
+# shown in the summary figures). Every variable is read whole; the regions only select what the figures show.
+TRACER_CHAIN = {
+    "tracers": ("TOZ", "SCO", "TCO"),                               # total, stratospheric, tropospheric ozone (DU)
+    "radiation": ("FLDSC", "FSDSC", "FLUTC", "FSNTOAC"),            # clear-sky fluxes
+    "stratosphere": ("T010", "T050", "T100"),
+    "troposphere": ("T850", "Z500", "TMQ", "PRECT"),
+    "surface": ("TREFHT", "TS"),
+}
+
+
+@dataclass(frozen=True)
+class TracerInitSettings(_Settings):
+    """Notebook 08: the radiative/chemical tracer initialization (question a, ``CONFIG_GROUPS["tracer_init"]``).
+
+    ``test`` (HYB_BASE: the ERA5 eam.i without ozone, linoz gases, aerosols and chemistry) against ``control``
+    (ERA5CLIMFILL: the same ERA5 state, DART perturbations and DATM-forced land, the missing fields taken from
+    CLIM_BASE). ``contrasts`` (name: (a, b), a minus b) put the tracer defect next to the initialization signals it
+    would contaminate. Members are exchangeable and not paired across configurations (``METHODS.md``).
+    """
+    paths: RunPaths
+    configs: tuple = ("CLIM_BASE", "HYB_BASE", "ERA5CLIMFILL", "DA_ATM")
+    test: str = "HYB_BASE"
+    control: str = "ERA5CLIMFILL"
+    contrasts: dict = field(default_factory=lambda: {
+        "tracer_defect": ("HYB_BASE", "ERA5CLIMFILL"),     # incomplete - completed ERA5 state: the defect
+        "dart_atm": ("DA_ATM", "ERA5CLIMFILL"),            # DART - ERA5 atmosphere (question c, same land)
+        "era5_vs_clim": ("ERA5CLIMFILL", "CLIM_BASE"),     # ERA5 atmosphere + DATM land - free-running states
+    })
+    variables: tuple = tuple(v for vs in TRACER_CHAIN.values() for v in vs)
+    seasons: tuple = ("DJF", "JJA")
+    max_lead: int = 56
+    max_members: int | None = None              # e.g. 3 for a quick test
+    require_all_members: bool = True
+    regions: tuple = ("GLOBAL", "LAND", "TROPICS", "NH_EXTRATROPICS", "SH_EXTRATROPICS", "NH_MIDLAT_LAND")
+    custom_regions: dict = field(default_factory=lambda: {
+        "TROPICS": dict(lat=(-30.0, 30.0), lon=(0.0, 360.0)),
+        "NH_EXTRATROPICS": dict(lat=(30.0, 90.0), lon=(0.0, 360.0)),
+        "SH_EXTRATROPICS": dict(lat=(-90.0, -30.0), lon=(0.0, 360.0)),
+        "NH_MIDLAT_LAND": dict(lat=(30.0, 60.0), lon=(0.0, 360.0), mask="land"),   # as notebooks 05
+    })
+    lead_windows: dict = field(default_factory=lambda: {"days 1-3": (1, 3), "days 4-10": (4, 10),
+                                                        "days 11-28": (11, 28), "days 29-56": (29, 56)})
+    recovery_k: float = 1.0                     # recovered once |difference| stays within k x the member spread
+    z_crit: float = 2.0                         # |difference| / standard error counted as significant
+    # (variable, region) of the summary (normalized recovery) figure: one per step of TRACER_CHAIN
+    chain: tuple = (("TOZ", "GLOBAL"), ("FLDSC", "GLOBAL"), ("T050", "GLOBAL"), ("TREFHT", "LAND"),
+                    ("T850", "NH_EXTRATROPICS"), ("Z500", "NH_EXTRATROPICS"))
+    workers: int = 4                            # processes reading model output (summary builds only)
+
+
+__all__ = ["RunPaths", "INIT_BENEFIT_DESIGNS", "InitBenefitSettings", "HeatwaveSettings", "WinterStormSettings",
+           "TRACER_CHAIN", "TracerInitSettings"]

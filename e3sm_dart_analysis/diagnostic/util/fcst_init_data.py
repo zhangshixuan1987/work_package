@@ -20,7 +20,7 @@ Sampling, as in ``util.forecast_window_scorecard`` (``VARIABLES[...]["sampling"]
   verified with ERA5 at the same instant (``ERA5/1x1/6hourly``).
 
 Units follow the scorecard: Z in m, Q in g kg-1, PRECT in mm day-1, PSL in hPa, TMQ in
-kg m-2, soil moisture of the top 5 cm in m3 m-3.
+kg m-2, soil moisture of the top 5 cm in m3 m-3, ozone columns in DU.
 
 Climatologies (``reference_climatology``, ``model_climatology``) are built the same way
 for every variable and for both sides: calendar-month means over the climatology years,
@@ -50,6 +50,7 @@ from configs.fcst_init_experiment_config import (DEFAULT_INPUT_DATA_ROOT, init_d
 # are relative to observation_root.
 MAX_LEAD = 56          # 8 weeks; the runs cover about 62 days
 _G = 9.80665
+_KG_M2_PER_DU = 2.1415e-5   # ozone column of 1 Dobson unit
 _DAY = np.timedelta64(1, "D")
 
 _ERA5_6H = "ERA5/1x1/6hourly/ERA5.6hourly.en00.{name}.{year}01-{year}12.nc"   # 00Z states
@@ -89,6 +90,15 @@ VARIABLES: dict[str, VarSpec] = {
     **{f"{n}{p}": VarSpec("atm", f"{n}{p}", "daily", "00z", "ERA5", f"{n}{p}", u)
        for n, u in (("U", "m s-1"), ("V", "m s-1"), ("T", "K"), ("Q", "g kg-1"), ("Z", "m"))
        for p in (200, 500, 700, 850, 925)},
+    # radiative-tracer diagnostics (notebook 08): clear-sky fluxes (ERA5 daily means, same sign conventions),
+    # total ozone (model TOZ, 6-hourly states; ERA5 TCO, total column in kg m-2), model-only ozone columns
+    # (TCO tropospheric, SCO stratospheric, chemistry tropopause) and stratospheric 00Z temperatures
+    **{v: VarSpec("atm", v, "6hourly", "daily_mean", "ERA5", v, "W m-2") for v in ("FLDSC", "FSDSC", "FLUTC", "FSNTOAC")},
+    "TOZ": VarSpec("atm", "TOZ", "6hourly", "daily_mean", "ERA5", "TCO", "DU"),
+    "TCO": VarSpec("atm", "TCO", "daily", "daily_mean", "", "", "DU"),
+    "SCO": VarSpec("atm", "SCO", "daily", "daily_mean", "", "", "DU"),
+    "T100": VarSpec("atm", "T100", "daily", "00z", "ERA5", "T100", "K"),
+    **{v: VarSpec("atm", v, "daily", "00z", "", "", "K") for v in ("T050", "T010")},
     "TSA": VarSpec("lnd", "TSA", "daily", "daily_mean", "ERA5", "TREFHT", "K"),
     "SOILM_5CM": VarSpec("lnd", "H2OSOI", "daily", "daily_mean", "ESA_CCI", "H2OSOI", "m3 m-3"),
     "SOILWATER_10CM": VarSpec("lnd", "SOILWATER_10CM", "daily", "daily_mean", "", "", "kg m-2"),
@@ -119,6 +129,8 @@ def _convert(field: xr.DataArray, variable: str) -> xr.DataArray:
         field = field * 86400
     elif variable == "TMQ" and units.startswith("g m"):  # ERA5 monthly product
         field = field * 0.001
+    elif variable == "TOZ" and units.startswith("kg"):   # ERA5 total column ozone
+        field = field / _KG_M2_PER_DU
     field = field.astype("float32")
     field.attrs = dict(units=spec(variable).units)
     return field

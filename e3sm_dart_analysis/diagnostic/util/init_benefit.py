@@ -1,10 +1,11 @@
 """Atmospheric and land initialization benefits of the F20TR hindcasts (``hind_lead_eval/05``).
 
 The benefit of an initialization change is a difference of skill between two experiments that
-differ only in that change, e.g. DA_ATM - HYB_BASE (DART atmosphere instead of ERA5 + DART
+differ only in that change, e.g. DA_ATM - ERA5CLIMFILL (DART atmosphere instead of ERA5 + DART
 perturbations of the same 20 DART members) or DA_COUPLED - DA_ATM (DART land
 instead of the DATM-forced land, same DART atmosphere files). Experiments are referred to by
-roles (``E00``, ``E10``, ``E01``, ``E11``: atmosphere, land initialized by DART when 1), and a
+roles (``E00``, ``E10``, ``E01``, ``E11``: atmosphere, land initialized by DART when 1; the reference states of
+E00 depend on the design, ``INIT_BENEFIT_DESIGNS`` in ``configs/hind_lead_eval_cases.py``), and a
 contrast is ``(roles added, roles subtracted)``.
 
 Fields are the daily values of every member on a region's bounding box, (init, member, lead, lat,

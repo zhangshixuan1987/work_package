@@ -7,8 +7,11 @@
   ``daily_ref_<SEASON>_<VAR>.nc``);
 * ``curves(scale)``: skill and contrast curves with paired-bootstrap intervals on weekly means or daily
   running means, panel (b) per bias treatment and season set and panel (c) (cached,
-  ``init_benefit_curves_<scale>.csv``); ``panel(...)`` turns them back into the plotting dictionaries;
-* ``maps(bias, set)``: gridpoint-ACC contrasts on weekly means (cached, ``init_benefit_maps_<BIAS>_<SET>.nc``).
+  ``<design>/init_benefit_curves_<scale>.csv``); ``panel(...)`` turns them back into the plotting dictionaries;
+* ``maps(bias, set)``: gridpoint-ACC contrasts on weekly means (cached, ``<design>/init_benefit_maps_<BIAS>_<SET>.nc``).
+
+The daily caches are per configuration and shared by the designs (``InitBenefitSettings.design``); the
+scores, maps and figures of a design are in its own subdirectory.
 
 A product is read when its file exists with the same settings, unless ``force_compute`` (this case's
 results) or ``force_inputs`` (also the model and observation reads) is set. Methods: ``util/init_benefit.py``.
@@ -47,12 +50,17 @@ class InitBenefitCase:
         self.roles = role_configs(settings.roles)
         check_configs(list(self.roles.values()))
         p = settings.paths
-        self.data_dir, self.figure_dir = workflow_output_dirs(p.workflow_name, SUBDIR, output_root=p.diagnostic_output_root)
+        # daily caches (per configuration) are shared by the designs; scores, maps and figures are per design
+        self.data_dir, _ = workflow_output_dirs(p.workflow_name, SUBDIR, output_root=p.diagnostic_output_root)
+        self.product_dir, self.figure_dir = workflow_output_dirs(p.workflow_name, SUBDIR, settings.design,
+                                                                 output_root=p.diagnostic_output_root)
         # {season: {role: member directories}}; the DA labels differ by season
         self.members = {s: {r: tuple(m)[:settings.max_members] for r, m in member_set(settings.roles, s).items()}
                         for s in settings.seasons}
         self.n_members = len(next(iter(self.members[settings.seasons[0]].values())))
-        print(f"[DATA] {self.data_dir}\n[FIGURE] {self.figure_dir}")
+        print(f"[DESIGN] {settings.design}: benefits relative to {settings.reference}")
+        print(f"[DATA] {self.data_dir} (daily caches)\n[DATA] {self.product_dir} (scores, maps)\n"
+              f"[FIGURE] {self.figure_dir}")
         for s, by_role in self.members.items():
             for r, m in by_role.items():
                 print(f"[MEMBERS] {s} {r}: {len(m)}: {', '.join(m)}")
@@ -190,7 +198,7 @@ class InitBenefitCase:
                     tables.append(results_table(res, coords, "model member", name, axis).assign(bias="amip", scale=scale))
                 print(f"[SCORES] {scale} {name}")
             return pd.concat(tables, ignore_index=True)
-        return cached_table(self.data_dir / f"init_benefit_curves_{scale}.csv", build, self._stamp(*_SCORE_KEYS),
+        return cached_table(self.product_dir / f"init_benefit_curves_{scale}.csv", build, self._stamp(*_SCORE_KEYS),
                             force=self.force)
 
     @staticmethod
@@ -222,7 +230,7 @@ class InitBenefitCase:
                             coords={"week": self.weeks, "lat": g.lat, "lon": g.lon}).where(g.mask)
             ds.attrs.update(n_starts=len(labels), note="gridpoint ACC across starts; very few starts")
             return ds
-        return cached_dataset(self.data_dir / f"init_benefit_maps_{bias}_{set_name}.nc", build,
+        return cached_dataset(self.product_dir / f"init_benefit_maps_{bias}_{set_name}.nc", build,
                               self._stamp(*_DATA_KEYS, "contrasts"), force=self.force)
 
 
