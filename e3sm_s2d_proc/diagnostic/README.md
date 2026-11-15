@@ -180,7 +180,7 @@ Run `9a_strat_build_caches` first (about 1 h the first time: the native daily mo
 notebooks then only read caches (`derivation_mode = "require"`) and can run in any order. Each starts with
 its question and findings. The polar-vortex notebooks need `ERA5/1x1/daily_zonal` in the reference
 archive (built by `ERA5/scripts/daily_zonal`). On a login node (30 GB per user) run one 9x notebook at a time;
-`.split_work/run_strat_series.sbatch` runs the whole series on a compute node.
+`run_strat_series.sbatch` runs the whole series on a compute node.
 
 The notebooks (the former notebooks 9, 10 and 11, split by question) share their loaders in
 `util/strat_diag.py`; edit the notebooks directly.

@@ -1,3 +1,3 @@
-# executed test copies and logs of the 9x series
-.split_work/run/
-.split_work/test_*.py
+# executed copies and logs of run_strat_series.sbatch
+strat_run/
+strat_run.o*
