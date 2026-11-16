@@ -37,8 +37,8 @@ What this means in the diagnostics:
 * **Feb 2026 has no CLIM vs OBS contrast.** In plots the `Reanalysis-CLIM` line or map is
   hidden under `Reanalysis-OBS`; any CLIM-OBS difference for that start is zero by
   construction, not a result.
-* **Pooled ensembles count those members once.** The notebook 4 inter-member regression
-  and the notebook 6 outlook pool `Reanalysis-CLIM`, `-OBS` and `-NSIDC`, and skip a case
+* **Pooled ensembles count those members once.** The notebook 1 RONI outlook, the notebook 6
+  outlook and notebooks 8 and 9a-9i pool `Reanalysis-CLIM`, `-OBS` and `-NSIDC`, and skip a case
   whose members repeat an already pooled case exactly (each run prints a note). The Feb
   2026 pool is therefore 20 members (CLIM + NSIDC) instead of 30.
 * `Reanalysis-NSIDC` is unaffected: its NSIDC sea ice differs from the 2010 state.
@@ -112,7 +112,7 @@ points, so it gives no Nino index.
 | `1_enso_plume.ipynb` | Nino3.4/3/4/1+2/ONI forecast plumes per start against HadISST 1.1, ERSSTv5, ESA CCI SST and NOAA OISST v2.1 with the observed peak period shaded, IRI-style seasonal plumes, a CPC-style RONI outlook (Relative Oceanic Nino Index: 3-month Nino3.4 minus 20S-20N tropical-mean anomaly, rescaled to the ONI's standard deviation with HadISST 1.1 1981-2010; pooled-ensemble 5-95/15-85/25-75% ranges), peak-season summary, ensemble-mean error and spread (after 3a), and a map of the Nino regions. |
 | `2_anomaly_maps_acc.ipynb` | Peak-season (DJF) anomaly maps from every start, and spatial pattern ACC and RMSE by lead season and region, per member and ensemble mean (after 1a/1b); only fully observed seasons are scored. Set `FIELD` to `TS`, `PRECT` (both events), `TREFHT`, `PSL` or `U850` (2015 only). |
 | `3_ic_sensitivity.ipynb` | `Reanalysis-CLIM` vs `-OBS`, `-OBS` vs `-NSIDC`, and each vs `Reanalysis-FOSIRL` (2015 only), for both events: land-mean differences with member-based intervals, fraction of land with significant differences by lead, stippled difference maps, and hemispheric sea-ice area against NOAA/NSIDC CDR v6. |
-| `4_teleconnections.ipynb` | Peak-season teleconnections of `PRECT`/`TREFHT`/`PSL` per degC of Nino3.4 against the observed event and the 1982-2010 observed regression, an inter-member regression, and CPC-style equatorial Hovmollers of SST, U850, OLR and 200-hPa velocity potential (`rc.velocity_potential`) (after 3b). |
+| `4_teleconnections.ipynb` | Peak-season teleconnections of `PRECT`/`TREFHT`/`PSL` per degC of Nino3.4 against the observed event and the 1982-2010 observed regression, and CPC-style equatorial Hovmollers of SST, U850, OLR and 200-hPa velocity potential (`rc.velocity_potential`) (after 3b). |
 | `5_npac_namerica.ipynb` | CPC-style North Pacific / North America maps (120E-60W, 20-70N) for Nov-Feb: 500-hPa height and anomaly, 200-hPa wind, 925-hPa temperature anomaly, observed (ERA5, through 2019) and each case's ensemble mean. |
 | `6_us_temp_precip.ipynb` | CPC-style U.S. maps: 1- and 3-month percent of average precipitation and temperature departures, and a tercile-probability seasonal outlook (NDJ) from the pooled members with the observed category. |
 | `util/xro_case.py` | XRO state vector (Nino3.4, recharge *h*, NPMM, SPMM, IOB, IOD, SIOD, TNA, ATL3, SASD boxes) and the configuration shared by the 7a-7d notebooks (`EVENTS`, `CASES`, `XRO_SETUP`); cached observed and hindcast state vectors, training-period trend, XRO fit, event forecasts aligned with the hindcast starts, initial-state sensitivity experiments and out-of-sample rolling hindcasts. |
