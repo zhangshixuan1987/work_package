@@ -45,27 +45,50 @@ What this means in the diagnostics:
 
 ## Drift correction
 
-Model anomalies remove the Reanalysis (BruteForce) 1981-2010 lead-time climatology,
-the same IC system:
+Every notebook (1-9i) uses the same lead-dependent mean-bias correction (ICPO 2011),
+`CLIM_METHOD = "start_drift"`, built from the Reanalysis (BruteForce) hindcasts, the same IC
+system. For start month *m* and lead *L*:
 
-- May and Nov starts use the Reanalysis climatology for that start month and lead.
-- Feb and Aug starts have no Reanalysis climatology (only 1980 and 1985 exist). The
-  default `CLIM_METHOD = "lead_drift"` uses the observed 1981-2010 climatology of each
-  target month plus the Reanalysis drift at the same lead, averaged over the May and
-  Nov starts. `"target_month"` instead borrows the May/Nov climatology for the same
-  target month at the nearest lead; it is biased at short leads because the
-  equatorial cold tongue drifts about 1 C in the first months (Nino3.4 error at the
-  Aug start, lead 0: +0.82 C with `target_month`, -0.10 C with `lead_drift`).
+    drift_m(L) = mean over the Reanalysis starts of month m in 1981-2010 of
+                 [ensemble mean(L) - observed value at the same verification month]
+    clim_m(L)  = observed 1981-2010 climatology of the target month + drift_m(L)
+    anomaly    = forecast - clim_m(L)
 
-Observed anomalies are relative to the 1981-2010 monthly climatology: HadISST2 SST
-(land-masked, verified 60S-60N), ERA5 `TREFHT`, `PSL`, `U850`, and GPCP v2.3 `PRECT`,
-all conservatively regridded to the model 1x1 grid.
+- May and Nov: 30 start years (1981-2010). The observed terms then average back to the
+  observed climatology, so the climatology equals the Reanalysis ensemble-mean climatology
+  (to within a few hundredths of a degree for Nino3.4; leads that verify after 2010 differ
+  slightly).
+- Feb and Aug: the Reanalysis has these starts every fifth year, 1980-2015; the six inside
+  1981-2010 are 1985, 1990, 1995, 2000, 2005 and 2010 (10 members each). Measuring the drift
+  against observations of the same years removes the ENSO state of those years (several were
+  La Nina years, so a plain six-year mean of the hindcasts is about 0.5 C too cold in Nino3.4).
+- Fields without an observational product (land `SOILWATER_10CM`, `H2OSNO`, `TWS`, `TSA`), and
+  points without observations (e.g. `TS` over land), use the Reanalysis ensemble mean of the same
+  starts (`"direct"`).
+- The observed reference is each field's default product (`rc.FIELDS[field]["obs"]`: HadISST 1.1 for
+  `TS`, ERA5, GPCP v2.3, EN4.2.2); the stratosphere uses the ERA5 daily zonal means.
+- Uncertainty: `rc.start_drift(field, init)` returns the standard error of the drift over the
+  start years (members of one start share their initial state, so the sample size is the number
+  of years). For Nino3.4 (against HadISST 1.1) it is 0.13-0.38 C at leads 0-11 of the Feb/Aug
+  starts (0.27-0.38 C at the DJF-peak leads) and 0.06-0.18 C for May/Nov. Subsampling the May/Nov
+  starts to the same six years changes their Nino3.4 drift by up to 0.36 C (May) and 0.52 C (Nov)
+  at leads 0-11, and 0.86 C at Nov leads 20-23, consistent with that standard error.
 
-These e3sm_diags time series end in 2022 (HadISST2), 2019 (ERA5) and 2017 (GPCP). For
-later years, such as the 2026 starts, `obs_anomaly(field, years=(2026, 2027))` switches to
-the 1x1 archive products under `/global/cfs/cdirs/e3sm/zhan391/data` (`OBS_ARCHIVE`), which
-then also supply the 1981-2010 climatology: NOAA OISST v2.1 for `TS` (to Oct 2026; Jan-Aug
-climatology 1982-2010), GPCP v2.3 for `PRECT` (to Oct 2026) and NOAA/NSIDC CDR v6 for `SICE`
+Alternatives kept for sensitivity tests (`matched_climatology`, `strat_case.lead_climatology`):
+`"direct"` (the Reanalysis ensemble mean of the same starts), `"lead_drift"` (observed target-month
+climatology plus the mean May/Nov drift; misses the Aug-start drift of about -1.4 C in Nino3.4 at
+leads 1-2 and gives a spurious weak polar vortex for Feb/Aug), and `"target_month"` (the May/Nov
+climatology of the same target month at the nearest lead).
+
+Observed anomalies are relative to the 1981-2010 monthly climatology: HadISST 1.1 SST
+(`data/HadSST`, 1870 to Sep 2026, land-masked where the model land fraction is 0.5 or more; the
+SST product everywhere: drift reference, observed climatology, Nino indices, maps), ERA5 `TREFHT`,
+`PSL`, `U850`, and GPCP v2.3 `PRECT`, all conservatively regridded to the model 1x1 grid.
+
+The e3sm_diags time series end in 2019 (ERA5) and 2017 (GPCP). For later years, such as the
+2026 starts, `obs_anomaly(field, years=(2026, 2027))` switches to the 1x1 archive products under
+`/global/cfs/cdirs/e3sm/zhan391/data` (`OBS_ARCHIVE`), which then also supply the 1981-2010
+climatology: GPCP v2.3 for `PRECT` (to Oct 2026) and NOAA/NSIDC CDR v6 for `SICE`
 (to Oct 2026; also `product="NSIDCv6"` for any year, used by notebook 3 for both events), and NOAA CDR for `FLUT` (OLR, to Oct 2026). There is no archive product yet for
 `PSL`, `U850`, `Z500`, `T925` or the 200-hPa winds after 2019; `TREFHT` over land comes from
 ERA5-Land (`product="ERA5_Land"`, to Sep 2026).
@@ -98,11 +121,11 @@ points, so it gives no Nino index.
 | `7b_xro_events.ipynb` | XRO forecasts of the 2015/16 and 2026/27 events from the months before each start: Nino3.4 and *h* plumes, peak-season summary, peak-season Nino3.4 sensitivity to each initial-state component (removal experiments, with the non-additive remainder shown), and to the initial *h* alone. |
 | `7c_e3sm_xro_state.ipynb` | E3SM hindcasts in the XRO state space against observations and XRO: state-vector plumes (common 5-95% ranges), error decomposition into the start-month error B(0) and the error accumulated afterwards G(L) = B(L) - B(0), summary heat maps, growth of Nino3.4 and *h* from the start month, peak-season summary. |
 | `7d_e3sm_recharge.ipynb` | *T*-*h* phase planes, and XRO started from E3SM's start-month offsets (*h* only, and the full state) to test whether the E3SM-XRO peak difference comes from the initial state or from E3SM's evolution. |
-| `8_enso2026_animation.ipynb` | Animated month-by-month evolution of the 2026/27 El Nino: global maps (Robinson; `DOMAIN` for a regional box) of SST (OISST v2.1), 0-700 m heat content (EN4.2.2), precipitation (GPCP v2.3) and land 2-m air temperature (ERA5-Land) anomalies, observed and the pooled (`clim`/`obs`/`NSIDC`) ensemble mean of each 2026 start, above a Nino3.4 plume drawn up to the frame month, with the deterministic XRO forecast from each start (7b control setup) as a dashed reference. Saves a GIF and a video per field (H.264 MP4 if ffmpeg has libx264, e.g. via `imageio-ffmpeg`; else VP9 WebM) and a static storyboard of selected months; the pooled ensemble means are cached under `data/`. |
-| `util/strat_case.py` | Stratosphere readers: daily zonal means and daily 10-hPa maps from the native `eam.h1` files, monthly zonal means of the post-processed U/T/Z3, ERA5 daily zonal means and 00Z maps, lead-time climatologies of zonal means (`direct`, `lead_drift`), the daily-minus-monthly Z offset, SSW central dates (Charlton and Polvani 2007), final warming with coverage status, event details, lag composites. |
+| `8_enso2026_animation.ipynb` | Animated month-by-month evolution of the 2026/27 El Nino: global maps (Robinson; `DOMAIN` for a regional box) of SST (HadISST 1.1), 0-700 m heat content (EN4.2.2), precipitation (GPCP v2.3) and land 2-m air temperature (ERA5-Land) anomalies, observed and the pooled (`clim`/`obs`/`NSIDC`) ensemble mean of each 2026 start, above a Nino3.4 plume drawn up to the frame month, with the deterministic XRO forecast from each start (7b control setup) as a dashed reference. Saves a GIF and a video per field (H.264 MP4 if ffmpeg has libx264, e.g. via `imageio-ffmpeg`; else VP9 WebM) and a static storyboard of selected months; the pooled ensemble means are cached under `data/`. |
+| `util/strat_case.py` | Stratosphere readers: daily zonal means and daily 10-hPa maps from the native `eam.h1` files, monthly zonal means of the post-processed U/T/Z3, ERA5 daily zonal means and 00Z maps, lead-time climatologies of zonal means (default `start_drift`; `direct`, `lead_drift`), the daily-minus-monthly Z offset, SSW central dates (Charlton and Polvani 2007), final warming with coverage status, event details, lag composites. |
 | `util/strat_diag.py` | Shared inputs of the 9a-9i notebooks: `StratConfig` (data roots and run controls), `load_era5` (cached ERA5 indices and climatologies), `load_references` (Reanalysis zonal means of every start month), `load_model` (pooled 2026 starts with their daily and monthly indices), `ssw_catalogue`, `djf_vortex`, DJF helpers. |
 | `util/vortex_plot.py` | North-polar map helpers of 9g-9i: projection and extent, fixed-level anomaly shading and total contours, U60 badges, video writer. |
-| `9a_strat_build_caches.ipynb` | Builds and checks every stratosphere cache (the only 9x notebook that reads raw data; the others use `derivation_mode = "require"`): ERA5 daily zonal means and indices, model daily/monthly zonal means and daily 10-hPa maps, Reanalysis climatologies of every start month (`direct`: Feb/Aug from the six 1985-2010 starts); cache inventory; the daily-minus-monthly height offset check (38 m at 10 hPa, constant over leads and starts). |
+| `9a_strat_build_caches.ipynb` | Builds and checks every stratosphere cache (the only 9x notebook that reads raw data; the others use `derivation_mode = "require"`): ERA5 daily zonal means and indices, model daily/monthly zonal means and daily 10-hPa maps, Reanalysis climatologies of every start month (Feb/Aug from the six 1985-2010 starts) and the ERA5 monthly zonal means for `start_drift`; cache inventory; the daily-minus-monthly height offset check (38 m at 10 hPa, constant over leads and starts). |
 | `9b_strat_model_climatology.ipynb` | E3SM's stratosphere against ERA5: seasonal cycle of U(60N, 10 hPa) and polar-cap temperature, DJF zonal-mean U bias, DJF vortex strength and interannual variability. |
 | `9c_vortex_forecast.ipynb` | The vortex forecast: Feb 2026 start against the observed end of winter 2025/26, daily U(60N, 10 hPa) plumes for 2026/27 and 2027/28, the vortex index plume (U60, polar-cap T and height, polar-cap SLP), DJF tercile probabilities with their sensitivity to the climatology method. |
 | `9d_ssw_occurrence.ipynb` | SSW frequency by start x case x winter (raw wind; bias-adjusted as sensitivity) against ERA5 1979/80 on, central-date months, final warming with censoring; event catalogue CSV. |
@@ -185,6 +208,7 @@ archive (built by `ERA5/scripts/daily_zonal`). On a login node (30 GB per user) 
 The notebooks (the former notebooks 9, 10 and 11, split by question) share their loaders in
 `util/strat_diag.py`; edit the notebooks directly.
 
-Model anomalies use each start's own Reanalysis climatology (`CLIM_METHOD = "direct"`): May/Nov
-1981-2010, Feb/Aug the six 1985-2010 starts. The earlier `lead_drift` climatology produced a spurious
-weak-vortex signal for the Feb/Aug starts (9c keeps it as a sensitivity test).
+Model anomalies use `CLIM_METHOD = "start_drift"` as in the other notebooks (see "Drift correction"):
+the ERA5 target-month climatology plus the drift of the Reanalysis starts of the same month (May/Nov
+1981-2010, Feb/Aug the six 1985-2010 starts). The earlier `lead_drift` climatology produced a spurious
+weak-vortex signal for the Feb/Aug starts; 9c compares the methods.

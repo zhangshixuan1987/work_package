@@ -3,12 +3,14 @@
 Every notebook builds a ``StratConfig`` from its run controls (data roots are notebook inputs) and
 loads only what it needs:
 
-* ``load_era5``: ERA5 daily zonal-mean indices, their smoothed daily climatologies and the
-  calendar-month climatology on all levels (lazy reads: only reductions are loaded);
+* ``load_era5``: ERA5 daily zonal-mean indices, their smoothed daily climatologies, the
+  calendar-month climatology and the monthly series (inputs of the "start_drift" lead-time
+  climatology) on all levels (lazy reads: only reductions are loaded);
 * ``load_references``: Reanalysis monthly zonal means of every start month (May/Nov 1981-2010;
   Feb/Aug the starts of every fifth year, 1985-2010) for the lead-time climatologies;
 * ``load_model``: the pooled 2026 starts, monthly and daily zonal means, and the daily indices with
-  their climatology (``cfg.clim_method``; the native daily Z gets the daily-minus-monthly offset);
+  their climatology (``cfg.clim_method``, built by ``lead_clim``; the native daily Z gets the
+  daily-minus-monthly offset);
 * ``ssw_catalogue``: SSW central dates and per-event properties, ERA5 and every model member.
 
 The caches themselves are built by ``9a_strat_build_caches`` (``mode="auto"``); the other notebooks
@@ -49,7 +51,7 @@ class StratConfig:
     pool: dict = field(default_factory=default_pool)
     year: int = 2026
     init_months: tuple = (2, 5, 8, 11)
-    clim_method: str = "direct"                # "direct", "lead_drift" or "target_month"
+    clim_method: str = "start_drift"           # "start_drift" (default), "direct", "lead_drift" or "target_month"
     clim_years: tuple = rc.CLIM_YEARS
     era5_first_year: int = 1979
     ref_level: float = 10.0
@@ -145,6 +147,7 @@ def load_era5(cfg: StratConfig) -> SimpleNamespace:
                          **{f"month_clim_{k}": o.month_clim[k] for k in ("U", "T", "Z")}})
         ds.attrs.update(expected)
         sc.atomic_to_netcdf(ds, path)
+    o.month_series = era5_monthly_series(cfg, era5)
     o.clim_u60, o.std_u60 = sc.daily_climatology(o.u60, cfg.clim_years)
     o.clim_pcz, o.std_pcz = sc.daily_climatology(o.pcz, cfg.clim_years)
     o.clim_vt, _ = sc.daily_climatology(o.vt, cfg.clim_years)
@@ -153,6 +156,31 @@ def load_era5(cfg: StratConfig) -> SimpleNamespace:
     o.u60_month = sc.monthly_means(o.u60)
     print(f"ERA5 daily zonal means {pd.Timestamp(era5['time'].values[0]):%d %b %Y} - {o.obs_end:%d %b %Y}")
     return o
+
+
+def era5_monthly_series(cfg: StratConfig, era5=None) -> xr.Dataset:
+    """ERA5 monthly zonal means U, T, Z (time on the 15th, plev, lat) from the first climatology year
+    to two years after the last (the verification months of the Reanalysis starts; "start_drift")."""
+    years = (cfg.clim_years[0], cfg.clim_years[1] + 2)
+    path = rc.diag_dir("observations", "strat", f"ERA5_monthly_zonal_y{years[0]}-{years[1]}_v{sc.CACHE_VERSION}.nc")
+    expected = {"source_mtime": _era5_stamp(cfg.era5_zonal_dir), "years": f"{years[0]}-{years[1]}"}
+    if cfg.mode != "rebuild" and sc._cache_ok(path, expected):
+        return xr.load_dataset(path)
+    if cfg.mode == "require":
+        raise FileNotFoundError(f"missing or stale ERA5 monthly zonal-mean cache {path} (run 9a)")
+    if era5 is None:
+        era5 = sc.era5_daily_zonal(cfg.era5_zonal_dir, years=years, load=False)
+    ds = sc.monthly_means(era5[["U", "T", "Z"]].sel(time=slice(f"{years[0]}-01-01", f"{years[1]}-12-31"))).load()
+    ds.attrs.update(expected)
+    sc.atomic_to_netcdf(ds, path)
+    return ds
+
+
+def lead_clim(init, refs: SimpleNamespace, era5: SimpleNamespace, method: str):
+    """Monthly lead-time climatology (lead, plev, lat) of one start with ``method`` (``sc.lead_climatology``)."""
+    month_clim = era5.month_clim.sel(plev=refs.plev) if era5 is not None else None
+    series = era5.month_series.sel(plev=refs.plev) if era5 is not None and method == "start_drift" else None
+    return sc.lead_climatology(init, refs.for_method(method), month_clim, method=method, obs_monthly=series)
 
 
 def observed_nino(cfg: StratConfig, product="HadISST1.1"):
@@ -181,7 +209,7 @@ def load_references(cfg: StratConfig) -> SimpleNamespace:
               for m in rc.DIRECT_INIT_MONTHS}
     out = SimpleNamespace(ref=ref, direct=direct, all={**ref, **direct})
     out.plev = ref[rc.REFERENCE["init_months"][0]]["plev"].values
-    out.for_method = lambda method: out.all if method == "direct" else out.ref
+    out.for_method = lambda method: out.all if method in ("direct", "start_drift") else out.ref
     return out
 
 
@@ -200,7 +228,6 @@ def load_model(cfg: StratConfig, era5: SimpleNamespace, refs: SimpleNamespace) -
     Monthly (per start): mm_u60 raw and mm_u60_anom (member, lead), mm_qbo (member, lead, plev).
     The native daily Z gets the ensemble-mean daily-minus-monthly offset (``sc.daily_monthly_offset``).
     """
-    month_clim = era5.month_clim.sel(plev=refs.plev)
     m = SimpleNamespace(monthly={}, daily={}, lead_clim={}, z_offset={}, u60={}, u60_clim={}, u60_adj={}, pct={},
                         vt={}, pch={}, mm_u60={}, mm_u60_anom={}, mm_qbo={})
     std_pcz = sc.interp_logp(era5.std_pcz, sc.DAILY_LEVELS)
@@ -208,7 +235,7 @@ def load_model(cfg: StratConfig, era5: SimpleNamespace, refs: SimpleNamespace) -
         mo = pooled_monthly(cfg, init)
         d = sc.pooled_daily_zonal(cfg.simulation_root, cfg.pool, cfg.year, init, mode=cfg.mode, workers=cfg.workers,
                                   verbose=False)
-        lc = sc.lead_climatology(init, refs.for_method(cfg.clim_method), month_clim, method=cfg.clim_method)
+        lc = lead_clim(init, refs, era5, cfg.clim_method)
         m.monthly[init], m.daily[init], m.lead_clim[init] = mo, d, lc
         lcd = sc.interp_logp(lc[["U", "Z", "T"]], sc.DAILY_LEVELS)
         m.z_offset[init] = sc.daily_monthly_offset(d, mo, cfg.year, init)
@@ -290,11 +317,10 @@ def djf_vortex(cfg: StratConfig, model: SimpleNamespace, refs: SimpleNamespace, 
     """{(init, winter): DJF U(60N, ref level) anomaly per member (monthly product)} with the ``method``
     climatology (default ``cfg.clim_method``)."""
     method = method or cfg.clim_method
-    month_clim = era5.month_clim.sel(plev=refs.plev)
     out = {}
     for init in cfg.init_months:
         raw = model.mm_u60[init].assign_coords(time=model.monthly[init]["time"]).swap_dims(lead="time")
-        lc = sc.lead_climatology(init, refs.for_method(method), month_clim, method=method)
+        lc = lead_clim(init, refs, era5, method)
         clim = sc.lat_mean(lc["U"].sel(plev=cfg.ref_level), sc.U60).assign_coords(
             time=("lead", model.monthly[init]["time"].values)).swap_dims(lead="time")
         for w in (cfg.year, cfg.year + 1):

@@ -224,7 +224,7 @@ def last_observed(X, var):
     return t.year, t.month
 
 
-def hindcast_state(case, year, init, method="lead_drift", mode="auto"):
+def hindcast_state(case, year, init, method="start_drift", mode="auto"):
     """Drift-corrected state vector (member, lead) of one hindcast with a target-month ``time``
     coordinate along ``lead``, or None when the runs do not exist. SST is land-masked as the
     observations (EAM LANDFRAC < 0.5)."""
@@ -256,7 +256,7 @@ def hindcast_state(case, year, init, method="lead_drift", mode="auto"):
     return X.assign_coords(time=("lead", rc._target_times(year, init, X.sizes["lead"])))
 
 
-def hindcast_states(years=None, method="lead_drift", mode="auto", verbose=True):
+def hindcast_states(years=None, method="start_drift", mode="auto", verbose=True):
     """{(year, case, init): Dataset} for every existing hindcast of ``EVENTS``."""
     out = {}
     for year, event in EVENTS.items():

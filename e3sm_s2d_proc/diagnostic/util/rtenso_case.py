@@ -5,11 +5,13 @@ Feb/May/Aug/Nov starts of 2015 and 2026, 10 members, 24 months) use the same ERA
 and CFSR ocean ICs as the Reanalysis (BruteForce) set, so Reanalysis provides
 the lead-time climatology that removes model drift:
 
-* May and Nov starts use the Reanalysis 1981-2010 climatology for the same
-  start month and lead.
-* Feb and Aug starts have no Reanalysis 1981-2010 climatology; the default
-  ``lead_drift`` method uses the observed target-month climatology plus the
-  Reanalysis May/Nov drift at the same lead (see ``matched_climatology``).
+* The default ``start_drift`` method (ICPO 2011 lead-dependent mean-bias correction) is the
+  observed 1981-2010 climatology of the target month plus the drift of the Reanalysis starts
+  of the same month (model ensemble mean minus observations at the same verification months),
+  averaged over every Reanalysis start of that month in 1981-2010: 30 years for May and Nov
+  (identical to their Reanalysis climatology), 1985, 1990, ..., 2010 for Feb and Aug.
+* ``lead_drift``, ``target_month`` and ``direct`` remain for sensitivity tests (see
+  ``matched_climatology``).
 
 ``EVENTS`` and ``CASES`` are the one registry of events, hindcast sets and their starts;
 every notebook and the ``xro_case``/``strat_diag`` helpers read them from here.
@@ -39,7 +41,7 @@ from esp_lab.utils.netcdf_utils import atomic_to_netcdf, load_netcdf
 from esp_lab.utils.regrid_utils import make_regridder
 
 CACHE_VERSION = 1
-OBS_CACHE_VERSION = 2   # 2: TS (HadISST2 SST) masked over land, as ESP-Lab's sst_land_mask
+OBS_CACHE_VERSION = 2   # 2: TS (SST) masked over land, as ESP-Lab's sst_land_mask
 GRID = "180x360_aave"
 GRID_TAG = "1x1deg"
 NENS = 10
@@ -118,12 +120,12 @@ def cases_for(year, init_month, cases=None):
 
 REFERENCE = {"case_prefix": f"{MODEL_PREFIX}_BruteForce", "source": "Reanalysis", "init_months": (5, 11)}
 # The Reanalysis also has Feb and Aug starts every five years (1980-2015, 10 members): 1985-2010 inside
-# CLIM_YEARS give a direct (60 member-year) climatology for those starts (matched_climatology method "direct").
+# CLIM_YEARS give the six start years of their "start_drift" (default) and "direct" climatologies.
 DIRECT_INIT_MONTHS = (2, 8)
 
 # Field -> realm, file variable, obs product/variable, unit conversion to display units.
 FIELDS = {
-    "TS": {"realm": "atm", "obs": ("HadISST2", "sst"), "scale": 1.0, "offset": -273.15, "units": "degC", "long_name": "Surface temperature (SST over ocean)"},
+    "TS": {"realm": "atm", "obs": ("HadISST1.1", "TS"), "scale": 1.0, "offset": -273.15, "units": "degC", "long_name": "Surface temperature (SST over ocean)"},
     "TREFHT": {"realm": "atm", "obs": ("ERA5", "TREFHT"), "scale": 1.0, "offset": -273.15, "units": "degC", "long_name": "2-m air temperature"},
     "PRECT": {"realm": "atm", "obs": ("GPCP_v2.3", "PRECT"), "scale": 86400.0 * 1000.0, "offset": 0.0, "units": "mm/day", "long_name": "Precipitation"},
     "PSL": {"realm": "atm", "obs": ("ERA5", "PSL"), "scale": 0.01, "offset": 0.0, "units": "hPa", "long_name": "Sea-level pressure"},
@@ -151,7 +153,6 @@ FIELDS = {
 OBS_LAST_YEAR = {"HadISST2": 2022, "ERA5": 2019, "GPCP_v2.3": 2017, "EN4.2.2": 0}   # EN4: archive only
 OBS_ARCHIVE_ROOT = Path("/global/cfs/cdirs/e3sm/zhan391/data")
 OBS_ARCHIVE = {
-    "TS": ("OISSTv2.1", "NOAA_OISST/1x1/monthly/SST.monthly.*.nc", "SST"),       # 1981-09 on, degC
     "PRECT": ("GPCP_v2.3", "GPCPv2.3/1x1/monthly/PRECT.monthly.*.nc", "PRECT"),   # mm/day
     "SICE": ("NSIDCv6", "NOAA_NSIDC/1x1/monthly/ICEFRAC.monthly.*.nc", "ICEFRAC"),  # fraction
     "FLUT": ("NOAA_CDR_OLR", "NOAA_CDR/1x1/monthly/FLUT.monthly.*.nc", "FLUT"),     # 1979 on, W m-2
@@ -368,6 +369,71 @@ def leadtime_climatology(field, init_month, years=CLIM_YEARS, mode="auto"):
     return clim
 
 
+def leadtime_yearly(field, init_month, years=CLIM_YEARS, mode="auto"):
+    """Reanalysis ensemble mean of every start of ``init_month`` in ``years`` as (year, lead, lat, lon):
+    30 years for May/Nov, the quinquennial 1985-2010 starts for Feb/Aug. Input of ``start_drift``."""
+    realm = FIELDS[field]["realm"]
+    path = diag_dir(REFERENCE["source"], "leadtime_yearly", realm, field,
+                    f"{REFERENCE['source']}_init{init_month:02d}_{field}_ensmean_y{years[0]}-{years[1]}_m{NENS}_l{NLEAD}_{GRID_TAG}.nc")
+    expected = {"cache_version": CACHE_VERSION, "case_prefix": REFERENCE["case_prefix"],
+                "clim_start_year": years[0], "clim_end_year": years[1], "nlead": NLEAD, "units": FIELDS[field]["units"]}
+    if mode != "rebuild" and _cache_ok(path, expected):
+        return load_netcdf(path)[field]
+    if mode == "require":
+        raise FileNotFoundError(f"missing or stale per-year ensemble-mean cache {path}")
+
+    means, used, nmem = [], [], []
+    for year in range(years[0], years[1] + 1):
+        ens = open_hindcast(REFERENCE["case_prefix"], year, init_month, field)
+        if ens is None:
+            continue
+        means.append(ens.mean("member").drop_vars("time"))
+        used.append(year)
+        nmem.append(ens.sizes["member"])
+        print(f"  {field} init{init_month:02d}: {year} ({ens.sizes['member']} members)", flush=True)
+    if not used:
+        raise FileNotFoundError(f"no Reanalysis {field} hindcasts for init{init_month:02d} in {years}")
+    da = xr.concat(means, dim=xr.DataArray(used, dims="year", name="year")).astype("float32")
+    da.attrs = {"units": FIELDS[field]["units"], "long_name": FIELDS[field]["long_name"]}
+    ds = da.to_dataset(name=field)
+    ds["nmember"] = ("year", np.array(nmem, dtype="int32"))
+    ds.attrs.update(expected, years_used=",".join(map(str, used)))
+    atomic_to_netcdf(ds, path)
+    return da
+
+
+def start_drift(field, init_month, years=None, mode="auto"):
+    """Lead-dependent mean drift of the Reanalysis starts of ``init_month`` (ICPO 2011 mean-bias correction).
+
+    For each start year j and lead L: d_j(L) = ensemble mean(j, L) - observed value at the verification
+    month of (j, L), against the default product of ``FIELDS[field]["obs"]``. Returns a Dataset with
+    "drift" (mean over years, lead x lat x lon), "drift_se" (standard error over years: the members of one
+    start share their initial state, so the sample size is the number of years) and "per_year" (d_j).
+    ``years`` subsets the available start years (e.g. the subsampling check of the May/Nov starts).
+    """
+    if FIELDS[field]["obs"] is None:
+        raise ValueError(f"{field} has no observational product; start_drift needs one")
+    ens = leadtime_yearly(field, init_month, mode=mode)
+    if years is not None:
+        missing = sorted(set(years) - set(ens["year"].values.tolist()))
+        if missing:
+            raise ValueError(f"no Reanalysis init{init_month:02d} starts for {missing}")
+        ens = ens.sel(year=list(years))
+    obs = obs_monthly(field, mode=mode)
+    per_year = []
+    for year in ens["year"].values:
+        target = obs.reindex(time=_target_times(int(year), init_month))
+        if bool(target.isnull().all(("lat", "lon")).any()):
+            raise ValueError(f"{field}: observations do not cover every target month of the {year} init{init_month:02d} start")
+        per_year.append(ens.sel(year=year, drop=True) - target.rename(time="lead").assign_coords(lead=ens["lead"].values))
+    d = xr.concat(per_year, dim=ens["year"])
+    n = d.sizes["year"]
+    out = xr.Dataset({"drift": d.mean("year"), "drift_se": d.std("year", ddof=1) / np.sqrt(n), "per_year": d})
+    out.attrs = {"units": FIELDS[field]["units"], "obs_product": obs.attrs.get("product", FIELDS[field]["obs"][0]),
+                 "init_month": init_month, "years": ",".join(str(int(y)) for y in ens["year"].values)}
+    return out
+
+
 def nearest_reference_leads(init_month, lead, ref_months=REFERENCE["init_months"], nlead=NLEAD):
     """(ref_init, ref_lead) pairs with the same target month as (init_month, lead) and the nearest lead."""
     candidates = []
@@ -389,13 +455,13 @@ def obs_monthly_climatology(field, clim_years=CLIM_YEARS, mode="auto", product=N
     return da.sel(time=slice(f"{clim_years[0]}-01", f"{clim_years[1]}-12")).groupby("time.month").mean("time")
 
 
-def matched_climatology(field, init_month, method="lead_drift", mode="auto"):
+def matched_climatology(field, init_month, method="start_drift", mode="auto"):
     """Lead-time climatology for any start month.
 
-    May/Nov use the Reanalysis climatology directly. Other starts use
     ``method``:
 
-    * "lead_drift" (default): observed 1981-2010 climatology of each target
+    * "start_drift" (default): see below.
+    * "lead_drift": observed 1981-2010 climatology of each target
       month plus the model drift at the same lead, averaged over the May and
       Nov starts (drift = Reanalysis lead climatology minus the observed
       climatology of its target month). Keeps the fast early-lead drift.
@@ -407,8 +473,30 @@ def matched_climatology(field, init_month, method="lead_drift", mode="auto"):
       starts that exist every fifth year (1985-2010 within CLIM_YEARS: 6 years x 10 members). No drift
       assumption; noisier than the 30-year May/Nov climatologies.
 
-    Fields without an observational product always use "target_month" (unless "direct").
+    * "start_drift": the ICPO (2011) lead-dependent mean-bias correction for every start month: the
+      observed 1981-2010 climatology of the target month plus the drift of the Reanalysis starts of the
+      same month against observations of the same verification months (``start_drift``; 30 years for
+      May/Nov, which reproduces the Reanalysis climatology, 1985-2010 every fifth year for Feb/Aug).
+      Fields without an observational product, and points without observations (e.g. TS over land),
+      use "direct" (for May/Nov identical to "start_drift").
+
+    With "lead_drift" and "target_month", May/Nov use the Reanalysis climatology directly, and fields
+    without an observational product use "target_month".
     """
+    if method == "start_drift":
+        if FIELDS[field]["obs"] is None:
+            return matched_climatology(field, init_month, method="direct", mode=mode)
+        direct = leadtime_yearly(field, init_month, mode=mode).mean("year")   # same starts, no observations
+        sd = start_drift(field, init_month, mode=mode)
+        obs_clim = obs_monthly_climatology(field, mode=mode)
+        clim = obs_clim.sel(month=xr.DataArray(_target_months(init_month), dims="lead")).drop_vars("month") + sd["drift"]
+        clim = clim.assign_coords(lead=np.arange(NLEAD)).fillna(direct)
+        years = sd.attrs["years"].split(",")
+        clim.attrs = {"units": FIELDS[field]["units"],
+                      "climatology_method": (f"{sd.attrs['obs_product']} {CLIM_YEARS[0]}-{CLIM_YEARS[1]} target-month climatology "
+                                             f"+ Reanalysis init{init_month:02d} drift over {len(years)} starts "
+                                             f"({years[0]}-{years[-1]}; start_drift)")}
+        return clim
     if method == "direct" and init_month in DIRECT_INIT_MONTHS:
         clim = leadtime_climatology(field, init_month, mode=mode)
         used = load_netcdf(diag_dir(REFERENCE["source"], "leadtime_clim", FIELDS[field]["realm"], field,
@@ -432,7 +520,7 @@ def matched_climatology(field, init_month, method="lead_drift", mode="auto"):
                       "climatology_method": (f"{FIELDS[field]['obs'][0]} {CLIM_YEARS[0]}-{CLIM_YEARS[1]} target-month "
                                              "climatology + Reanalysis init05/init11 mean drift at the same lead")}
         return clim
-    if method not in ("lead_drift", "target_month", "direct"):
+    if method not in ("lead_drift", "target_month", "direct", "start_drift"):
         raise ValueError(f"unknown climatology method {method!r}")
     leads, mapping = [], []
     for lead in range(NLEAD):
@@ -446,7 +534,7 @@ def matched_climatology(field, init_month, method="lead_drift", mode="auto"):
     return clim
 
 
-def hindcast_anomaly(case_prefix, init_month, field, year=CASE_YEAR, method="lead_drift", mode="auto"):
+def hindcast_anomaly(case_prefix, init_month, field, year=CASE_YEAR, method="start_drift", mode="auto"):
     """Drift-corrected anomalies (member, lead, lat, lon), or None when the case is missing."""
     ens = open_hindcast(case_prefix, year, init_month, field)
     if ens is None:
@@ -470,11 +558,14 @@ def model_grid():
 def obs_product(field, years=OBS_YEARS, product=None):
     """(product, file variable, archive glob or None) covering ``years`` for ``field``.
 
-    ``product`` picks an entry of ``OBS_ALT_PRODUCTS``; None (or the default product) keeps
-    the e3sm_diags default with its archive fallback.
+    ``product`` picks an entry of ``OBS_ALT_PRODUCTS``; None means the default product of
+    ``FIELDS[field]["obs"]``: an archive product when it is listed in ``OBS_ALT_PRODUCTS``
+    (TS: HadISST 1.1 for every year), else the e3sm_diags series with its archive fallback.
     """
     default, obs_field = FIELDS[field]["obs"]
-    if product is not None and product != default:
+    if product is None and default in OBS_ALT_PRODUCTS.get(field, {}):
+        product = default
+    if product is not None and (product != default or default in OBS_ALT_PRODUCTS.get(field, {})):
         if product not in OBS_ALT_PRODUCTS.get(field, {}):
             raise ValueError(f"unknown {field} product {product}; "
                              f"choose from {[default] + sorted(OBS_ALT_PRODUCTS.get(field, {}))}")
@@ -615,8 +706,9 @@ CACHE_FIELDS = ["TS", "PRECT", "TREFHT", "PSL", "U850"]
 
 
 def build_caches(fields=CACHE_FIELDS, mode="auto", verbose=True):
-    """Build the Reanalysis lead-time climatologies (every ``REFERENCE`` start month) and the
-    observation anomalies of ``fields`` ahead of the notebooks.
+    """Build the Reanalysis lead-time climatologies and per-year ensemble means (every start month,
+    the inputs of the default "start_drift" climatology) and the observation anomalies of ``fields``
+    ahead of the notebooks.
 
     ``mode``: "auto" reuses valid caches, "rebuild" recomputes them. Returns one row per cache
     built or checked: {"field", "cache", "seconds"}.
@@ -633,11 +725,14 @@ def build_caches(fields=CACHE_FIELDS, mode="auto", verbose=True):
             print(f"{field} {cache} ready ({rows[-1]['seconds']:.0f} s)", flush=True)
 
     for field in fields:
-        for init_month in REFERENCE["init_months"]:
+        for init_month in REFERENCE["init_months"] + DIRECT_INIT_MONTHS:
             timed(field, f"init{init_month:02d} climatology",
                   lambda: leadtime_climatology(field, init_month, mode=mode))
+            timed(field, f"init{init_month:02d} per-year ensemble means",
+                  lambda: leadtime_yearly(field, init_month, mode=mode))
         if FIELDS[field]["obs"] is not None:
             timed(field, "observation anomalies", lambda: obs_anomaly(field, mode=mode))
+            timed(field, "observed monthly series", lambda: obs_monthly(field, mode=mode))
     return rows
 
 

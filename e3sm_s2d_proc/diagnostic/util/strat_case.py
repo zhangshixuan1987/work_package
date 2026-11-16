@@ -9,9 +9,10 @@ QBO band to the pole) and pressure levels (hPa):
   [v*T*] of the daily means within each band (no sub-daily transients). Cached per case and
   start under ``S2D_DIAG_ROOT/<source>/strat/``.
 * **Model, monthly**: the post-processed 1x1 monthly U, T, Z3 (19 levels, 1000-1 hPa). The
-  Reanalysis (BruteForce) 1981-2010 May/Nov starts give the lead-time climatology that removes
-  drift; Feb/Aug starts use the "lead_drift" method of ``rtenso_case`` (observed target-month
-  climatology plus the May/Nov mean drift at the same lead).
+  Reanalysis (BruteForce) starts of 1981-2010 give the lead-time climatology that removes drift
+  (``lead_climatology``; default "start_drift" as in ``rtenso_case``: the ERA5 target-month
+  climatology plus the drift of the Reanalysis starts of the same month against ERA5 at the same
+  verification months; 30 years for May/Nov, 1985, 1990, ..., 2010 for Feb/Aug).
 * **ERA5**: ``ERA5/1x1/daily_zonal`` (ERA5/scripts/daily_zonal; zonal means of the 00Z and
   12Z analyses, 37 levels).
 
@@ -346,14 +347,42 @@ def target_months(init_month, nlead=rc.NLEAD):
     return [(init_month - 1 + lead) % 12 + 1 for lead in range(nlead)]
 
 
-def lead_climatology(init_month, ref, obs_month_clim, method="lead_drift"):
+def lead_climatology(init_month, ref, obs_month_clim, method="start_drift", obs_monthly=None):
     """Monthly lead-time climatology (lead, plev, lat) for any start month.
 
-    ``ref``: {init_month: Reanalysis monthly_zonal Dataset} for the starts that have one (May,
-    Nov; with Feb and Aug, built from the starts of every fifth year, for ``method="direct"``). Other starts: ``obs_month_clim`` (month, plev, lat; ERA5 on the model levels) of each
-    target month plus the mean Reanalysis drift at the same lead ("lead_drift"), or the
-    Reanalysis value for the same target month at the nearest lead ("target_month").
+    ``ref``: {init_month: Reanalysis monthly_zonal Dataset (year, member, lead, plev, lat)}.
+    ``obs_month_clim``: (month, plev, lat) ERA5 1981-2010 climatology on the model levels;
+    ``obs_monthly``: the ERA5 monthly series (time stamped on the 15th, plev, lat) on the same levels.
+
+    * "start_drift" (default; needs ``ref[init_month]``, ``obs_month_clim`` and ``obs_monthly``): ERA5
+      target-month climatology plus the mean over the Reanalysis start years of (ensemble mean minus ERA5
+      at the same verification month); for May/Nov this equals the Reanalysis climatology.
+    * "direct": the Reanalysis ensemble mean of the same start month (Feb/Aug: every fifth year).
+    * "lead_drift": ERA5 target-month climatology plus the mean May/Nov drift at the same lead.
+    * "target_month": the Reanalysis value for the same target month at the nearest lead.
+    With "lead_drift"/"target_month" the starts in ``ref`` use their Reanalysis climatology directly.
     """
+    if method == "start_drift":
+        if init_month not in ref or obs_month_clim is None or obs_monthly is None:
+            raise ValueError("start_drift needs the Reanalysis starts of the same month and the ERA5 climatology and monthly series")
+        ens = ref[init_month].mean("member")
+        has = np.isfinite(ens["U"].isel(lead=0, plev=0, lat=-1))
+        ens = ens.sel(year=ens["year"].values[has.values])
+        diffs = []
+        for y in ens["year"].values:
+            targets = np.asarray([np.datetime64(f"{int(y) + (init_month - 1 + k) // 12:04d}-{(init_month - 1 + k) % 12 + 1:02d}-15")
+                                  for k in range(ens.sizes["lead"])], dtype="datetime64[ns]")
+            missing = np.setdiff1d(targets, obs_monthly["time"].values)
+            if missing.size:
+                raise ValueError(f"ERA5 monthly series misses {missing[:3]} for the {int(y)} init{init_month:02d} start")
+            o = obs_monthly.sel(time=targets).rename(time="lead").assign_coords(lead=ens["lead"].values)
+            diffs.append(ens.sel(year=y, drop=True) - o[list(ens.data_vars)])
+        drift = xr.concat(diffs, dim="year").mean("year")
+        out = obs_month_clim.sel(month=xr.DataArray(target_months(init_month), dims="lead")).drop_vars("month") + drift
+        years = [int(y) for y in ens["year"].values]
+        return out.assign_coords(lead=np.arange(out.sizes["lead"])).assign_attrs(
+            climatology_method=f"ERA5 target-month climatology + Reanalysis init{init_month:02d} drift over "
+                               f"{len(years)} starts ({years[0]}-{years[-1]}; start_drift)")
     clim = {m: ds.mean(("year", "member")) for m, ds in ref.items()}
     if method == "direct" and init_month not in clim:
         raise ValueError(f"no Reanalysis zonal-mean climatology for init month {init_month} in ref {sorted(clim)}")
@@ -854,12 +883,12 @@ def ssw_event_details(u, times, dates, recover_days=10):
     return pd.DataFrame(rows, columns=["central_date", "min_u", "easterly_days", "recovery_date", "days_to_recovery"])
 
 
-def map_lead_climatology(pool, year, init_month, maps, days, method="direct", field="Z10", lat_min=MAP_LAT_MIN,
+def map_lead_climatology(pool, year, init_month, maps, days, method="start_drift", field="Z10", lat_min=MAP_LAT_MIN,
                          mode="auto"):
     """Daily climatology (time, lat, lon) of the native daily maps of one pooled start, on ``days``.
 
     The Reanalysis lead-time climatology of the monthly product (``rc.matched_climatology(field, method)``;
-    "direct" uses each start's own Reanalysis starts) plus the ensemble-mean daily-minus-monthly offset of
+    default "start_drift"; "direct" uses each start's own Reanalysis starts) plus the ensemble-mean daily-minus-monthly offset of
     the same runs (native ``Z010`` is ~40 m above the monthly ``Z3``), month by month, interpolated to days.
     ``maps``: the pooled daily maps (member, time, lat, lon) of the start (``pooled_daily_maps``).
     """
