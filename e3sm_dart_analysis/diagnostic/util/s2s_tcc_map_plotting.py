@@ -25,6 +25,7 @@ try:
 except ImportError:
     HAS_CARTOPY = False
 
+from configs.s2s_config import display_label
 from util.s2s_experiments import (
     build_experiments,
     DEFAULT_EXPERIMENTS
@@ -608,7 +609,7 @@ class TccWindowMapPlotter:
             # robust exp_display mapping: handles "GROUP:EXP"
             s = str(exp).strip()
             key = s.split(":", 1)[-1].strip()
-            exp_label = self.cfg.exp_display.get(key, key)
+            exp_label = self.cfg.exp_display.get(key) or display_label(key, self.cfg.group)
 
             for c, w in enumerate(windows_list):
                 ax = axes[r, c]
@@ -711,7 +712,7 @@ class TccWindowMapPlotter:
             if baseline_exp is not None:
                 bs = str(baseline_exp).strip()
                 bkey = bs.split(":", 1)[-1].strip()
-                base_txt += f" (minus {self.cfg.exp_display.get(bkey, bkey)})"
+                base_txt += f" (minus {self.cfg.exp_display.get(bkey) or display_label(bkey, self.cfg.group)})"
             suptitle = base_txt
 
         fig.suptitle(suptitle, fontsize=fontz * 1.0)

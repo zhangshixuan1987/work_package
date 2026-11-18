@@ -7,6 +7,8 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
+from configs.experiment_labels import hindcast_label
+
 def _decay(t,a,tau,c): return a*np.exp(-t/tau)+c
 
 def derive_shock_decay(shock,baseline,*,shock_experiment,baseline_experiment,variable,region):
@@ -37,4 +39,4 @@ def cache_shock_decay(path,*,shock=None,baseline=None,force_compute=False,**meta
  ds=derive_shock_decay(shock,baseline,**metadata); path.parent.mkdir(parents=True,exist_ok=True); tmp=path.with_suffix(path.suffix+".tmp"); ds.to_netcdf(tmp); os.replace(tmp,path); return ds
 
 def plot_shock_decay(ds):
- fig,ax=plt.subplots(figsize=(8,4)); t=((ds.time-ds.time.isel(time=0))/np.timedelta64(1,"D")).astype(float); ax.plot(t,ds.shock_magnitude,label="|shock-baseline|",lw=2); ax.plot(t,ds.fitted_magnitude,"r--",label=f"fit: tau={float(ds.tau_days):.2f} days"); ax.axhline(0,color="gray",lw=.7); ax.set_xlabel("Lead day"); ax.set_ylabel(ds.attrs["variable"]+" anomaly"); ax.grid(alpha=.3); ax.legend(); ax.set_title(f"{ds.attrs['shock_experiment']} − {ds.attrs['baseline_experiment']} ({ds.attrs['region']})"); fig.tight_layout(); return fig
+ fig,ax=plt.subplots(figsize=(8,4)); t=((ds.time-ds.time.isel(time=0))/np.timedelta64(1,"D")).astype(float); ax.plot(t,ds.shock_magnitude,label="|shock-baseline|",lw=2); ax.plot(t,ds.fitted_magnitude,"r--",label=f"fit: tau={float(ds.tau_days):.2f} days"); ax.axhline(0,color="gray",lw=.7); ax.set_xlabel("Lead day"); ax.set_ylabel(ds.attrs["variable"]+" anomaly"); ax.grid(alpha=.3); ax.legend(); ax.set_title(f"{hindcast_label(ds.attrs['shock_experiment'])} − {hindcast_label(ds.attrs['baseline_experiment'])} ({ds.attrs['region']})"); fig.tight_layout(); return fig

@@ -15,6 +15,8 @@ from matplotlib.colors import Normalize
 from matplotlib.colors import BoundaryNorm, ListedColormap, LinearSegmentedColormap
 from matplotlib.colors import TwoSlopeNorm
 
+from configs.s2s_config import display_label
+
 @dataclass(frozen=True)
 class S2SSkillPlotConfig:
     """
@@ -659,7 +661,8 @@ class S2SSkillPlotter:
         ax.set_xticklabels(vars_, rotation=30, ha="right", fontsize=fontz * 0.95)
 
         ax.set_yticks(np.arange(nexp) + 0.5)
-        ax.set_yticklabels([self._strip_group(e) for e in exps_], fontsize=fontz * 0.95)
+        ax.set_yticklabels([display_label(e, groups[0] if len(groups) == 1 else None) for e in exps_],
+                           fontsize=fontz * 0.95)
 
         if xlabel is not None:
             ax.set_xlabel(xlabel, fontsize=fontz * 0.95)

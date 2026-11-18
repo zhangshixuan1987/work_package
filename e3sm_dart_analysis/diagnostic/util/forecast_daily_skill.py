@@ -563,10 +563,10 @@ def plot_daily_metric(results, region, *, metric, labels, colors, variables=PANE
     ``reference_line`` at 1). Panels are labelled "(a) PSL (January)", row by
     row; the metric is on the y axis. ``season_names``: {season: name} for the
     panel labels; None names each season by the month of its initial date.
-    ``legend_by``: "experiment" lists every experiment (``CTRL10-S0``,
-    ``CTRL10-S1``, ...), one legend row per season with each experiment under
+    ``legend_by``: "experiment" lists every experiment (``CTRL10-H0``,
+    ``CTRL10-H1``, ...), one legend row per season with each experiment under
     its type; "type" lists each type once (``CTRL10``). Experiments run for one
-    season only share a column (DART10-S0 above DART20-S0). The subset entry
+    season only share a column (DART10-H0 above DART20-H0). The subset entry
     comes last, in a column of its own after the last experiment. ``legend_fontz``:
     legend font size (None: 0.85 x ``fontz``); the box scales with it.
     ``xlabel``: None gives "Days since <initial date>" under each season column.
@@ -655,7 +655,7 @@ def _figure_legend(fig, handles, labels, *, height, fontz, title, ncol=None, fra
 
 def _season_legend(fig, handles, extra, *, height, fontz, title, ncol=None, frame=True, edgecolor="#b5b4ae",
                    legend_fontz=None, extra_last=False, pack=False):
-    """Legend with one row per season, each experiment in the column of its type (CTRL10-S1 under CTRL10-S0).
+    """Legend with one row per season, each experiment in the column of its type (CTRL10-H1 under CTRL10-H0).
 
     ``handles``: {group: {name: line}} (one group per season, or a single group
     of types); ``extra``: [(label, handle)] entries (observations, member range,
@@ -663,8 +663,8 @@ def _season_legend(fig, handles, extra, *, height, fontz, title, ncol=None, fram
     when they do not fit; ``extra_last=True`` places them after the last
     experiment instead, stacked in end columns of their own (a lone entry on the
     last row), so the experiment columns keep their own widths. ``pack=True`` stacks the
-    types missing from some seasons into shared columns, in order (DART10-S0
-    above DART20-S0 when both are S0 only). ``ncol`` None: one column per
+    types missing from some seasons into shared columns, in order (DART10-H0
+    above DART20-H0 when both are S0 only). ``ncol`` None: one column per
     experiment type, or per packed column (plus the extra columns).
     """
     types = list(dict.fromkeys(name.rsplit("-", 1)[0] for group in handles.values() for name in group))
@@ -714,8 +714,8 @@ def plot_daily_timeseries(results, region, *, labels, colors, variables=("TREFHT
     ``read_or_process_daily_skill``; one row per variable and one column per
     season (``seasons``, default all), on the same 24-h forecast-lead days,
     gridpoints, and references as ``plot_daily_performance``.
-    ``legend_by``: "experiment" lists every experiment (``CTRL10-S0``,
-    ``CTRL10-S1``, ...), one legend row per season; "type" lists each type once
+    ``legend_by``: "experiment" lists every experiment (``CTRL10-H0``,
+    ``CTRL10-H1``, ...), one legend row per season; "type" lists each type once
     (``CTRL10``), for figures where a type looks the same in every season.
     ``member_display``: "range" shades the member min-max, "members" draws every
     member thinly, "none" shows only ensemble means (``member_alpha`` sets the
@@ -726,8 +726,8 @@ def plot_daily_timeseries(results, region, *, labels, colors, variables=("TREFHT
     ``xlabel``: None gives "Days since <initial date>" under each season column.
     ``season_names``: {season: name} for the panel labels, "(a) TREFHT (January)";
     None names each season by the month of its initial date.
-    Experiments run for one season only share a legend column (DART10-S0 above
-    DART20-S0); observations and member range come last, stacked in a column
+    Experiments run for one season only share a legend column (DART10-H0 above
+    DART20-H0); observations and member range come last, stacked in a column
     of their own (``legend_ncol`` None: one column per experiment column).
     ``legend_fontz``: legend font size (None: 0.85 x ``fontz``); the box scales with it.
     Other style arguments as in ``plot_daily_performance``.

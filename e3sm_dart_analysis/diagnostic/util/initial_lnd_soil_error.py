@@ -24,6 +24,8 @@ from matplotlib.colors import BoundaryNorm
 from scipy.ndimage import gaussian_filter
 from scipy.stats import ttest_1samp
 
+from configs.experiment_labels import hindcast_label
+
 
 @dataclass(frozen=True)
 class SoilBiasFromFilesConfig:
@@ -470,10 +472,10 @@ class SoilErrorMapPlotter:
                               cmap=self.cfg.spread_cmap, norm=spread_norm, is_bias=False)
 
         # titles
-        ax_bL.set_title(f"{exp_left} - {obs_label} (Bias)", fontsize=self.cfg.title_fontsize, pad=10)
-        ax_bR.set_title(f"{exp_right} - {obs_label} (Bias)", fontsize=self.cfg.title_fontsize, pad=10)
-        ax_sL.set_title(f"{exp_left} (Spread)", fontsize=self.cfg.title_fontsize, pad=10)
-        ax_sR.set_title(f"{exp_right} (Spread)", fontsize=self.cfg.title_fontsize, pad=10)
+        ax_bL.set_title(f"{hindcast_label(exp_left)} - {obs_label} (Bias)", fontsize=self.cfg.title_fontsize, pad=10)
+        ax_bR.set_title(f"{hindcast_label(exp_right)} - {obs_label} (Bias)", fontsize=self.cfg.title_fontsize, pad=10)
+        ax_sL.set_title(f"{hindcast_label(exp_left)} (Spread)", fontsize=self.cfg.title_fontsize, pad=10)
+        ax_sR.set_title(f"{hindcast_label(exp_right)} (Spread)", fontsize=self.cfg.title_fontsize, pad=10)
 
         # PCC/RMSE boxes on bias panels
         self._stats_box(ax_bL, pccL, rmseL)

@@ -21,7 +21,7 @@ import xarray as xr
 
 from pathlib import Path
 
-from configs.experiment_labels import experiment_label
+from configs.experiment_labels import hindcast_label
 from util.model_daily import open_model_daily
 from util.time_labels import label_by_interval_start
 import matplotlib.pyplot as plt
@@ -348,7 +348,7 @@ class HovmollerPrecipAnalyzer:
         else:
             mag_scale = 1.0
 
-        title = f'{experiment_label(exp_key)} Hovmoller ({self.varname} x {mag_scale})'
+        title = f'{hindcast_label(exp_key)} Hovmoller ({self.varname} x {mag_scale})'
 
         norm = mcolors.BoundaryNorm(clevs, ncolors=cmap.N)
 

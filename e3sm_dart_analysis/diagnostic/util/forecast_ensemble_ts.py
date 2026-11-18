@@ -21,7 +21,7 @@ import xarray as xr
 from util.bias_metrics import _period_years, experiment_registry
 from util.forecast_regional_timeseries import REGIONS as BOX_REGIONS
 from util.model_evaluation import experiment_colors
-from configs.experiment_labels import experiment_label
+from configs.experiment_labels import hindcast_label
 
 FREQUENCIES = ("6hourly", "daily", "daily_mean", "daily_00z", "h1")  # ts/<subdirectory>
 REGIONS = ("global", "land", "ocean") + tuple(r for r in BOX_REGIONS if r != "global")
@@ -419,7 +419,7 @@ def shock_summary(datasets, *, shock_days=2.0, settled_days=(10.0, 30.0), tolera
             sel = ds.sel(region=region)
             tendency = sel.member_tendency.mean("member")
             settled_level = float(tendency.where(settled).mean())
-            row = {"experiment": experiment, "label": experiment_label(experiment),
+            row = {"experiment": experiment, "label": hindcast_label(experiment),
                    "variable": ds.attrs["variable"], "region": str(region),
                    "units": sel.member_mean.attrs.get("units", ""),
                    "tendency_ratio": float(tendency.where(shock).mean()) / settled_level}
@@ -652,7 +652,7 @@ def plot_shock_summary(summary, metrics, *, colors, title="", fontz=16):
         for index, experiment in enumerate(experiments):
             rows = summary[summary["experiment"] == experiment].set_index("variable")
             values = [rows[metric].get(v, np.nan) for v in variables]
-            label = rows["label"].iloc[0] if len(rows) else experiment
+            label = hindcast_label(experiment)  # not the cached "label" column, which may predate H<n>
             bars = ax.bar(x + (index - (len(experiments) - 1) / 2) * width, values, width,
                           color=colors[experiment], label=label)
             handles[label] = bars

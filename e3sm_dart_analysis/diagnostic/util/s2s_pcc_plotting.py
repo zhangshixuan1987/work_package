@@ -13,6 +13,8 @@ from matplotlib.colors import Normalize
 from matplotlib.colors import BoundaryNorm, ListedColormap, LinearSegmentedColormap
 from matplotlib.colors import TwoSlopeNorm
 
+from configs.experiment_labels import hindcast_label
+
 @dataclass(frozen=True)
 class S2SSkillPlotConfig:
     """Plot config for s2s_skill_<GROUP>_<FREQ>_<RUN>_<OBS>_<REGION>_<VAR>.nc style files."""
@@ -735,7 +737,7 @@ class S2SSkillPlotter:
         ax.set_xticks(np.arange(nvar) + 0.5)
         ax.set_xticklabels(vars_, rotation=30, ha="right", fontsize=fontz * 0.95)
         ax.set_yticks(np.arange(nexp) + 0.5)
-        ax.set_yticklabels(exps_, fontsize=fontz * 0.95)
+        ax.set_yticklabels([hindcast_label(e) for e in exps_], fontsize=fontz * 0.95)
 
         if xlabel is not None:
             ax.set_xlabel(xlabel, fontsize=fontz * 0.95, labelpad=6)
@@ -753,7 +755,7 @@ class S2SSkillPlotter:
         sm = plt.cm.ScalarMappable(norm=norm, cmap=cm)
         sm.set_array([])
         cbar = fig.colorbar(sm, ax=ax, shrink=0.9, pad=0.02, boundaries=bounds, ticks=bounds)
-        cbar.set_label(metric if not self.cfg.baseline_exp else f"{metric} − {self.cfg.baseline_exp }", fontsize=fontz * 0.90)
+        cbar.set_label(metric if not self.cfg.baseline_exp else f"{metric} − {hindcast_label(self.cfg.baseline_exp)}", fontsize=fontz * 0.90)
         cbar.ax.tick_params(labelsize=fontz * 0.85, length=4, width=1.0)
 
         # ----------------------------
@@ -880,7 +882,7 @@ class S2SSkillPlotter:
         rr = 0
         for reg in regions_:
             for exp in exps_:
-                row_labels.append(f"{reg}  |  {self._strip_group(exp)}")
+                row_labels.append(f"{reg}  |  {hindcast_label(self._strip_group(exp))}")
                 row_index[(exp, reg)] = rr
                 rr += 1
 
@@ -1109,7 +1111,7 @@ class S2SSkillPlotter:
         if metric.upper() == "RMSE":
             lab = f"Normalized RMSE wrt CTRL"
         else:
-            lab = metric if self.cfg.baseline_exp is None else f"{metric} − {self.cfg.baseline_exp}"
+            lab = metric if self.cfg.baseline_exp is None else f"{metric} − {hindcast_label(self.cfg.baseline_exp)}"
 
         cbar.set_label(lab, fontsize=fontz * 0.90)
 

@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 
+from configs.experiment_labels import hindcast_label
+
 
 @dataclass(frozen=True)
 class SoilPointTSConfig:
@@ -336,7 +338,7 @@ class SoilPointTimeSeriesFromCollectedFiles:
                 mm = ds["model_mean"].sel(point=pk, exp=exp)
                 ss = ds["model_std"].sel(point=pk, exp=exp)
 
-                ax.plot(mm["time"].values, mm.values, label=f"{exp} mean")
+                ax.plot(mm["time"].values, mm.values, label=f"{hindcast_label(exp)} mean")
                 ax.fill_between(
                     mm["time"].values,
                     (mm - ss).values,

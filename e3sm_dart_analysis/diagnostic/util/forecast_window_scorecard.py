@@ -609,7 +609,7 @@ def plot_window_scorecard_paper(scores, *, region, cases, groups, labels=None, s
     ``groups`` ({"Surface": (...), "Upper air": (...), "Land": (...)}),
     bracketed and separated by a gap; inside a group, rows of a new
     pressure-level variable (U, V, T, Q, Z) start below a thin line. Experiment
-    names (``labels`` {experiment: label}, e.g. "CTRL10-S0"; None: the
+    names (``labels`` {experiment: label}, e.g. "CTRL10-H0"; None: the
     experiment key) sit under the panels, season names above them. Each cell holds the
     four lead-window triangles (key at the bottom left). ``width`` is
     the figure width in inches (7.2: double column), ``row_height`` inches

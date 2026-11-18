@@ -13,6 +13,7 @@ import pandas as pd
 import xarray as xr
 import xskillscore as xs
 
+from configs.experiment_labels import hindcast_label
 from configs.input_paths import product_dir
 
 from util.array_stats import nanquantile
@@ -89,8 +90,8 @@ def experiment_registry(data_root, season, run_segment, *, resolution="ne30pg2_r
         run_name, period = run
         run_id = f"{run_name}_F20TR_{resolution}_{machine}"
         registry[name] = {
-            # Hindcasts are labelled by experiment name, as in analysis_atm_da.
-            "label": name if run_segment == "fc" else metadata["label"],
+            # Hindcasts are labelled by experiment name with the cycle as H<n> (CTRL10-H0).
+            "label": hindcast_label(name) if run_segment == "fc" else metadata["label"],
             "nens": metadata["nens"],
             "period": period,
             "run_id": run_id,

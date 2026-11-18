@@ -74,6 +74,14 @@ Model and reference readers (`util/hind_model_data.py`,
 by the day they cover and monthly means by year-month, and subset before
 computing (the ERA5 pressure-level references are 0.25-degree, ~75 GB files).
 
+Experiment labels: DA figures (`analysis_*`) name experiments `<TYPE><members>-S<cycle>`
+(`CTRL10-S0`, `DART40-S1`; S0 boreal winter, S1 boreal summer). Hindcast figures
+(`fcst_*`, `hind_*`) write the cycle as `H<cycle>` (`CTRL10-H0`, `DART40-H1`) to
+tell the hindcasts from the DA runs they start from. The S names remain the keys
+of registries, file names and caches; `configs.experiment_labels.hindcast_label`
+gives the H name (`configs.s2s_config.display_label` in the S2S workflows, where
+the Dec2011 analysis group keeps S).
+
 ## `analysis_atm_da/`
 
 DART observation-space and state-space diagnostics of the assimilation.
@@ -226,7 +234,7 @@ Stratosphere, extratropical modes, and tropical winds in the AMIP hindcasts.
 3. `03_compute_and_plot_nao_index.ipynb` - NAO EOF base from NOAA-20C SLP (NDJFM, 1985-2014) and its check, then the daily NAO index of every experiment and ERA5 projected on it; 14-day lead-window means and correlations (`util/nao_index.py`).
 4. `04_compute_and_plot_tropical_wind_skill.ipynb` - daily 20S-20N U850/U200 spatial ACC and RMSE vs ERA5 by lead day, window means with block-bootstrap CI (`util/tropical_wind_skill.py`).
 
-Experiment set: every `hind_atm_*` parameter cell maps run keys to figure labels in `EXPERIMENTS_FULL`, all eight runs of the atmosphere x land factorial, and in `EXPERIMENTS_FCST`, the three runs whose initial states match the `fcst_atm_eval` forecasts and which carry their names (CTRL -> CTRL10-S0, ERA5OP -> CAPT10-S0, DARTOP -> DART40-S0); the mixed runs are labelled `<atm>A-<lnd>L-S0` by the experiments their states come from (e.g. ERA5DL -> CAPTA-DARTL-S0); `EXPERIMENTS = EXPERIMENTS_FCST` by default. Files and tables keep the run keys; `util.hind_factorial.relabel_figure` applies the labels when a figure is saved. Per-source files (sections, indices, projections) are shared between the sets; the tables and figures of a subset go to a `fcst_aligned/` subdirectory of the data and figure directories. The factorial effects and scorecards, and the noise floor of the SSW RMSE attribution, need the full set and are skipped otherwise (the SSW attribution then shows only the bars whose two runs are present).
+Experiment set: every `hind_atm_*` parameter cell maps run keys to figure labels in `EXPERIMENTS_FULL`, all eight runs of the atmosphere x land factorial, and in `EXPERIMENTS_FCST`, the three runs whose initial states match the `fcst_atm_eval` forecasts and which carry their names (CTRL -> CTRL10-H0, ERA5OP -> CAPT10-H0, DARTOP -> DART40-H0); the mixed runs are labelled `<atm>A-<lnd>L-H0` by the experiments their states come from (e.g. ERA5DL -> CAPTA-DARTL-H0); `EXPERIMENTS = EXPERIMENTS_FCST` by default. Files and tables keep the run keys; `util.hind_factorial.relabel_figure` applies the labels when a figure is saved. Per-source files (sections, indices, projections) are shared between the sets; the tables and figures of a subset go to a `fcst_aligned/` subdirectory of the data and figure directories. The factorial effects and scorecards, and the noise floor of the SSW RMSE attribution, need the full set and are skipped otherwise (the SSW attribution then shows only the bars whose two runs are present).
 
 Every `hind_atm_*` notebook covers one metric in the same order: read input, derive, save (then reload every source from disk), scores or checks, plot. Saved diagnostics are reused: input fields are opened lazily, and only for sources whose output file is missing, unless `FORCE_COMPUTE = True` (a rebuilt NAO or RMM EOF file recomputes every index projected on it). The long training records behind the NAO and RMM EOF checks are read only when the EOFs are built or `RECHECK = True`. In the derive step the expensive reductions of all sources are computed in one Dask graph (`util.dask_helpers.compute_all`); `DASK_WORKERS` (default 8) caps the threads, which bounds memory on many-core login nodes; `USE_DISTRIBUTED = True` runs the graph on a local `dask.distributed` cluster of `DASK_WORKERS` processes instead, which read NetCDF files in parallel.
 

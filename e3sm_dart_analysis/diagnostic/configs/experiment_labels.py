@@ -7,6 +7,11 @@ hindcasts Jun-Jul 2012). The DA run and the hindcasts started from it share
 one name. Workflows that key their inputs on case names (``DARTEN20_15day``,
 ``CAPTEN10``) keep those keys for paths and caches and use
 ``experiment_label`` only for display.
+
+Hindcast figures (``fcst_*`` and ``hind_*`` workflows) write the cycle as
+``H<cycle>`` instead (``CTRL10-H0``, ``DART40-H1``) so they are not mistaken
+for the DA runs; ``hindcast_label`` gives that name. The ``S<cycle>`` names
+stay the keys of every registry, path and cache.
 """
 from __future__ import annotations
 
@@ -41,3 +46,17 @@ def experiment_label(name: str) -> str:
     if _CANONICAL.fullmatch(name):
         return name
     return _CASE_ALIASES.get(_CASE_SUFFIX.sub("", name), name)
+
+
+_CYCLE = re.compile(r"(?<=\d)-S(\d)\b")
+
+
+def hindcast_label(name: str) -> str:
+    """Hindcast display name: ``experiment_label`` with the cycle as ``H<n>``.
+
+    ``CTRL10-S0`` and ``CTRLEN10_15day`` give ``CTRL10-H0``; ``DART40-S1``
+    gives ``DART40-H1``. Also rewrites names inside longer text
+    (``"Jan2012:CTRL10-S0"`` -> ``"Jan2012:CTRL10-H0"``). Names that are not
+    experiments are returned unchanged.
+    """
+    return _CYCLE.sub(r"-H\1", experiment_label(name))

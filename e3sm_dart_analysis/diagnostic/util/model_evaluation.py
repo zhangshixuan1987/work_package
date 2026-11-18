@@ -385,12 +385,13 @@ def experiment_colors(experiments):
     return dict(zip(order, CATEGORICAL_COLORS))
 
 
-def plot_scalar_metrics(summary, metrics, *, variables=None, title="", colors=None):
+def plot_scalar_metrics(summary, metrics, *, variables=None, title="", colors=None, label_map=None):
     """Small multiples: one row per variable, one column per scalar metric.
 
     Each panel has one bar per season/experiment; bars are labeled on the axis
-    (color only repeats that identity). Reference lines: 0 for bias, 1 for
-    spread-skill ratio, the nominal ensemble coverage is not drawn.
+    (color only repeats that identity), by ``label_map`` {experiment: name} or
+    the experiment key. Reference lines: 0 for bias, 1 for spread-skill ratio,
+    the nominal ensemble coverage is not drawn.
     """
     variables = list(variables or dict.fromkeys(summary["variable"]))
     missing = [m for m in metrics if m not in summary]
@@ -401,7 +402,7 @@ def plot_scalar_metrics(summary, metrics, *, variables=None, title="", colors=No
                              figsize=(2.7 * len(metrics) + 0.6, 2.4 * len(variables) + 0.8))
     for row, variable in enumerate(variables):
         table = summary[summary["variable"] == variable]
-        names = [f"{r.experiment}" for r in table.itertuples()]
+        names = [(label_map or {}).get(r.experiment, f"{r.experiment}") for r in table.itertuples()]
         x = np.arange(len(table))
         for col, metric in enumerate(metrics):
             ax = axes[row, col]

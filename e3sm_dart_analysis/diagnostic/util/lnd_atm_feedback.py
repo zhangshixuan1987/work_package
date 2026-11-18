@@ -37,7 +37,7 @@ import pandas as pd
 import xarray as xr
 from scipy import stats
 
-from configs.experiment_labels import experiment_label
+from configs.experiment_labels import hindcast_label
 from util.bias_metrics import _period_years
 from util.forecast_ensemble_ts import region_masks
 from util.forecast_regional_timeseries import REGIONS as BOX_REGIONS
@@ -242,7 +242,7 @@ def plot_lag_curves(results, regions, *, title=""):
         for experiment, ds in results.items():
             curve = ds.sel(region=region)
             ax.fill_between(curve.lag, curve.curve_low, curve.curve_high, color=colors[experiment], alpha=0.18, lw=0)
-            ax.plot(curve.lag, curve.curve, color=colors[experiment], lw=1.8, label=experiment_label(experiment))
+            ax.plot(curve.lag, curve.curve, color=colors[experiment], lw=1.8, label=hindcast_label(experiment))
         ax.axhline(0, color="gray", lw=0.7)
         ax.axvline(0, color="gray", lw=0.7, ls="--")
         ax.set_title(region)
@@ -281,7 +281,7 @@ def plot_lag_maps(results, lag, *, alpha=0.05, title="", vmax=0.6):
         ax.scatter(lon2d[dots], lat2d[dots], s=0.3, c="k", transform=ccrs.PlateCarree())
         ax.coastlines(lw=0.5)
         ax.set_extent([-180, 180, _SOUTH_LIMIT, 90], crs=ccrs.PlateCarree())
-        ax.set_title(f"{experiment_label(experiment)} (lag {lag} d)")
+        ax.set_title(f"{hindcast_label(experiment)} (lag {lag} d)")
     for ax in axes.flat[len(names):]:
         ax.set_visible(False)
     fig.colorbar(mesh, ax=axes, orientation="horizontal", shrink=0.6, pad=0.06,
