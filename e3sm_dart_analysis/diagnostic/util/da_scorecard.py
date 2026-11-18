@@ -508,7 +508,8 @@ def _latitude(value):
 
 def plot_change_heatmap(table, *, variable_order, experiment_order, experiment_label, region_order=tuple(REGIONS),
                         limit=40, title="", cbar_label="RMSE change (%)", fontsize=8,
-                        value="change_pct", levels=None, cmap="RdBu_r", fmt="{:.0f}", region_bounds=None):
+                        value="change_pct", levels=None, cmap="RdBu_r", fmt="{:.0f}", region_bounds=None,
+                        region_names=None, cell_edgecolor=None, cell_linewidth=0.5, text_scale=1.0):
     """Scorecard heat map: experiments (within regions) on y, variables on x.
 
     ``table`` has one ``value`` per (row, region, experiment), e.g. a
@@ -519,7 +520,12 @@ def plot_change_heatmap(table, *, variable_order, experiment_order, experiment_l
     reduced; pass ``levels`` and ``cmap`` for a sequential metric. If the table
     has a ``significant`` column, cells whose 95% bootstrap interval includes 0
     are hatched with grey text. ``region_bounds`` overrides the latitude range
-    shown in the panel titles (default :data:`REGIONS`).
+    shown in the panel titles (default :data:`REGIONS`); ``region_names``
+    {region: title} renames the panels (e.g. "All land" for a land-only "Global").
+    ``cell_edgecolor`` (e.g. "#d0d0d0") outlines every cell with a thin box line
+    (``cell_linewidth`` points at the 8-pt reference layout); None: no outline.
+    ``text_scale`` enlarges every text relative to the cells (1: reference);
+    the margins grow with it, the cells keep their size.
     """
     import matplotlib.pyplot as plt
     from matplotlib.colors import BoundaryNorm
@@ -545,9 +551,11 @@ def plot_change_heatmap(table, *, variable_order, experiment_order, experiment_l
     # ``fontsize`` is the tick-label size; all other text and every length
     # in inches scale with it (8 pt = reference layout).
     scale = fontsize / 8
-    panel_h, gap, top = 0.32 * n_exp * scale, 0.3 * scale, (0.55 if title else 0.3) * scale
-    bottom = (0.075 * max(len(c) for c in columns) + 0.25) * scale   # rotated labels
-    left, right = 1.0 * scale, 1.2 * scale
+    tscale = scale * text_scale                       # text and the margins that hold it
+    fontsize = fontsize * text_scale
+    panel_h, gap, top = 0.32 * n_exp * scale, 0.3 * tscale, (0.55 if title else 0.3) * tscale
+    bottom = (0.075 * max(len(c) for c in columns) + 0.25) * tscale   # rotated labels
+    left, right = 0.11 * max(len(e) for e in experiment_order) * tscale, 1.2 * tscale
     fig_w = 0.42 * scale * len(columns) + left + right
     fig_h = top + len(region_order) * panel_h + (len(region_order) - 1) * gap + bottom
     fig = plt.figure(figsize=(fig_w, fig_h))
@@ -583,30 +591,34 @@ def plot_change_heatmap(table, *, variable_order, experiment_order, experiment_l
                 text = fmt.format(0.0) if float(text) == 0 else text   # no "-0"
                 ax.text(j, i, text, ha="center", va="center", fontsize=0.875 * fontsize,
                         color=text_color if sig[i, j] else "#6b6b6b")
+        if cell_edgecolor is not None:                 # thin box line around every cell
+            edges = dict(color=cell_edgecolor, linewidth=cell_linewidth * scale, zorder=2)
+            ax.hlines(np.arange(n_exp + 1) - 0.5, -0.5, len(columns) - 0.5, **edges)
+            ax.vlines(np.arange(len(columns) + 1) - 0.5, -0.5, n_exp - 0.5, **edges)
         for g in groups[1:]:                           # group separators
             first = min(j for j, c in enumerate(columns) if group_of[c] == g)
-            ax.axvline(first - 0.5, color="white", linewidth=3 * scale)
+            ax.axvline(first - 0.5, color="white", linewidth=3 * scale, zorder=3)
         ax.set_xticks(range(len(columns)))
         ax.set_xticklabels(columns if k == len(region_order) - 1 else [], rotation=90, fontsize=fontsize)
         ax.set_yticks(range(n_exp))
         ax.set_yticklabels(experiment_order, fontsize=fontsize)
         south, north = (region_bounds or REGIONS)[region]
-        label = f"({'abcdefgh'[k]}) {region}"
+        label = f"({'abcdefgh'[k]}) {(region_names or {}).get(region, region)}"
         if (south, north) != (-90, 90):
             label += f" ({_latitude(south)}–{_latitude(north)})"
-        ax.set_title(label, loc="left", fontsize=1.125 * fontsize, pad=3 * scale)
+        ax.set_title(label, loc="left", fontsize=1.125 * fontsize, pad=3 * tscale)
         ax.tick_params(length=0)
         for spine in ax.spines.values():
             spine.set_visible(False)
     first, last = axes[0].get_position(), axes[-1].get_position()
-    cax = fig.add_axes([first.x1 + 0.2 * scale / fig_w, last.y0, 0.14 * scale / fig_w, first.y1 - last.y0])
+    cax = fig.add_axes([first.x1 + 0.2 * scale / fig_w, last.y0, 0.14 * tscale / fig_w, first.y1 - last.y0])
     cbar = fig.colorbar(image, cax=cax, orientation="vertical", extend=extend, ticks=levels[::2],
                         drawedges=True)
     cbar.dividers.set_color("white")
     cbar.dividers.set_linewidth(0.6 * scale)
     cbar.outline.set_visible(False)
-    cbar.set_label(cbar_label, fontsize=fontsize)
+    cbar.set_label(cbar_label, fontsize=fontsize, labelpad=4 * tscale)
     cbar.ax.tick_params(labelsize=0.875 * fontsize)
     if title:
-        fig.suptitle(title, fontsize=1.25 * fontsize, x=first.x0 + first.width / 2, y=1 - 0.15 * scale / fig_h)
+        fig.suptitle(title, fontsize=1.25 * fontsize, x=first.x0 + first.width / 2, y=1 - 0.15 * tscale / fig_h)
     return fig
