@@ -31,7 +31,7 @@ EXPERIMENTS = {
     # tracers and is far too warm near the ground over high terrain (zero O3 at start; lower
     # stratosphere -11 K for months). CAPTOP instead starts atm and lnd from the CAPT run
     # CAPTEN10_15day (EN01, 2012-01-01), full model states. Not part of the 8-run factorial.
-    "CAPTOP": ("CAPT01", "CAPT atm + CAPT lnd (CAPTEN10_15day EN01)"),
+    "CAPTOP": ("CAPT01", "REAN atm + REAN lnd (CAPTEN10_15day EN01)"),
 }
 EXPERIMENT_KEYS = tuple(EXPERIMENTS)
 

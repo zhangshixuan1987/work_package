@@ -62,14 +62,14 @@ _EXPERIMENTS = {
     "S0": {
         "CTRL10-S0": {"nens": 10, "label": "CTRL (ENS=10)", "da": ("CTRLEN10", "201112-201112"), "fc": ("CTRLEN10_15day", "201201-201202")},
         "CTRF10-S0": {"nens": 10, "label": "Free run (ENS=10)", "da": ("CTRFEN10", "201112-201112"), "fc": None},
-        "CAPT10-S0": {"nens": 10, "label": "CAPT (ENS=10)", "da": None, "fc": ("CAPTEN10_15day", "201201-201202")},
+        "CAPT10-S0": {"nens": 10, "label": "REAN (ENS=10)", "da": None, "fc": ("CAPTEN10_15day", "201201-201202")},
         "DART10-S0": {"nens": 10, "label": "EAM-DART (ENS=10)", "da": ("DARTEN10", "201112-201112"), "fc": ("DARTEN10_15day", "201201-201202")},
         "DART20-S0": {"nens": 20, "label": "EAM-DART (ENS=20)", "da": ("DARTEN20", "201112-201112"), "fc": ("DARTEN20_15day", "201201-201202")},
         "DART40-S0": {"nens": 40, "label": "EAM-DART (ENS=40)", "da": ("DARTEN40", "201112-201112"), "fc": ("DARTEN40_15day", "201201-201202")},
     },
     "S1": {
         "CTRL10-S1": {"nens": 10, "label": "CTRL (ENS=10)", "da": None, "fc": ("CTRLEN10s1_15day", "201206-201207")},
-        "CAPT10-S1": {"nens": 10, "label": "CAPT (ENS=10)", "da": None, "fc": ("CAPTEN10S1_15day", "201206-201207")},
+        "CAPT10-S1": {"nens": 10, "label": "REAN (ENS=10)", "da": None, "fc": ("CAPTEN10S1_15day", "201206-201207")},
         "CTRF10-S1": {"nens": 10, "label": "Free run (ENS=10)", "da": ("CTRFEN10S1", "201205-201205"), "fc": None},
         "DART40-S1": {"nens": 40, "label": "EAM-DART (ENS=40)", "da": ("DARTEN40S1", "201205-201205"), "fc": ("DARTEN40S1_15day", "201206-201207")},
     },

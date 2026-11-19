@@ -246,14 +246,14 @@ class SoilPointTimeSeriesFromCollectedFiles:
                         did_legend = True
     
             # -----------------------------
-            # CAPT: GREY
+            # CAPT (shown as REAN): GREY
             # -----------------------------
             _plot_spaghetti_for(
                 capt_exps,
                 color="0.6",         # grey
                 alpha=0.35,
                 lw=1.5,
-                legend_label="CAPT members",
+                legend_label="REAN members",
             )
     
             # -----------------------------
@@ -283,7 +283,7 @@ class SoilPointTimeSeriesFromCollectedFiles:
             ax.set_ylabel("Soil moisture (kg m$^{-2}$)")
             ax.grid(True, alpha=0.3)
     
-            # cleaner legend: OBS + CAPT + DART (and Other only if present)
+            # cleaner legend: OBS + REAN + DART (and Other only if present)
             ax.legend(loc="upper right", frameon=False, ncol=3)
     
         axes[-1].set_xlabel("Time")
