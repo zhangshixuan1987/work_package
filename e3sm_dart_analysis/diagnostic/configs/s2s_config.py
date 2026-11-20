@@ -5,8 +5,8 @@ from configs.experiment_labels import experiment_label, hindcast_label
 
 EXPERIMENT_GROUPS = {
     "Dec2011": dict(models=("CTRL10-S0", "DART20-S0", "DART40-S0"), period="201112-201112", season="Analysis", init_date="2011-12-01", init_month=12, run="da", freq="daily"),
-    "Jan2012": dict(models=("CTRL10-S0", "CAPT10-S0", "DART20-S0", "DART40-S0"), period="201201-201203", season="Winter", init_date="2012-01-01", init_month=1, run="fc", freq="daily"),
-    "Jun2012": dict(models=("CTRL10-S1", "CAPT10-S1", "DART40-S1"), period="201206-201208", season="Summer", init_date="2012-06-01", init_month=6, run="fc", freq="daily"),
+    "Jan2012": dict(models=("CTRL10-S0", "REAN10-S0", "CAPT10-S0", "DART20-S0", "DART40-S0"), period="201201-201203", season="Winter", init_date="2012-01-01", init_month=1, run="fc", freq="daily"),
+    "Jun2012": dict(models=("CTRL10-S1", "REAN10-S1", "CAPT10-S1", "DART40-S1"), period="201206-201208", season="Summer", init_date="2012-06-01", init_month=6, run="fc", freq="daily"),
 }
 
 

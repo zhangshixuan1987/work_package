@@ -553,7 +553,7 @@ def plot_daily_metric(results, region, *, metric, labels, colors, variables=PANE
                       markers=None, marker_size=4, subset_line_width=1.6, subset_line_style="--",
                       subset_alpha=0.18, reference_line=None, grid_alpha=0.3, panel_size=(7.5, 3.6),
                       legend_frame=True, legend_ncol=None, legend_edgecolor="#b5b4ae", xlabel=None,
-                      season_names=None, legend_by="experiment", legend_fontz=None):
+                      season_names=None, legend_by="experiment", legend_fontz=None, share_y=False):
     """One daily metric, one row per variable and one column per season (S0 left, S1 right).
 
     ``results[season][variable][experiment]`` as returned by
@@ -570,6 +570,8 @@ def plot_daily_metric(results, region, *, metric, labels, colors, variables=PANE
     comes last, in a column of its own after the last experiment. ``legend_fontz``:
     legend font size (None: 0.85 x ``fontz``); the box scales with it.
     ``xlabel``: None gives "Days since <initial date>" under each season column.
+    ``share_y``: one y scale per row on round tick steps (identical limits in every
+    season where their ranges are close, else the same span), as in ``plot_daily_timeseries``.
     Other style arguments as in ``plot_daily_performance``.
     """
     if metric not in DAILY_METRIC_NAMES:
@@ -584,14 +586,17 @@ def plot_daily_metric(results, region, *, metric, labels, colors, variables=PANE
     names = {season: (season_names or {}).get(season) or _initial_month(results[season]) for season in seasons}
     fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * panel_size[0], nrows * panel_size[1]),
                              sharex="col", squeeze=False)
-    handles = {}
+    handles, spans = {}, {}
     subset_size = None
     for col, season in enumerate(seasons):
         for row, variable in enumerate(variables):
             ax = axes[row, col]
-            units = ""
+            units, drawn = "", []
             for experiment, ds in results[season].get(variable, {}).items():
                 sel = ds.sel(region=region).where(ds.day <= max_day, drop=True)
+                drawn.append(sel[metric])
+                if metric == "rmse" and "rmse_subset" in sel:
+                    drawn.append(sel.rmse_subset.quantile([0.05, 0.95], "subset"))
                 line, = ax.plot(sel.day, sel[metric], color=colors[experiment], lw=line_width,
                                 ls=line_styles.get(experiment, "-"), marker=markers.get(experiment, marker),
                                 ms=marker_size)
@@ -605,8 +610,12 @@ def plot_daily_metric(results, region, *, metric, labels, colors, variables=PANE
                 name = labels[experiment] if legend_by == "experiment" else labels[experiment].rsplit("-", 1)[0]
                 handles.setdefault(season if legend_by == "experiment" else "", {}).setdefault(name, line)
                 units = ds.attrs.get("units", "")
+            if drawn:
+                spans[row, col] = (min(float(d.min()) for d in drawn), max(float(d.max()) for d in drawn))
             if metric == "spread_ratio":
                 ax.axhline(1.0, **reference_line)
+                if drawn:
+                    spans[row, col] = (min(spans[row, col][0], 1.0), max(spans[row, col][1], 1.0))
                 ax.set_ylabel("Spread/RMSE", fontsize=fontz * 0.8)
             else:
                 ax.set_ylabel(f"RMSE ({_UNIT_LABELS.get(units, units)})" if units else "RMSE",
@@ -617,6 +626,16 @@ def plot_daily_metric(results, region, *, metric, labels, colors, variables=PANE
             ax.set_xlim(0.5, max_day + 0.5)
             ax.tick_params(labelsize=fontz * 0.75)
         axes[-1, col].set_xlabel(xlabel or _days_since_label(results[season]), fontsize=fontz * 0.8)
+    if share_y:  # one scale per row, round ticks
+        for row in range(nrows):
+            ranges = {col: _padded(*spans[row, col], 0.08) for col in range(ncols) if (row, col) in spans}
+            if not ranges:
+                continue
+            ranges = _shared_limits(ranges)
+            step = _pick_step(ranges, 3)
+            for col, (lo, hi) in ranges.items():
+                axes[row, col].set_ylim(lo, hi)
+                axes[row, col].set_yticks(_shown_ticks(lo, hi, step))
     extra = []
     if subset_size is not None:
         subset_line = plt.Line2D([], [], color="#6f6e69", lw=subset_line_width, ls=subset_line_style)
@@ -702,12 +721,57 @@ def _season_legend(fig, handles, extra, *, height, fontz, title, ncol=None, fram
                    fontz=fontz, title=title, ncol=ncol, frame=frame, edgecolor=edgecolor, legend_fontz=legend_fontz)
 
 
+def _nice_step(width, nbins):
+    """Round step (1, 2, 5 x 10^k) of about ``width / nbins``, rounded up."""
+    raw = width / max(nbins, 1)
+    exponent = 10 ** np.floor(np.log10(raw))
+    return exponent * next(m for m in (1, 2, 5, 10) if m * exponent >= raw * (1 - 1e-9))
+
+
+def _shown_ticks(lo, hi, step, skip=None, clearance=0.0):
+    """Multiples of ``step`` in [lo, hi], without those within ``clearance`` (axis fraction) of the ``skip`` edge."""
+    ticks = np.arange(np.ceil(lo / step - 1e-9), np.floor(hi / step + 1e-9) + 1) * step
+    edge = {"low": lo, "high": hi}.get(skip)
+    return [t for t in ticks if edge is None or abs(t - edge) > clearance * (hi - lo) + 1e-9 * step]
+
+
+def _pick_step(ranges, min_ticks, skips=None, clearance=0.0):
+    """Largest round step (1, 2, 5 x 10^k) that labels every axis range in {key: (lo, hi)} at least
+    ``min_ticks`` times (ticks within ``clearance`` of an axis's ``skips[key]`` edge not counted)."""
+    skips = skips or {}
+    step = _nice_step(max(hi - lo for lo, hi in ranges.values()), 1)
+    for _ in range(12):
+        if all(len(_shown_ticks(lo, hi, step, skips.get(k), clearance)) >= min_ticks
+               for k, (lo, hi) in ranges.items()):
+            return step
+        mantissa = round(step / 10 ** np.floor(np.log10(step)), 6)
+        step = step / 2.5 if mantissa == 5 else step / 2  # 5 -> 2 -> 1 -> 0.5 ...
+    return step
+
+
+def _padded(lo, hi, fraction):
+    pad = fraction * ((hi - lo) or abs(hi) * 0.01 or 1.0)
+    return lo - pad, hi + pad
+
+
+def _shared_limits(ranges):
+    """One scale for the axis ranges {key: (lo, hi)} of a figure row: identical limits where they are
+    close (union no wider than 1.5 x the widest), else the widest span centred on each range."""
+    widest = max(hi - lo for lo, hi in ranges.values())
+    lo_all, hi_all = min(r[0] for r in ranges.values()), max(r[1] for r in ranges.values())
+    if hi_all - lo_all <= 1.5 * widest:
+        return {k: (lo_all, hi_all) for k in ranges}
+    return {k: ((lo + hi - widest) / 2, (lo + hi + widest) / 2) for k, (lo, hi) in ranges.items()}
+
+
 def plot_daily_timeseries(results, region, *, labels, colors, variables=("TREFHT", "PRECT", "FLUT"),
                           seasons=None, max_day=15, title="", fontz=16, line_width=2.2, line_styles=None,
                           marker="o", markers=None, marker_size=4, member_display="range", member_alpha=0.15,
                           reference_line=None, reference_name=None, grid_alpha=0.3, panel_size=(5.5, 3.6),
                           legend_frame=True, legend_ncol=None, legend_edgecolor="#b5b4ae", xlabel=None,
-                          legend_by="experiment", season_names=None, show_reference=True, legend_fontz=None):
+                          legend_by="experiment", season_names=None, show_reference=True, legend_fontz=None,
+                          break_experiments=None, break_ratio=0.35, break_threshold=1.0,
+                          share_y=False):
     """Regional-mean daily field: ensemble mean of each experiment and the observations.
 
     ``results[season][variable][experiment]`` as returned by
@@ -730,30 +794,135 @@ def plot_daily_timeseries(results, region, *, labels, colors, variables=("TREFHT
     DART20-H0); observations and member range come last, stacked in a column
     of their own (``legend_ncol`` None: one column per experiment column).
     ``legend_fontz``: legend font size (None: 0.85 x ``fontz``); the box scales with it.
+    ``break_experiments``: experiment types or keys (``("REAN10",)``) drawn beyond a
+    broken vertical axis: a panel where they reach above or below the other
+    lines (and the observations, if shown) by more than ``break_threshold`` x the
+    range of those lines is split into two stacked parts with diagonal break
+    marks: the other lines on their own scale, and beyond it, taking
+    ``break_ratio`` of the panel height, the rest of the break experiments' range
+    (contiguous with the main scale where they overlap it); other panels stay whole. The panels
+    that were split are listed in ``fig.broken_panels`` [(season, variable, "above"|"below")].
+    ``share_y``: one y scale per row on round tick steps: identical limits in every
+    season where their ranges are close, else the same span and tick step (each
+    season centred on its own values), for the main and the broken-off parts alike.
     Other style arguments as in ``plot_daily_performance``.
     """
     if member_display not in ("range", "members", "none"):
         raise ValueError('member_display must be "range", "members", or "none"')
     if legend_by not in ("experiment", "type"):
         raise ValueError('legend_by must be "experiment" or "type"')
+    if not 0 < break_ratio < 1:
+        raise ValueError("break_ratio must be between 0 and 1")
+    break_set = set(break_experiments or ())
+    beyond = lambda experiment: experiment in break_set or experiment.rsplit("-", 1)[0] in break_set
     seasons = [s for s in (seasons or results) if s in results]
     variables = [v for v in variables if any(v in results[s] for s in seasons)]
     line_styles, markers = line_styles or {}, markers or {}
     reference_line = {"color": "black", "lw": line_width, "ls": "-", **(reference_line or {})}
     nrows, ncols = len(variables), len(seasons)
     names = {season: (season_names or {}).get(season) or _initial_month(results[season]) for season in seasons}
-    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * panel_size[0], nrows * panel_size[1]),
-                             sharex="col", squeeze=False)
-    handles, products, observed = {}, {}, None
+    # Pass 1: what each panel draws, its data ranges, and whether it is broken.
+    panels, products = {}, {}
     for col, season in enumerate(seasons):
         for row, variable in enumerate(variables):
-            ax = axes[row, col]
-            datasets = results[season].get(variable, {})
-            units, reference = "", None
-            for experiment, ds in datasets.items():
+            selected, units, reference = {}, "", None
+            for experiment, ds in results[season].get(variable, {}).items():
                 if "member_mean" not in ds:
                     raise KeyError(f"{experiment} {variable}: cache has no member_mean; rebuild the daily caches")
-                sel = ds.sel(region=region).where(ds.day <= max_day, drop=True)
+                selected[experiment] = sel = ds.sel(region=region).where(ds.day <= max_day, drop=True)
+                if reference is None:
+                    reference = sel.reference_mean
+                    products[variable] = ds.attrs.get("reference", "")
+                units = ds.attrs.get("units", "")
+
+            def span(experiments, with_reference=False):  # (low, high) of what is drawn
+                values = [selected[e].member_mean if member_display != "none" else selected[e].member_mean.mean("member")
+                          for e in experiments]
+                if with_reference and reference is not None:
+                    values.append(reference)
+                return min(float(v.min()) for v in values), max(float(v.max()) for v in values)
+
+            inside = [e for e in selected if not beyond(e)] or list(selected)
+            outside = [e for e in selected if beyond(e) and e not in inside]
+            main_span, extra_span, side = span(inside, show_reference) if selected else (0.0, 1.0), None, None
+            if outside:
+                (m0, m1), (o0, o1) = main_span, span(outside)
+                above, below = o1 - m1, m0 - o0  # how far the break experiments reach beyond the rest
+                if max(above, below) > break_threshold * ((m1 - m0) or 1.0):
+                    side = "above" if above >= below else "below"
+                    extra_span = (o0, o1)
+                else:
+                    main_span = span(list(selected), show_reference)
+            panels[row, col] = dict(season=season, variable=variable, selected=selected, units=units,
+                                    reference=reference, side=side, main=main_span, extra=extra_span)
+
+    # Pass 2: y limits. Margins of 10% (main part) and the same on-screen size in the broken-off part.
+    # With share_y, every row's panels get one scale: identical limits where the seasons' ranges are
+    # close, else the same span centred on each season's values; ticks at round steps inside.
+    facing_edges = {"above": ("high", "low"), "below": ("low", "high")}  # (main part, broken-off part)
+    MAIN_CLEARANCE, EXTRA_CLEARANCE = 0.10, 0.20  # axis fraction kept free of labels next to a break
+
+    limits, steps = {}, {}
+    for row in range(nrows):
+        cols = [c for c in range(ncols)]
+        main_skips = {c: facing_edges[panels[row, c]["side"]][0] for c in cols if panels[row, c]["side"]}
+        main = {c: _padded(*panels[row, c]["main"], 0.10) for c in cols}
+        if share_y:
+            main = _shared_limits(main)
+        steps[row, "main"] = _pick_step(main, 3, main_skips, MAIN_CLEARANCE) if share_y else None
+        for c in cols:
+            limits[row, c, "main"] = main[c]
+        broken_cols = [c for c in cols if panels[row, c]["side"]]
+        if not broken_cols:
+            continue
+        margin = 0.10 * (1 - break_ratio) / break_ratio
+        wanted = {}
+        for c in broken_cols:
+            (lo, hi), side, (m_lo, m_hi) = panels[row, c]["extra"], panels[row, c]["side"], main[c]
+            if side == "above":
+                lo = max(lo, m_hi)
+                wanted[c] = (lo, hi + margin * (hi - lo))
+            else:
+                hi = min(hi, m_lo)
+                wanted[c] = (lo - margin * (hi - lo), hi)
+        extra = _shared_limits(wanted) if share_y else wanted
+        for c in broken_cols:
+            lo, hi = extra[c]
+            m_lo, m_hi = main[c]
+            # Never cross into the main scale; contiguous with it where the break experiments reach into it.
+            if panels[row, c]["side"] == "above" and (lo < m_hi or panels[row, c]["extra"][0] <= m_hi):
+                lo, hi = m_hi, m_hi + (hi - lo)
+            elif panels[row, c]["side"] == "below" and (hi > m_lo or panels[row, c]["extra"][1] >= m_lo):
+                lo, hi = m_lo - (hi - lo), m_lo
+            limits[row, c, "extra"] = (lo, hi)
+        if share_y:
+            steps[row, "extra"] = _pick_step({c: limits[row, c, "extra"] for c in broken_cols}, 2,
+                                            {c: facing_edges[panels[row, c]["side"]][1] for c in broken_cols},
+                                            EXTRA_CLEARANCE)
+        else:
+            steps[row, "extra"] = None
+
+    # Pass 3: draw.
+    fig = plt.figure(figsize=(ncols * panel_size[0], nrows * panel_size[1]))
+    grid = fig.add_gridspec(nrows, ncols)
+    handles, observed, broken = {}, None, []
+    for (row, col), info in panels.items():
+        season, variable, side = info["season"], info["variable"], info["side"]
+        selected, reference = info["selected"], info["reference"]
+        if side:
+            ratios = (break_ratio, 1 - break_ratio) if side == "above" else (1 - break_ratio, break_ratio)
+            cell = grid[row, col].subgridspec(2, 1, height_ratios=ratios, hspace=0.07)
+            top, bottom = fig.add_subplot(cell[0]), fig.add_subplot(cell[1])
+            main, extra_ax = (bottom, top) if side == "above" else (top, bottom)
+            panel = [top, bottom]
+            broken.append((season, variable, side))
+        else:
+            main, extra_ax = fig.add_subplot(grid[row, col]), None
+            panel = [main]
+        for ax in panel:
+            for experiment, sel in selected.items():
+                if ax is extra_ax and not beyond(experiment):
+                    continue  # the broken-off part holds only the break experiments' range
                 color = colors[experiment]
                 if member_display == "range":
                     ax.fill_between(sel.day, sel.member_mean.min("member"), sel.member_mean.max("member"),
@@ -767,19 +936,40 @@ def plot_daily_timeseries(results, region, *, labels, colors, variables=("TREFHT
                                 ms=marker_size)
                 name = labels[experiment] if legend_by == "experiment" else labels[experiment].rsplit("-", 1)[0]
                 handles.setdefault(season if legend_by == "experiment" else "", {}).setdefault(name, line)
-                if reference is None:
-                    reference = sel.reference_mean
-                    products[variable] = ds.attrs.get("reference", "")
-                units = ds.attrs.get("units", "")
-            if reference is not None and show_reference:
+            if reference is not None and show_reference and ax is not extra_ax:
                 observed, = ax.plot(reference.day, reference, zorder=5, **reference_line)
-            ax.set_title(f"({chr(97 + row * ncols + col)}) {variable} ({names[season]})", loc="left",
-                         fontsize=fontz * 0.9, color="#2b2b29")
-            ax.set_ylabel(_UNIT_LABELS.get(units, units), fontsize=fontz * 0.8)
             ax.grid(alpha=grid_alpha)
             ax.set_xlim(0.5, max_day + 0.5)
             ax.tick_params(labelsize=fontz * 0.75)
-        axes[-1, col].set_xlabel(xlabel or _days_since_label(results[season]), fontsize=fontz * 0.8)
+            if ax is not panel[-1] or row < nrows - 1:
+                ax.tick_params(labelbottom=False)
+        def set_scale(ax, lo, hi, step, skip=None, clearance=0.0):
+            """Limits, and round ticks every ``step`` inside them, leaving the ``clearance`` fraction
+            of the axis next to the ``skip`` edge (the break) free so labels do not collide there."""
+            ax.set_ylim(lo, hi)
+            if step is None:
+                if ax is extra_ax:
+                    ax.yaxis.set_major_locator(plt.MaxNLocator(nbins=3))
+                return
+            ax.set_yticks(_shown_ticks(lo, hi, step, skip, clearance))
+
+        facing = facing_edges.get(side, (None, None))
+        set_scale(main, *limits[row, col, "main"], steps[row, "main"], facing[0], clearance=MAIN_CLEARANCE)
+        if side:
+            set_scale(extra_ax, *limits[row, col, "extra"], steps[row, "extra"], facing[1],
+                      clearance=EXTRA_CLEARANCE)
+            top.spines["bottom"].set_visible(False)
+            bottom.spines["top"].set_visible(False)
+            top.tick_params(bottom=False)
+            marks = dict(marker=[(-1, -0.5), (1, 0.5)], markersize=10, linestyle="none", color="k", mec="k",
+                         mew=1, clip_on=False)
+            top.plot([0, 1], [0, 0], transform=top.transAxes, **marks)
+            bottom.plot([0, 1], [1, 1], transform=bottom.transAxes, **marks)
+        panel[0].set_title(f"({chr(97 + row * ncols + col)}) {variable} ({names[season]})", loc="left",
+                           fontsize=fontz * 0.9, color="#2b2b29")
+        main.set_ylabel(_UNIT_LABELS.get(info["units"], info["units"]), fontsize=fontz * 0.8)
+        if row == nrows - 1:
+            panel[-1].set_xlabel(xlabel or _days_since_label(results[season]), fontsize=fontz * 0.8)
     extra = []
     if observed is not None:
         extra.append((reference_name or "Observations", observed))
@@ -789,4 +979,5 @@ def plot_daily_timeseries(results, region, *, labels, colors, variables=("TREFHT
     _season_legend(fig, handles, extra, height=panel_size[1] * nrows, fontz=fontz, title=title,
                    ncol=legend_ncol, frame=legend_frame, edgecolor=legend_edgecolor, legend_fontz=legend_fontz,
                    extra_last=True, pack=True)
+    fig.broken_panels = broken
     return fig

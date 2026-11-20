@@ -33,7 +33,8 @@ from configs.hind_experiment_config import (
     START_DATE,
     check_experiments,
 )
-from util.hind_model_data import open_model_monthly, select_plev
+from configs.hind_experiment_config import NATIVE_RUNS
+from util.hind_model_data import open_model_monthly, open_native_monthly_band, select_plev
 from util.hind_observation_data import (
     REANALYSES,
     open_reference_monthly,
@@ -190,6 +191,9 @@ def open_qbo_input(
     """Lazy monthly ``variable`` of an experiment or reanalysis (``ERA5``, ``ERAI``) on the model levels."""
     if source in REANALYSES:
         da = open_reference_monthly(source, variable, start=start, end=end, observation_root=observation_root)
+    elif source in NATIVE_RUNS:  # Compy reruns: band mean on the levels straight from eam.h0
+        return open_native_monthly_band(source, variable, data_root=data_root, plev_pa=plev_pa,
+                                        start=start, end=end)
     else:
         check_experiments([source])
         da = open_model_monthly(source, variable, data_root=data_root, start=start, end=end)

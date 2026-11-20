@@ -207,3 +207,63 @@ def open_model_monthly(
     field.attrs = dict(field.attrs, experiment=experiment)
     field.name = variable
     return field
+
+
+def open_native_monthly_band(
+    experiment: str,
+    variable: str,
+    *,
+    data_root,
+    plev_pa,
+    lat_band=(-5.0, 5.0),
+    start: str = START_DATE,
+    end: str = END_DATE,
+) -> xr.DataArray:
+    """Monthly band mean of ``variable`` (``ua``/``ta``) on pressure levels from native ``eam.h0`` files.
+
+    For the ``NATIVE_RUNS`` (no pressure-level zppy output): the columns whose
+    centre lies in ``lat_band`` are interpolated from the hybrid levels to
+    ``plev_pa`` (linear in log p; NaN outside a column's pressure range) and
+    averaged with their cell areas (the area-weighted, i.e. cos-latitude,
+    zonal mean). Returns (time, plev[Pa], lat=[0]) labelled ``YYYY-MM-16``,
+    the shape ``QboAnalyzer.section`` accepts.
+    """
+    from configs.hind_experiment_config import NATIVE_RUNS
+
+    case, member = NATIVE_RUNS[experiment]
+    name = {"ua": "U", "ta": "T"}[variable]
+    hist = Path(data_root) / case / "archive" / "atm" / "hist"
+    files = sorted(hist.glob(f"{case}.{member}.eam.h0.????-??.nc"))
+    if not files:
+        raise FileNotFoundError(f"No {case}.{member}.eam.h0.YYYY-MM.nc under {hist}")
+    target = np.log(np.asarray(plev_pa, dtype=np.float64))
+    months, values, units = [], [], ""
+    for f in files:
+        with xr.open_dataset(f, decode_times=_CFTIME) as ds:
+            start_of_month = ds.time_bnds.values[0, 0]
+            if not (start <= f"{start_of_month.year:04d}-{start_of_month.month:02d}-01" <= end):
+                continue
+            cols = np.flatnonzero((ds.lat.values >= lat_band[0]) & (ds.lat.values <= lat_band[1]))
+            p0 = float(ds.P0) if "P0" in ds else 100000.0
+            ps = ds.PS.values[0, cols].astype(np.float64)
+            pressure = ds.hyam.values[:, None] * p0 + ds.hybm.values[:, None] * ps[None, :]  # (lev, col)
+            field = ds[name].values[0][:, cols].astype(np.float64)
+            area = ds.area.values[cols].astype(np.float64)
+            units = ds[name].attrs.get("units", units)
+        log_p = np.log(pressure)
+        on_plev = np.array([np.interp(target, log_p[:, k], field[:, k], left=np.nan, right=np.nan)
+                            for k in range(len(cols))])  # (col, plev)
+        valid = np.isfinite(on_plev)
+        weights = np.where(valid, area[:, None], 0.0)
+        total = weights.sum(0)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            values.append(np.where(total > 0, (np.where(valid, on_plev, 0.0) * weights).sum(0) / total, np.nan))
+        months.append(cftime.DatetimeNoLeap(start_of_month.year, start_of_month.month, 16))
+    if not months:
+        raise FileNotFoundError(f"No {case}.{member} eam.h0 months in {start}..{end}")
+    da = xr.DataArray(np.array(values)[:, :, None], dims=("time", "plev", "lat"),
+                      coords={"time": months, "plev": np.asarray(plev_pa, dtype=np.float64), "lat": [0.0]},
+                      name=variable, attrs={"units": units, "experiment": experiment,
+                                            "source": f"{case}.{member} eam.h0, {lat_band} band, area-weighted"})
+    da.plev.attrs["units"] = "Pa"
+    return da

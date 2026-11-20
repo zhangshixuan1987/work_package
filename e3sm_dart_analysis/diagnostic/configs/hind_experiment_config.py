@@ -31,8 +31,25 @@ EXPERIMENTS = {
     # tracers and is far too warm near the ground over high terrain (zero O3 at start; lower
     # stratosphere -11 K for months). CAPTOP instead starts atm and lnd from the CAPT run
     # CAPTEN10_15day (EN01, 2012-01-01), full model states. Not part of the 8-run factorial.
-    "CAPTOP": ("CAPT01", "REAN atm + REAN lnd (CAPTEN10_15day EN01)"),
+    "CAPTOP": ("CAPT01", "RHYB atm + RHYB lnd (CAPTEN10_15day EN01)"),
 }
+# Two-year reruns on Compy (2026-11-19), one member each, read from the native eam.h0 history files
+# (``INPUT_DATA_ROOT/<case>/archive/atm/hist/<case>.<member>.eam.h0.YYYY-MM.nc``; their zppy output has
+# no pressure-level fields): key -> (case, member). They test the tracer and aerosol initialization:
+# REAN starts from ERA5 without ozone, chemistry and aerosols, RHYB from the same ERA5 state completed
+# with the model's tracers (CAPTEN10_15day EN01), DART from DART40 member EN16, CTRL from piControl.
+NATIVE_RUNS = {
+    "CTRL_2yr": ("CTRL_2yr_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy", "EN01"),
+    "REAN_2yr": ("ERA5_2yr_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy", "EN01"),
+    "RHYB_2yr": ("CAPT_2yr_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy", "EN01"),
+    "DART_2yr": ("DARTEN40EN16_2yr_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy", "EN16"),
+}
+EXPERIMENTS.update({
+    "CTRL_2yr": ("CTRL_2yr", "piControl atm + piControl lnd (Compy rerun)"),
+    "REAN_2yr": ("ERA5_2yr", "ERA5 atm, no ozone/chemistry/aerosols (Compy rerun)"),
+    "RHYB_2yr": ("CAPT_2yr", "ERA5 atm with model tracers (Compy rerun)"),
+    "DART_2yr": ("DARTEN40EN16_2yr", "DART atm + DART lnd, EN16 (Compy rerun)"),
+})
 EXPERIMENT_KEYS = tuple(EXPERIMENTS)
 
 # Runs whose case name does not follow CASE_TEMPLATE (a later case date).

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 import numpy as np
 import xarray as xr
@@ -378,11 +379,20 @@ def scalar_summary(results, registries):
 
 
 def experiment_colors(experiments):
-    """Fixed categorical color per experiment, in first-seen order (never cycled)."""
+    """Fixed categorical color per experiment, in first-seen order (never cycled).
+
+    With more experiments than colors, experiments of one type share a color
+    across seasons (``REAN10-S0`` and ``REAN10-S1`` -> the ``REAN10`` color).
+    """
     order = list(dict.fromkeys(experiments))
-    if len(order) > len(CATEGORICAL_COLORS):
-        raise ValueError(f"At most {len(CATEGORICAL_COLORS)} experiments can be colored; facet instead")
-    return dict(zip(order, CATEGORICAL_COLORS))
+    if len(order) <= len(CATEGORICAL_COLORS):
+        return dict(zip(order, CATEGORICAL_COLORS))
+    kind = lambda e: re.sub(r"-[SH]\d+$", "", str(e))  # DART20-S0 -> DART20
+    kinds = list(dict.fromkeys(map(kind, order)))
+    if len(kinds) > len(CATEGORICAL_COLORS):
+        raise ValueError(f"At most {len(CATEGORICAL_COLORS)} experiment types can be colored; facet instead")
+    by_kind = dict(zip(kinds, CATEGORICAL_COLORS))
+    return {e: by_kind[kind(e)] for e in order}
 
 
 def plot_scalar_metrics(summary, metrics, *, variables=None, title="", colors=None, label_map=None):

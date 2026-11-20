@@ -12,6 +12,11 @@ exp_dict1 = {
         'template': '%(variable)s.%(ensemble)s.%(year)s.nc',
         'nens': 10
     },
+    'ERA5EN10': {
+        'path': '/compyfs/zhan391/v3_dart_cda_scratch/ERA5EN10_15day_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy',
+        'template': '%(variable)s.%(ensemble)s.%(year)s.nc',
+        'nens': 10
+    },
     'CAPTEN10': {
         'path': '/compyfs/zhan391/v3_dart_cda_scratch/CAPTEN10_15day_F20TR_ne30pg2_r05_IcoswISC30E3r5_compy',
         'template': '%(variable)s.%(ensemble)s.%(year)s.nc',

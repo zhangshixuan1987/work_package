@@ -52,15 +52,17 @@ for _var in ("U850", "U200", "V850", "V200", "PSL"):
                                         (f"ERA5/1x1/6hourly/ERA5.6hourly.en00.{_var}.*.nc", _var),
                                         (f"ERA5/daily/{_var}_*.nc", _var),
                                         (f"ERA5/6hourly/ERA5.6hourly.en00.{_var}.*.nc", _var)]
+_ERA5_YEARLY = {"ua": "U", "ta": "T", "zg": "Z3", "va": "V"}  # Compy: ERA5/monthly/ERA5_analysis_monthly_YYYY.nc
 for _var in ("ua", "ta", "zg", "va", "psl"):
-    REFERENCES[("ERA5", _var)] = [(f"{_TS}/ERA5/{_var}_*.nc", _var)]
+    REFERENCES[("ERA5", _var)] = [(f"{_TS}/ERA5/{_var}_*.nc", _var)] + (
+        [("ERA5/monthly/ERA5_analysis_monthly_*.nc", _ERA5_YEARLY[_var])] if _var in _ERA5_YEARLY else [])
     REFERENCES[("ERAI", _var)] = [(f"{_TS}/ERA-Interim/{_var}_*.nc", _var)]
 
 # Monthly reanalyses usable as QBO/SSW references
 REANALYSES = ("ERA5", "ERAI")
 
 _RANGE = re.compile(r"(\d{4})\d{2}[-_](\d{4})\d{2}")
-_YEAR = re.compile(r"\.(\d{4})\.nc$")
+_YEAR = re.compile(r"[._](\d{4})\.nc$")
 
 
 def _overlapping(files: list[Path], start: str | None, end: str | None) -> list[Path]:
@@ -95,13 +97,15 @@ def reference_files(product: str, variable: str, *, observation_root,
     key = (product, variable)
     if key not in REFERENCES:
         raise KeyError(f"No reference registered for {key}; known: {sorted(REFERENCES)}")
-    root = Path(observation_root)
+    roots = [Path(r) for r in observation_root] if isinstance(observation_root, (list, tuple)) \
+        else [Path(observation_root)]  # several roots: searched in order for each candidate
     tried = []
     for pattern, name in REFERENCES[key]:
-        files = sorted(root.glob(pattern))
-        if files:
-            return _overlapping(files, start, end), name
-        tried.append(str(root / pattern))
+        for root in roots:
+            files = sorted(root.glob(pattern))
+            if files:
+                return _overlapping(files, start, end), name
+            tried.append(str(root / pattern))
     raise FileNotFoundError(f"No files for {product} {variable}; tried:\n  " + "\n  ".join(tried))
 
 

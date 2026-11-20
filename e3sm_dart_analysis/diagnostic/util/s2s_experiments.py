@@ -81,6 +81,13 @@ DEFAULT_EXPERIMENTS: Dict[str, ExperimentSpec] = {
         fc_run=RunSpec(compset="F20TR", name="CTRLEN10_15day", period="201201-201202"),
         wc_run=RunSpec(compset="WCYCL20TR", name="CTRLEN10_15day", period="201201-201202"),
     ),
+    "REAN10-S0": ExperimentSpec(
+        nens=10,
+        key="dart_en10",
+        da_run=None,
+        fc_run=RunSpec(compset="F20TR", name="ERA5EN10_15day", period="201201-201202"),
+        wc_run=RunSpec(compset="WCYCL20TR", name="ERA5EN10_15day", period="201201-201202"),
+    ),
     "CAPT10-S0": ExperimentSpec(
         nens=10,
         key="dart_en10",
@@ -143,6 +150,13 @@ DEFAULT_EXPERIMENTS: Dict[str, ExperimentSpec] = {
         da_run=None,
         fc_run=RunSpec(compset="F20TR", name="CTRLEN10s1_15day", period="201206-201207"),
         wc_run=RunSpec(compset="WCYCL20TR", name="CTRLEN10s1_15day", period="201206-201207"),
+    ),
+    "REAN10-S1": ExperimentSpec(
+        nens=10,
+        key="capt_en10",
+        da_run=None,
+        fc_run=RunSpec(compset="F20TR", name="ERA5EN10S1_15day", period="201206-201207"),
+        wc_run=RunSpec(compset="WCYCL20TR", name="ERA5EN10S1_15day", period="201206-201207"),
     ),
     "CAPT10-S1": ExperimentSpec(
         nens=10,
