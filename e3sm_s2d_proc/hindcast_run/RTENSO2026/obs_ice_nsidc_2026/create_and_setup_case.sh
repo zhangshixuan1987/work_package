@@ -8,7 +8,7 @@ export my_machine=pm-cpu
 export my_project="e3sm"
 export my_jobqueue="regular"
 export my_task_per_node=128 # pm-cpu
-export my_job_nnodes=270    # total nodes (nens x node per ens): 3 dates x 10 members x 9 nodes
+export my_job_nnodes=360    # total nodes (nens x node per ens): 4 dates x 10 members x 9 nodes
 export my_layout="custom-9_1x2_nyears"
 export my_min_nodes_per_sim=9
 #export my_layout="custom-28_1x2_nyears"
@@ -41,7 +41,7 @@ export do_ensemble_run=true #run simulation
 # only used when do_continue_setup = true 
 # note: restart ymd is corresponding to leadymd
 ######################################################
-export my_restart_ymd=("2026-03-01" "2026-06-01" "2026-09-01")
+export my_restart_ymd=("2026-03-01" "2026-06-01" "2026-09-01" "2026-12-01")
 export my_restart_tod="00000"
 export my_continue_recompile=false #true # recompile because the layout changed
 export my_continue_runopt="nyears"
@@ -61,7 +61,9 @@ export my_runpath="/pscratch/sd/z/zhan391/e3sm_project/E3SMv3_S2D"
 export my_mpaso_dt="00:30:00" # default: "00:30:00"
 export my_mpassi_dt=1800      # default: 1800
 
-export my_leadymd=("2026-02-01" "2026-05-01" "2026-08-01")
+# 2026-11-01 was first run on its own from ../all_ic_in_one (same 2-year setup; its
+# 1-year extension to 2029-11-01 is set up there, not here)
+export my_leadymd=("2026-02-01" "2026-05-01" "2026-08-01" "2026-11-01")
 export my_leadtod="00000"
 export my_leadhh=`echo "${my_leadtod}" / 3600 | bc`
 

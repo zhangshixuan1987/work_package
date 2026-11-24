@@ -5,7 +5,7 @@
 #SBATCH  --account=e3sm
 #SBATCH  --constraint=cpu
 #SBATCH  --qos=regular
-#SBATCH  --nodes=270
+#SBATCH  --nodes=360
 #SBATCH  --time=16:00:00
 #SBATCH  --job-name=e3sm_s2d_ensrun
 
