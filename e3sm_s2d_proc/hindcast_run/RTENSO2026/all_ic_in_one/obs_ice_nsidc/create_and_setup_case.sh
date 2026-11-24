@@ -30,7 +30,7 @@ export do_continue_setup=false #true
 
 # For short spin-up setup, when turned on the phase 1 will do a short-spinup with shorter ocean time step  
 # see also block below for the other setup 
-export do_short_spinup=true # must be false for continuation setup/run
+export do_short_spinup=false # spin-up done; must be false for continuation setup/run
 export do_skip_completed_spinup=true # skip members with complete spinup restart files
 
 # For final simulation stage, when short spinup is turned on this is phase 2  
@@ -38,8 +38,9 @@ export do_ensemble_run=true #run simulation
 
 # all_ic_in_one: ../run_all_ic.sh sets the phase for all three sets
 case "${ALL_IC_PHASE:-}" in
-  setup) do_compile_setup_only=true;  do_ensemble_run=false ;;
-  run)   do_compile_setup_only=false; do_ensemble_run=true ;;
+  setup)    do_compile_setup_only=true;  do_ensemble_run=false ;;
+  continue) do_compile_setup_only=false; do_continue_setup=true; do_ensemble_run=false ;;
+  run)      do_compile_setup_only=false; do_continue_setup=false; do_ensemble_run=true ;;
 esac
 
 ######################################################
@@ -47,14 +48,17 @@ esac
 # only used when do_continue_setup = true 
 # note: restart ymd is corresponding to leadymd
 ######################################################
-export my_restart_ymd=("2026-12-01")
+# 1-year extension (2026-11-23): the 23-month main run stopped at 2028-11-01 with its
+# last restart at 2028-10-01, so restart there and run 13 months to 2029-11-01
+# (36 months in all, Nov 2026 - Oct 2029; October 2028 is run again)
+export my_restart_ymd=("2028-10-01")
 export my_restart_tod="00000"
 export my_continue_recompile=false #true # recompile because the layout changed
-export my_continue_runopt="nyears"
-export my_continue_runn="1"  
-export my_continue_restopt="nyears" 
-export my_continue_restn="1" 
-export my_continue_walltime="12:00:00"
+export my_continue_runopt="nmonths"
+export my_continue_runn="13"
+export my_continue_restopt="nmonths"
+export my_continue_restn="13" # one restart, at 2029-11-01
+export my_continue_walltime="08:00:00"
 ############################################
 
 #model configuration (compset, resolution etc.)

@@ -6,7 +6,7 @@
 #SBATCH  --constraint=cpu
 #SBATCH  --qos=regular
 #SBATCH  --nodes=270
-#SBATCH  --time=16:00:00
+#SBATCH  --time=08:00:00     # 16:00:00 for the original spin-up + 23-month run
 #SBATCH  --job-name=rtenso_20261101_all_ic
 #SBATCH  --output=slurm-%j.out
 
@@ -26,8 +26,15 @@
 #
 #   ./run_all_ic.sh setup   create, build and set up the 30 cases (login node;
 #                           the three sets one after the other, logs in <set>/setup.log)
-#   sbatch run_all_ic.sh    short spin-up + 2-year run of all 30 members
-#                           (logs in <set>/run.log.<jobid>)
+#   ./run_all_ic.sh continue  reconfigure the 30 cases to continue from
+#                           my_restart_ymd (login node; logs in <set>/continue.log)
+#   sbatch run_all_ic.sh    run all 30 members (logs in <set>/run.log.<jobid>)
+#
+# History: setup + sbatch did the 1-month spin-up and 23-month run (to 2028-11-01,
+# last restart 2028-10-01; job 61120704). The 1-year extension restarts at
+# 2028-10-01 and runs 13 months to 2029-11-01: do_short_spinup=false and the
+# my_continue_* settings in each <set>/create_and_setup_case.sh, then
+# ./run_all_ic.sh continue and sbatch run_all_ic.sh.
 #
 # Case names are those of the run sets, e.g.
 #   WCYCL20TR_ne30pg2_r05_IcoswISC30E3r5_RTENSO2026_obs_ice_nsidc_2026110100.EN00
@@ -52,6 +59,14 @@ case "${phase}" in
     done
     echo "$(date '+%F %T') setup done; submit the run with: sbatch run_all_ic.sh"
     ;;
+  continue)
+    for s in "${sets[@]}"; do
+      echo "$(date '+%F %T') continue setup ${s}"
+      ( cd "${s}" && ALL_IC_PHASE=continue ./run_e3sm_ens_bundle.sh > continue.log 2>&1 ) || {
+        echo "ERROR: continue setup of ${s} failed (see ${top_dir}/${s}/continue.log)"; exit 1; }
+    done
+    echo "$(date '+%F %T') continue setup done; submit the run with: sbatch run_all_ic.sh"
+    ;;
   run)
     [[ -n ${SLURM_JOB_ID:-} ]] || { echo "ERROR: submit the run phase with sbatch run_all_ic.sh"; exit 1; }
     declare -A pid_set=()
@@ -73,5 +88,5 @@ case "${phase}" in
     exit "${failed}"
     ;;
   *)
-    echo "usage: ./run_all_ic.sh setup | sbatch run_all_ic.sh" >&2; exit 2 ;;
+    echo "usage: ./run_all_ic.sh setup|continue | sbatch run_all_ic.sh" >&2; exit 2 ;;
 esac
