@@ -5,7 +5,7 @@ export my_workdir=${PWD}
 
 # run configuration
 export my_machine=pm-cpu
-export my_project="e3sm"
+export my_project="m5451"
 export my_jobqueue="regular"
 export my_task_per_node=128 # pm-cpu
 export my_job_nnodes=90     # this set's share of the all_ic_in_one job: 1 date x 10 members x 9 nodes

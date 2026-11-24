@@ -2,7 +2,7 @@
 #------------------------------------------------------------------------------
 # Batch system directives
 #------------------------------------------------------------------------------
-#SBATCH  --account=e3sm
+#SBATCH  --account=m5451
 #SBATCH  --constraint=cpu
 #SBATCH  --qos=regular
 #SBATCH  --nodes=270

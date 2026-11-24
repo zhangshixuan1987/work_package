@@ -2,7 +2,7 @@
 #------------------------------------------------------------------------------
 # Batch system directives (run phase: 3 sets x 10 members x 9 nodes)
 #------------------------------------------------------------------------------
-#SBATCH  --account=e3sm
+#SBATCH  --account=m5451
 #SBATCH  --constraint=cpu
 #SBATCH  --qos=regular
 #SBATCH  --nodes=270
