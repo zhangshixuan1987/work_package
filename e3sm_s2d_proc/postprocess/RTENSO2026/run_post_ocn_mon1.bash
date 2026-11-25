@@ -12,7 +12,7 @@
 #source /global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh
 #source /global/common/software/e3sm/anaconda_envs/load_e3sm_unified_1.10.0_pm-cpu.sh
 
-package="/global/common/software/e3sm/anaconda_envs/load_e3sm_unified_1.10.0_pm-cpu.sh"
+package="/global/common/software/e3sm/anaconda_envs/load_latest_e3sm_unified_pm-cpu.sh"   # was 1.10.0 (no longer loads on pm-cpu; changed 2026-11-16)
 
 www="/global/cfs/cdirs/e3sm/www/zhan391/E3SMv3_S2D"
 
@@ -52,6 +52,15 @@ vars=timeMonthly_avg_dThreshMLD,timeMonthly_avg_ssh,timeMonthly_avg_oceanHeatCon
 vext=xtime_startMonthly,xtime_endMonthly
 
 leads=(${LEADS:-2015020100 2015050100 2015080100 2015110100})   # LEADS="2026020100 ..." for other starts
+# Reprocessing overrides (as in s2d_diag/post_bruteforce, 2026-11-16):
+#   LENGTH=3        override length= (years), e.g. LENGTH=3 LEADS=2026110100 for the 36-month run
+#   VARS="A,B,C"    override vars=
+#   ENS="1 2 3"     process only these members (default: 0..9)
+#   FORCE=1         rebuild even if the status file says OK (outputs overwritten in place;
+#                   if a run fails the old files stay and the status becomes ERROR)
+length="${LENGTH:-${length}}"
+vars="${VARS:-${vars}}"
+if [[ "${FORCE:-0}" == 1 ]]; then echo "FORCE=1: rebuilding ${leads[*]} (length=${length})"; fi
 
 patch_surface_tracer_preproc() {
   local script=$1
@@ -132,14 +141,14 @@ do
   echo "mth_end=$mth_end"
 
   # number of complete 12-month periods
-  start_total=$(( yr_srt * 12 + 10#$mth_srt ))
-  end_total=$(( yr_end * 12 + 10#$mth_end ))
+  start_total=$(( 10#${yr_srt} * 12 + 10#$mth_srt ))
+  end_total=$(( 10#${yr_end} * 12 + 10#$mth_end ))
   n_months=$(( end_total - start_total + 1 ))
   ypf=$(( n_months / 12 ))
 
   pids=()
 
-  for en in $(seq 0 9); do
+  for en in ${ENS:-$(seq 0 9)}; do
     ens="EN$(printf "%02d" "$en")"
     ttag="$(printf "%04d" "${yr_srt}")$(printf "%02d" "$((10#${mth_srt}))")-$(printf "%04d" "${yr_end}")$(printf "%02d" "$((10#${mth_end}))")-$(printf "%04d" "${ypf}")"
 
@@ -184,6 +193,9 @@ do
         done
       fi
     fi
+
+    if [[ "${FORCE:-0}" == 1 ]]; then outputs_complete=false; fi
+
 
     if [[ "${outputs_complete}" == true ]]; then
       echo "skipping completed output: ${case} ${ens} ${tag_srt}-${tag_end}"

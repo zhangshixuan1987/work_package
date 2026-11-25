@@ -42,6 +42,15 @@ vars=RIVER_DISCHARGE_OVER_LAND_LIQ
 var_xtr=mask,area,areatotal,areatotal2
 
 leads=(${LEADS:-2015020100 2015050100 2015080100 2015110100})   # LEADS="2026020100 ..." for other starts
+# Reprocessing overrides (as in s2d_diag/post_bruteforce, 2026-11-16):
+#   LENGTH=36       override length= (months), e.g. LENGTH=36 LEADS=2026110100 for the 36-month run
+#   VARS="A,B,C"    override vars=
+#   ENS="1 2 3"     process only these members (default: 0..9)
+#   FORCE=1         rebuild even if the status file says OK (outputs overwritten in place;
+#                   if a run fails the old files stay and the status becomes ERROR)
+length="${LENGTH:-${length}}"
+vars="${VARS:-${vars}}"
+if [[ "${FORCE:-0}" == 1 ]]; then echo "FORCE=1: rebuilding ${leads[*]} (length=${length})"; fi
 
 for lead in "${leads[@]}"
 #for lead in 1980050100 1980110100 1981050100 1981110100 1982050100 1982110100 1983050100 1983110100 
@@ -78,14 +87,14 @@ do
   echo "mth_end=$mth_end"
 
   # number of complete 12-month periods
-  start_total=$(( yr_srt * 12 + 10#${mth_srt} ))
-  end_total=$(( yr_end * 12 + 10#${mth_end} ))
+  start_total=$(( 10#${yr_srt} * 12 + 10#${mth_srt} ))
+  end_total=$(( 10#${yr_end} * 12 + 10#${mth_end} ))
   n_months=$(( end_total - start_total + 1 ))
   ypf=$(( n_months / 12 ))
 
   pids=()
 
-  for en in $(seq 0 9); do
+  for en in ${ENS:-$(seq 0 9)}; do
     ens="EN$(printf "%02d" "$en")"
     ttag="$(printf "%04d" "${yr_srt}")$(printf "%02d" "$((10#${mth_srt}))")-$(printf "%04d" "${yr_end}")$(printf "%02d" "$((10#${mth_end}))")-$(printf "%04d" "${ypf}")"
 
@@ -130,6 +139,9 @@ do
         done
       fi
     fi
+
+    if [[ "${FORCE:-0}" == 1 ]]; then outputs_complete=false; fi
+
 
     if [[ "${outputs_complete}" == true ]]; then
       echo "skipping completed output: ${case} ${ens} ${tag_srt}-${tag_end}"
