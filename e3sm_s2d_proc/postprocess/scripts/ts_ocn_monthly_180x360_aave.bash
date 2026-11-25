@@ -358,7 +358,9 @@ done
 
 shopt -u nullglob
 
-find preproc -name "${case_name}.${hist}.????-*.nc" | sort > input.txt
+# Absolute paths: with relative entries that include a directory, ncclimo 5.4.2 split mode
+# checks "/<entry>" and reports the file missing
+find "${PWD}/preproc" -name "${case_name}.${hist}.????-*.nc" | sort > input.txt
 
 if [[ ! -s input.txt ]]; then
   fail 1 "ERROR: Missing preprocessed input files"
