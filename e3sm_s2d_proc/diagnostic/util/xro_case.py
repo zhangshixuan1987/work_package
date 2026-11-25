@@ -203,14 +203,17 @@ def _cached(path, expected, mode, build):
 def obs_state(mode="auto"):
     """Observed state vector (time) of HadISST 1.1 SST and EN4 OHC700 anomalies from 1981-2010.
 
-    Rebuild (``mode="rebuild"``) after new observations are added to the archive.
+    The cache key holds the latest modification time of the SST and heat-content archive files, so the
+    state is rebuilt by itself when a product is extended (e.g. a new EN4 month).
     """
     mode = rc.reference_mode(mode)   # observation-based: a shared reference cache
     path = rc.diag_dir("observations", "xro",
                        f"{OBS_SST}_EN4.2.2_XRO_state_y{OBS_YEARS[0]}-{OBS_YEARS[1]}_"
                        f"clim{rc.CLIM_YEARS[0]}-{rc.CLIM_YEARS[1]}_{rc.GRID_TAG}.nc")
+    stamp = max(rc._source_stamp(rc.obs_product("TS", OBS_YEARS, OBS_SST)[2]),
+                rc._source_stamp(rc.obs_product("OHC700", OBS_YEARS)[2]))
     expected = {"cache_version": CACHE_VERSION, "sst_product": OBS_SST, "heat_content_product": "EN4.2.2",
-                "start_year": OBS_YEARS[0], "end_year": OBS_YEARS[1]}
+                "start_year": OBS_YEARS[0], "end_year": OBS_YEARS[1], "source_mtime": stamp}
 
     def build():
         sst = rc.obs_anomaly("TS", years=OBS_YEARS, mode=mode, product=OBS_SST)
