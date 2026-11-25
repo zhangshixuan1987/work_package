@@ -1,4 +1,4 @@
-"""Publication figure style for the RTENSO2026 7a-7d notebooks.
+"""Publication figure style for the RTENSO2026 XRO notebooks (enso/06-09).
 
 Figures are drawn at their printed size (journal column widths in inches) with 7-9 pt text, so
 they need no rescaling in a manuscript. ``save`` writes a vector PDF (fonts embedded as TrueType)

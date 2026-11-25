@@ -1,4 +1,4 @@
-"""XRO (extended nonlinear recharge oscillator) helpers for the RTENSO2026 7a-7d notebooks.
+"""XRO (extended nonlinear recharge oscillator) helpers for the RTENSO2026 XRO notebooks (enso/06-09).
 
 The XRO state vector of Zhao et al. (2024, Nature, doi:10.1038/s41586-024-07534-6) is
 ENSO [Nino3.4 SST T, recharge h] plus eight other climate-mode SST indices. The boxes follow
@@ -40,7 +40,7 @@ from . import rtenso_case as rc
 CACHE_VERSION = 1
 
 # -----------------------------------------------------------------------------
-# Shared configuration of the 7a-7d notebooks
+# Shared configuration of the XRO notebooks (06-09)
 # -----------------------------------------------------------------------------
 OBS_SST = "HadISST1.1"          # rc.OBS_ALT_PRODUCTS["TS"]; heat content is EN4.2.2 (rc.FIELDS["OHC700"])
 OBS_YEARS = (1981, 2026)        # observed state vector: training, initial states and verification
@@ -59,11 +59,11 @@ XRO_SETUP = {
     "diverge_threshold": 6.0,
 }
 
-# Out-of-sample validation (7a) and the cross-validated spread calibration derived from it, shared so
-# that 7b/7c apply exactly the factors 7a evaluates.
+# Out-of-sample validation (06_xro_validation) and the cross-validated spread calibration derived from it, shared so
+# that 07_xro_events/08_e3sm_xro_state apply exactly the factors 06_xro_validation evaluates.
 VALIDATION = {"years": (1995, 2025), "train_start": 1981, "n_month": 24, "ncopy": 50, "seed": 1995}
 # "method" per variable: "coverage" (alpha = 90th percentile of the required inflation) or "crps" (alpha
-# minimizing the mean CRPS of past forecasts). 7a section 9: coverage suits Nino3.4; for h it over-widens
+# minimizing the mean CRPS of past forecasts). 06_xro_validation section 9: coverage suits Nino3.4; for h it over-widens
 # the intervals, while the CRPS objective gives about 90% coverage at no CRPS cost.
 # "djf_min_samples": past DJF seasons needed for a DJF-specific factor.
 CALIBRATION = {"pool": 1, "min_samples": 60, "vars": ("Nino34", "WWV"),
@@ -205,6 +205,7 @@ def obs_state(mode="auto"):
 
     Rebuild (``mode="rebuild"``) after new observations are added to the archive.
     """
+    mode = rc.reference_mode(mode)   # observation-based: a shared reference cache
     path = rc.diag_dir("observations", "xro",
                        f"{OBS_SST}_EN4.2.2_XRO_state_y{OBS_YEARS[0]}-{OBS_YEARS[1]}_"
                        f"clim{rc.CLIM_YEARS[0]}-{rc.CLIM_YEARS[1]}_{rc.GRID_TAG}.nc")
@@ -230,7 +231,7 @@ def hindcast_state(case, year, init, method="start_drift", mode="auto"):
     observations (EAM LANDFRAC < 0.5)."""
     cfg = CASES[case]
     path = rc.diag_dir(cfg["source"], "xro_state",
-                       f"{cfg['source']}_init{init:02d}_y{year}_XRO_state_{method}_m{rc.NENS}_l{rc.NLEAD}_{rc.GRID_TAG}.nc")
+                       f"{cfg['source']}_init{init:02d}_y{year}_XRO_state_{method}_m{rc.NENS}_l{rc.start_nlead(year, init)}_{rc.GRID_TAG}.nc")
     expected = {"cache_version": CACHE_VERSION, "case_prefix": cfg["case_prefix"], "init_year": year,
                 "init_month": init, "method": method}
 
@@ -365,14 +366,16 @@ def initial_state(xfit, year, init):
     return None if bool(X0.to_array().isnull().any()) else X0
 
 
-def event_forecast(xfit, year, init, X0=None, stochastic=True, n_month=rc.NLEAD + 1, setup=XRO_SETUP):
+def event_forecast(xfit, year, init, X0=None, stochastic=True, n_month=None, setup=XRO_SETUP):
     """XRO forecast aligned with a hindcast started on 1 ``init`` ``year``.
 
     XRO starts from the (detrended) observed state of the month before the start (or ``X0``),
     so XRO lead 1 is the start month; leads are shifted by one so that lead 0 is the start month,
     as in the hindcasts, and lead -1 is the initial month. Returns {"det", "det_dt"[, "stoch"]}
     (trend added back to "det" and "stoch"), or None without an observed initial state.
+    ``n_month`` defaults to the hindcast length plus the initial month (``rc.start_nlead`` + 1).
     """
+    n_month = rc.start_nlead(year, init) + 1 if n_month is None else n_month
     X0 = initial_state(xfit, year, init) if X0 is None else X0
     if X0 is None:
         return None
@@ -459,6 +462,7 @@ def rolling_hindcasts(X, years, train_start, n_month=24, orders=None, ncopy=0, s
     when ``ncopy`` is 0. The cache records the last observed months of ``X``, so extending the
     observations rebuilds it; ``use_cache=False`` computes without reading or writing the cache.
     """
+    mode = rc.reference_mode(mode)   # observation-based: a shared reference cache
     orders = orders or setup["detrend_order"]
     tag = "_".join(f"{k}{v}" for k, v in sorted(orders.items()))
     base = rc.diag_dir("observations", "xro",
@@ -663,7 +667,7 @@ def _validation_scores(X, var, method, mode="auto"):
 def event_inflation(X, year, init, var="Nino34", method=None, mode="auto"):
     """Cross-validated monthly inflation factors for an event forecast (``event_forecast`` leads).
 
-    Factors come from the 7a validation hindcasts verified before XRO's initial month (the month
+    Factors come from the 06_xro_validation validation hindcasts verified before XRO's initial month (the month
     before the start); event lead L uses the factor of XRO lead L + 1, and lead -1 (the observed
     initial month) gets 1. Returns a DataArray over event leads (NaN where too few past cases).
     """
@@ -678,10 +682,15 @@ def event_inflation(X, year, init, var="Nino34", method=None, mode="auto"):
 
 def calibrated_stoch(X, year, init, stoch, method=None, mode="auto"):
     """Stochastic event ensemble with CALIBRATION["vars"] inflated month by month about the ensemble
-    mean (other variables unchanged). Use ``calibrated_djf`` for DJF-mean ranges."""
+    mean (other variables unchanged). Use ``calibrated_djf`` for DJF-mean ranges.
+    Leads past the validation hindcasts (an ``rc.EXTENDED_STARTS`` start) reuse the factor of the lead
+    12 months earlier (same target month), as the drift climatology (``rc.extend_leads``)."""
     out = stoch.copy()
     for var in CALIBRATION["vars"]:
-        alpha = event_inflation(X, year, init, var, method=method, mode=mode).reindex(lead=stoch["lead"])
+        alpha = event_inflation(X, year, init, var, method=method, mode=mode)
+        known = alpha["lead"].values
+        src = [L if L in known or L < known.min() else L - 12 * int(np.ceil((L - known.max()) / 12)) for L in stoch["lead"].values]
+        alpha = alpha.reindex(lead=src).assign_coords(lead=stoch["lead"].values)
         out[var] = inflate(stoch[var], alpha)
     out.attrs["calibrated_vars"] = ",".join(f"{v}:{calibration_method(v, method)}" for v in CALIBRATION["vars"])
     return out

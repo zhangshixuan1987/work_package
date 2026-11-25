@@ -1,7 +1,8 @@
 """Shared helpers for the RTENSO2026 case-study notebooks (2015/16 and 2026/27 El Nino).
 
 The RTENSO2026 hindcasts (``clim``, ``obs`` and ``obs_ice_nsidc`` land/sea-ice/river ICs,
-Feb/May/Aug/Nov starts of 2015 and 2026, 10 members, 24 months) use the same ERA5 atmosphere
+Feb/May/Aug/Nov starts of 2015 and 2026, 10 members, 24 months; the 1 Nov 2026 start runs 36 months,
+see ``EXTENDED_STARTS``) use the same ERA5 atmosphere
 and CFSR ocean ICs as the Reanalysis (BruteForce) set, so Reanalysis provides
 the lead-time climatology that removes model drift:
 
@@ -41,11 +42,21 @@ from esp_lab.utils.netcdf_utils import atomic_to_netcdf, load_netcdf
 from esp_lab.utils.regrid_utils import make_regridder
 
 CACHE_VERSION = 1
+# Shared reference caches (Reanalysis lead-time climatologies, observations; strat_case/strat_diag: ERA5,
+# Reanalysis zonal means; xro_case: observed XRO state, rolling hindcasts) are reused by every notebook.
+# They rebuild by themselves when stale (their cache keys include the inputs). A notebook's
+# FORCE_COMPUTE (mode="rebuild") recomputes only its own products; set REBUILD_REFERENCE = True
+# (rc.REBUILD_REFERENCE = True in a notebook) to recompute the reference caches as well.
+REBUILD_REFERENCE = False
 OBS_CACHE_VERSION = 2   # 2: TS (SST) masked over land, as ESP-Lab's sst_land_mask
 GRID = "180x360_aave"
 GRID_TAG = "1x1deg"
 NENS = 10
-NLEAD = 24
+NLEAD = 24                      # months of every Reanalysis start and of the standard RTENSO2026 starts
+# Starts that run longer than NLEAD months: (year, init_month) -> months. Only RTENSO2026 cases have 2026
+# starts. Their post-processed series are in ts/monthly/<months/12>yr; leads NLEAD... reuse the
+# climatology of the lead 12 months earlier (same target month), see ``extend_leads``.
+EXTENDED_STARTS = {(2026, 11): 36}
 CASE_YEAR = 2015
 CLIM_YEARS = (1981, 2010)
 OBS_YEARS = (2015, 2017)
@@ -226,10 +237,28 @@ def case_dir(case_prefix, year, init_month):
     return post_root(case_prefix) / f"{case_prefix}_{year}{init_month:02d}0100"
 
 
-def member_file(case_prefix, year, init_month, member, field):
+def reference_mode(mode):
+    """Cache mode for a shared reference cache: a notebook's "rebuild" becomes "auto" (reuse when valid)
+    unless REBUILD_REFERENCE is set."""
+    return "auto" if mode == "rebuild" and not REBUILD_REFERENCE else mode
+
+
+def start_nlead(year, init_month):
+    """Number of monthly leads of the start on 1 ``init_month`` ``year`` (NLEAD unless in EXTENDED_STARTS)."""
+    return EXTENDED_STARTS.get((int(year), int(init_month)), NLEAD)
+
+
+def ts_length_dir(nlead):
+    """Post-processing length folder of a run of ``nlead`` months (24 -> "2yr", 36 -> "3yr")."""
+    return f"{nlead // 12}yr"
+
+
+def member_file(case_prefix, year, init_month, member, field, nlead=None):
     info = FIELDS[field]
     var = info.get("var", field)
-    tsdir = case_dir(case_prefix, year, init_month) / f"EN{member:02d}" / "post" / info["realm"] / GRID / "ts" / "monthly" / "2yr"
+    nlead = start_nlead(year, init_month) if nlead is None else nlead
+    tsdir = (case_dir(case_prefix, year, init_month) / f"EN{member:02d}" / "post" / info["realm"] / GRID / "ts" / "monthly"
+             / ts_length_dir(nlead))
     matches = sorted(glob.glob(str(tsdir / f"{var}_{year}{init_month:02d}_*.nc")))
     return Path(matches[0]) if matches else None
 
@@ -270,9 +299,11 @@ def mpas_cell_area(map_file):
     return xr.DataArray(mean.reshape(nlat, nlon), coords={"lat": grid["lat"], "lon": grid["lon"]}, dims=("lat", "lon"))
 
 
-def open_member(case_prefix, year, init_month, member, field, nlead=NLEAD):
-    """One member's monthly series as (lead, lat, lon) in display units, or None."""
-    path = member_file(case_prefix, year, init_month, member, field)
+def open_member(case_prefix, year, init_month, member, field, nlead=None):
+    """One member's monthly series as (lead, lat, lon) in display units, or None.
+    ``nlead`` defaults to the start's length (``start_nlead``)."""
+    nlead = start_nlead(year, init_month) if nlead is None else nlead
+    path = member_file(case_prefix, year, init_month, member, field, nlead)
     if path is None:
         return None
     info = FIELDS[field]
@@ -299,8 +330,10 @@ def open_member(case_prefix, year, init_month, member, field, nlead=NLEAD):
     return _to_display_units(da.drop_vars([c for c in da.coords if c not in ("lead", "lat", "lon")]), field)
 
 
-def open_hindcast(case_prefix, year, init_month, field, members=range(NENS), nlead=NLEAD):
-    """Ensemble as (member, lead, lat, lon) with a target-month ``time`` coordinate."""
+def open_hindcast(case_prefix, year, init_month, field, members=range(NENS), nlead=None):
+    """Ensemble as (member, lead, lat, lon) with a target-month ``time`` coordinate
+    (``nlead`` defaults to the start's length, ``start_nlead``)."""
+    nlead = start_nlead(year, init_month) if nlead is None else nlead
     arrays, found = [], []
     for member in members:
         da = open_member(case_prefix, year, init_month, member, field, nlead)
@@ -335,6 +368,7 @@ def _cache_ok(path, expected):
 def leadtime_climatology(field, init_month, years=CLIM_YEARS, mode="auto"):
     """Reanalysis ensemble-mean climatology (lead, lat, lon) for a May or Nov start (every year of ``years``),
     or a Feb or Aug start (the years of ``years`` that have one: every fifth year)."""
+    mode = reference_mode(mode)
     if init_month not in REFERENCE["init_months"] + DIRECT_INIT_MONTHS:
         raise ValueError(f"Reanalysis climatology exists only for init months {REFERENCE['init_months'] + DIRECT_INIT_MONTHS}")
     realm = FIELDS[field]["realm"]
@@ -372,6 +406,7 @@ def leadtime_climatology(field, init_month, years=CLIM_YEARS, mode="auto"):
 def leadtime_yearly(field, init_month, years=CLIM_YEARS, mode="auto"):
     """Reanalysis ensemble mean of every start of ``init_month`` in ``years`` as (year, lead, lat, lon):
     30 years for May/Nov, the quinquennial 1985-2010 starts for Feb/Aug. Input of ``start_drift``."""
+    mode = reference_mode(mode)
     realm = FIELDS[field]["realm"]
     path = diag_dir(REFERENCE["source"], "leadtime_yearly", realm, field,
                     f"{REFERENCE['source']}_init{init_month:02d}_{field}_ensmean_y{years[0]}-{years[1]}_m{NENS}_l{NLEAD}_{GRID_TAG}.nc")
@@ -455,8 +490,32 @@ def obs_monthly_climatology(field, clim_years=CLIM_YEARS, mode="auto", product=N
     return da.sel(time=slice(f"{clim_years[0]}-01", f"{clim_years[1]}-12")).groupby("time.month").mean("time")
 
 
-def matched_climatology(field, init_month, method="start_drift", mode="auto"):
-    """Lead-time climatology for any start month.
+def extend_leads(clim, nlead):
+    """A lead-time climatology (lead, ...) cut or extended to ``nlead`` leads.
+
+    The Reanalysis starts run NLEAD months, so lead L >= NLEAD of a longer start (``EXTENDED_STARTS``)
+    reuses the climatology of lead L - 12k, the latest available lead with the same target month
+    (e.g. leads 24-35 take leads 12-23): the drift is assumed unchanged after the second year.
+    """
+    n = clim.sizes["lead"]
+    if nlead <= n:
+        return clim.isel(lead=slice(0, nlead))
+    src = [lead if lead < n else lead - 12 * ((lead - n) // 12 + 1) for lead in range(nlead)]
+    out = clim.isel(lead=xr.DataArray(src, dims="lead")).assign_coords(lead=np.arange(nlead))
+    out.attrs = dict(clim.attrs, extended_leads=f"leads {n}-{nlead - 1} reuse leads {n - 12}-{n - 1} (same target month)")
+    if "climatology_method" in out.attrs:
+        out.attrs["climatology_method"] += f"; leads {n}-{nlead - 1} reuse leads {n - 12}-{n - 1}"
+    return out
+
+
+def matched_climatology(field, init_month, method="start_drift", mode="auto", nlead=NLEAD):
+    """Lead-time climatology (lead, lat, lon) for any start month, with ``nlead`` leads
+    (beyond NLEAD see ``extend_leads``); ``method`` as in ``_matched_climatology``."""
+    return extend_leads(_matched_climatology(field, init_month, method=method, mode=mode), nlead)
+
+
+def _matched_climatology(field, init_month, method="start_drift", mode="auto"):
+    """Lead-time climatology for any start month (NLEAD leads).
 
     ``method``:
 
@@ -485,7 +544,7 @@ def matched_climatology(field, init_month, method="start_drift", mode="auto"):
     """
     if method == "start_drift":
         if FIELDS[field]["obs"] is None:
-            return matched_climatology(field, init_month, method="direct", mode=mode)
+            return _matched_climatology(field, init_month, method="direct", mode=mode)
         direct = leadtime_yearly(field, init_month, mode=mode).mean("year")   # same starts, no observations
         sd = start_drift(field, init_month, mode=mode)
         obs_clim = obs_monthly_climatology(field, mode=mode)
@@ -539,7 +598,7 @@ def hindcast_anomaly(case_prefix, init_month, field, year=CASE_YEAR, method="sta
     ens = open_hindcast(case_prefix, year, init_month, field)
     if ens is None:
         return None
-    clim = matched_climatology(field, init_month, method=method, mode=mode)
+    clim = matched_climatology(field, init_month, method=method, mode=mode, nlead=ens.sizes["lead"])
     anom = ens - clim
     anom.attrs = {"units": FIELDS[field]["units"], "case": case_prefix, "init_month": init_month,
                   "climatology_method": clim.attrs.get("climatology_method", "")}
@@ -607,6 +666,7 @@ def _archive_preproc(ds, **kwargs):
 
 def obs_monthly(field, years=(CLIM_YEARS[0], OBS_YEARS[1]), mode="auto", product=None):
     """Observed monthly values on the model 1x1 grid (time, lat, lon) in display units."""
+    mode = reference_mode(mode)
     product, obs_field, pattern = obs_product(field, years, product)
     path = diag_dir("observations", "case_study", FIELDS[field]["realm"], field,
                     f"{product}_{field}_monthly_y{years[0]}-{years[1]}_{GRID_TAG}.nc")
@@ -653,6 +713,7 @@ def obs_anomaly(field, years=OBS_YEARS, clim_years=CLIM_YEARS, mode="auto", prod
     climatology (OISST starts in 1981-09, so its Jan-Aug climatology is 1982-2010). ``product``
     selects an ``OBS_ALT_PRODUCTS`` entry instead (e.g. "ERSSTv5" or "ESA_CCI_SST" for TS).
     """
+    mode = reference_mode(mode)
     span = (min(clim_years[0], years[0]), max(clim_years[1], years[1]))
     product, _, pattern = obs_product(field, span, product)
     path = diag_dir("observations", "case_study", FIELDS[field]["realm"], field,
@@ -700,7 +761,7 @@ def match_obs(model, obs):
 
 
 # -----------------------------------------------------------------------------
-# Cache builds (0_build_caches.ipynb)
+# Optional pre-build of the reference caches (the notebooks build what they need themselves)
 # -----------------------------------------------------------------------------
 CACHE_FIELDS = ["TS", "PRECT", "TREFHT", "PSL", "U850"]
 
@@ -724,6 +785,16 @@ def build_caches(fields=CACHE_FIELDS, mode="auto", verbose=True):
         if verbose:
             print(f"{field} {cache} ready ({rows[-1]['seconds']:.0f} s)", flush=True)
 
+    global REBUILD_REFERENCE
+    saved, REBUILD_REFERENCE = REBUILD_REFERENCE, REBUILD_REFERENCE or mode == "rebuild"   # these are reference caches
+    try:
+        _build_reference(fields, mode, timed)
+    finally:
+        REBUILD_REFERENCE = saved
+    return rows
+
+
+def _build_reference(fields, mode, timed):
     for field in fields:
         for init_month in REFERENCE["init_months"] + DIRECT_INIT_MONTHS:
             timed(field, f"init{init_month:02d} climatology",
@@ -733,7 +804,6 @@ def build_caches(fields=CACHE_FIELDS, mode="auto", verbose=True):
         if FIELDS[field]["obs"] is not None:
             timed(field, "observation anomalies", lambda: obs_anomaly(field, mode=mode))
             timed(field, "observed monthly series", lambda: obs_monthly(field, mode=mode))
-    return rows
 
 
 # -----------------------------------------------------------------------------
@@ -787,13 +857,15 @@ def pattern_rmse(fcst, obs, region="Global"):
     return np.sqrt((w * (f - o) ** 2).sum(("lat", "lon")) / w.sum(("lat", "lon")))
 
 
-def seasonal_leads(da, nseason=8, complete=False):
-    """Non-overlapping 3-month means over leads (season 1 = leads 0-2), keeping the centre-month time.
+def seasonal_leads(da, nseason=None, complete=False):
+    """Non-overlapping 3-month means over leads (season 1 = leads 0-2), keeping the centre-month time;
+    ``nseason`` seasons (default: every complete season, 8 for NLEAD = 24 leads).
 
     ``complete=True`` leaves a season NaN unless each of its months has data somewhere (e.g.
     observations that end inside the season).
     """
     seasons = []
+    nseason = da.sizes["lead"] // 3 if nseason is None else nseason
     for s in range(nseason):
         chunk = da.isel(lead=slice(3 * s, 3 * s + 3))
         if chunk.sizes["lead"] < 3:
@@ -899,6 +971,7 @@ def welch_t(a, b, dim="member"):
 
 __all__ = [
     "EVENTS", "CASES", "POOLED_CASES", "has_start", "cases_for", "FIELDS", "REGIONS", "NINO_REGIONS", "REFERENCE", "CASE_YEAR", "CLIM_YEARS", "NENS", "NLEAD",
+    "EXTENDED_STARTS", "start_nlead", "REBUILD_REFERENCE", "reference_mode", "ts_length_dir", "extend_leads",
     "open_hindcast", "leadtime_climatology", "matched_climatology", "nearest_reference_leads",
     "hindcast_anomaly", "obs_monthly", "obs_anomaly", "match_obs", "box_mean", "nino_indices", "pattern_acc", "pattern_rmse",
     "seasonal_leads", "target_mean", "obs_target_mean", "hemispheric_area", "target_season_label",

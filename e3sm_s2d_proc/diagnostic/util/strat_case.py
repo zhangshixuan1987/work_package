@@ -1,4 +1,4 @@
-"""Stratosphere and polar-vortex helpers for ``9_ssw_polar_vortex.ipynb``.
+"""Stratosphere and polar-vortex helpers for the stratosphere notebooks (``jupyter/stratosphere/``).
 
 Every product is a zonal mean on 1-degree latitude bands (centres -19.5..89.5, kept from the
 QBO band to the pole) and pressure levels (hPa):
@@ -139,6 +139,13 @@ def _parallel_map(func, jobs, workers):
 # -----------------------------------------------------------------------------
 # Model: daily zonal means from the native eam.h1 files
 # -----------------------------------------------------------------------------
+def _length_key(year, init_month):
+    """Cache key of a start longer than rc.NLEAD months (``rc.EXTENDED_STARTS``), so a daily cache built
+    before the extension is rebuilt; empty for standard starts, whose caches stay valid."""
+    nlead = rc.start_nlead(year, init_month)
+    return {} if nlead == rc.NLEAD else {"nlead": nlead}
+
+
 def h1_files(simulation_root, case_prefix, year, init_month, member):
     hist = Path(simulation_root) / f"{case_prefix}_{year}{init_month:02d}0100" / f"EN{member:02d}" / "archive" / "atm" / "hist"
     return sorted(hist.glob("*.eam.h1.*.nc"))
@@ -218,6 +225,7 @@ def model_daily_zonal(simulation_root, case_prefix, source, year, init_month, me
     path = rc.diag_dir(source, "strat", "daily_zonal",
                        f"{source}_{year}{init_month:02d}_daily_zonal_lat{LAT_MIN:g}-90_v{CACHE_VERSION}.nc")
     expected = {"cache_version": CACHE_VERSION, "case_prefix": case_prefix, "init_year": year, "init_month": init_month}
+    expected.update(_length_key(year, init_month))
     if mode != "rebuild" and _cache_ok(path, expected):
         return load_netcdf(path).sortby("plev")   # 1 ... 1000 hPa, as ERA5
     if mode == "require":
@@ -278,7 +286,8 @@ def pooled_daily_zonal(simulation_root, pool, year, init_month, mode="auto", wor
 # -----------------------------------------------------------------------------
 def _read_member_monthly(args):
     case_prefix, year, init_month, member, nlead = args
-    tsdir = rc.case_dir(case_prefix, year, init_month) / f"EN{member:02d}" / "post" / "atm" / rc.GRID / "ts" / "monthly" / "2yr"
+    tsdir = (rc.case_dir(case_prefix, year, init_month) / f"EN{member:02d}" / "post" / "atm" / rc.GRID / "ts" / "monthly"
+             / rc.ts_length_dir(nlead))
     out, plev = {}, None
     for name, var in MONTHLY_VARS.items():
         files = sorted(glob.glob(str(tsdir / f"{var}_{year}{init_month:02d}_*.nc")))
@@ -304,11 +313,16 @@ def _read_member_monthly(args):
     return plev, out
 
 
-def monthly_zonal(case_prefix, source, years, init_month, members=range(rc.NENS), nlead=rc.NLEAD,
+def monthly_zonal(case_prefix, source, years, init_month, members=range(rc.NENS), nlead=None,
                   mode="auto", workers=4, verbose=True):
     """Monthly zonal means U, T, Z (year, member, lead, plev, lat) of a case for ``years`` (cached).
-    Missing members or years are NaN; None when nothing is found."""
+    Missing members or years are NaN; None when nothing is found. ``nlead`` defaults to the start's
+    length (``rc.start_nlead``) for one year, else rc.NLEAD."""
     years = list(years)
+    if case_prefix == rc.REFERENCE["case_prefix"]:
+        mode = rc.reference_mode(mode)   # Reanalysis: a shared reference cache
+    if nlead is None:
+        nlead = rc.start_nlead(years[0], init_month) if len(years) == 1 else rc.NLEAD
     path = rc.diag_dir(source, "strat", "monthly_zonal",
                        f"{source}_init{init_month:02d}_monthly_zonal_y{years[0]}-{years[-1]}_m{len(list(members))}_l{nlead}_v{CACHE_VERSION}.nc")
     expected = {"cache_version": CACHE_VERSION, "case_prefix": case_prefix, "init_month": init_month,
@@ -347,8 +361,14 @@ def target_months(init_month, nlead=rc.NLEAD):
     return [(init_month - 1 + lead) % 12 + 1 for lead in range(nlead)]
 
 
-def lead_climatology(init_month, ref, obs_month_clim, method="start_drift", obs_monthly=None):
-    """Monthly lead-time climatology (lead, plev, lat) for any start month.
+def lead_climatology(init_month, ref, obs_month_clim, method="start_drift", obs_monthly=None, nlead=rc.NLEAD):
+    """Monthly lead-time climatology (lead, plev, lat) for any start month with ``nlead`` leads
+    (beyond rc.NLEAD see ``rc.extend_leads``); arguments and methods as in ``_lead_climatology``."""
+    return rc.extend_leads(_lead_climatology(init_month, ref, obs_month_clim, method=method, obs_monthly=obs_monthly), nlead)
+
+
+def _lead_climatology(init_month, ref, obs_month_clim, method="start_drift", obs_monthly=None):
+    """Monthly lead-time climatology (lead, plev, lat) for any start month (rc.NLEAD leads).
 
     ``ref``: {init_month: Reanalysis monthly_zonal Dataset (year, member, lead, plev, lat)}.
     ``obs_month_clim``: (month, plev, lat) ERA5 1981-2010 climatology on the model levels;
@@ -655,6 +675,7 @@ def model_daily_maps(simulation_root, map_file, case_prefix, source, year, init_
                        f"{source}_{year}{init_month:02d}_{var}_daily_maps_lat{lat_min:g}-90_v{CACHE_VERSION}.nc")
     expected = {"cache_version": CACHE_VERSION, "case_prefix": case_prefix, "init_year": year, "init_month": init_month,
                 "var": var, "months": ",".join(map(str, months)), "map_file": Path(map_file).name}
+    expected.update(_length_key(year, init_month))
     if mode != "rebuild" and _cache_ok(path, expected):
         return xr.open_dataset(path, chunks={"time": 61})    # lazy: about 0.3 GB per case and start
     if mode == "require":
@@ -743,6 +764,7 @@ def era5_daily_maps(mirror_root, start, end, var="Z", level=10, lat_min=MAP_LAT_
     """ERA5 00Z maps of one pressure level (time, lat, lon) from the hourly 0.25-degree mirror,
     1-degree cells north of ``lat_min``, for the days ``start``..``end``; cached under
     ``S2D_DIAG_ROOT/observations/strat/daily_maps`` and extended when ``end`` moves later."""
+    mode = rc.reference_mode(mode)
     code = {"Z": "128_129_z", "U": "128_131_u", "T": "128_130_t"}[var]
     path = rc.diag_dir("observations", "strat", "daily_maps", f"ERA5_{var}{level:g}_00Z_daily_maps_lat{lat_min:g}-90_v{CACHE_VERSION}.nc")
     days = pd.date_range(start, end, freq="D")
@@ -895,7 +917,8 @@ def map_lead_climatology(pool, year, init_month, maps, days, method="start_drift
     def north(da):
         return da.sel(lat=slice(lat_min - 0.01, 90.0))
 
-    lead_clim = north(rc.matched_climatology(field, init_month, method=method, mode=mode))
+    lead_clim = north(rc.matched_climatology(field, init_month, method=method, mode=mode,
+                                             nlead=rc.start_nlead(year, init_month)))
     mon = [rc.open_hindcast(prefix, year, init_month, field) for prefix in pool.values()]
     mon = north(xr.concat([m.drop_vars("member") for m in mon if m is not None], dim="member").mean("member"))
     dmean = monthly_means(north(maps).mean("member")).load()

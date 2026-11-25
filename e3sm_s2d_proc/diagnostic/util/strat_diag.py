@@ -1,4 +1,4 @@
-"""Shared inputs of the 9a-9h stratosphere notebooks (polar vortex and SSWs in the 2026 starts).
+"""Shared inputs of the stratosphere notebooks (polar vortex and SSWs in the 2026 starts).
 
 Every notebook builds a ``StratConfig`` from its run controls (data roots are notebook inputs) and
 loads only what it needs:
@@ -13,8 +13,9 @@ loads only what it needs:
   daily-minus-monthly offset);
 * ``ssw_catalogue``: SSW central dates and per-event properties, ERA5 and every model member.
 
-The caches themselves are built by ``9a_strat_build_caches`` (``mode="auto"``); the other notebooks
-read them with ``mode="require"``.
+Each notebook reads valid caches and builds missing or stale ones (``mode="auto"``; its ``FORCE_COMPUTE``
+gives ``mode="rebuild"`` for its own products; the ERA5 and Reanalysis reference caches follow
+``rc.reference_mode``).
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ from util import strat_case as sc
 
 MONTH_NAMES = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug",
                9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
-INIT_COLORS = {2: "#1f77b4", 5: "#2ca02c", 8: "#9467bd", 11: "#d62728"}      # as notebook 8
+INIT_COLORS = {2: "#1f77b4", 5: "#2ca02c", 8: "#9467bd", 11: "#d62728"}      # as 10_enso2026_animation
 DJF = ((0, 12), (1, 1), (1, 2))                                   # (years after the winter year, month)
 DJF_DAYS = np.array([31.0, 31.0, 28.0])                          # day weights (no-leap model calendar)
 
@@ -44,10 +45,10 @@ def default_pool():
 
 @dataclass
 class StratConfig:
-    """Run controls shared by the 9a-9h notebooks."""
+    """Run controls shared by the stratosphere notebooks."""
     era5_zonal_dir: Path                       # ERA5/1x1/daily_zonal
     era5_daily_dir: Path                       # ERA5/1x1/daily (PSL)
-    simulation_root: Path                      # raw eam.h1 history (cache keys; read only by 9a)
+    simulation_root: Path                      # raw eam.h1 history (read when a daily cache is built)
     pool: dict = field(default_factory=default_pool)
     year: int = 2026
     init_months: tuple = (2, 5, 8, 11)
@@ -55,7 +56,7 @@ class StratConfig:
     clim_years: tuple = rc.CLIM_YEARS
     era5_first_year: int = 1979
     ref_level: float = 10.0
-    mode: str = "require"                      # "auto" builds missing caches (9a); "require" reads only
+    mode: str = "auto"                         # "auto": read valid caches, build missing or stale ones; "rebuild": recompute
     workers: int = 4
     ssw: dict = field(default_factory=lambda: {"sep_days": 20, "recover_days": 10})
 
@@ -94,6 +95,18 @@ def target_time(year, init, nlead=rc.NLEAD):
     return np.asarray(out, dtype="datetime64[ns]")
 
 
+def last_target(year, inits):
+    """(year, month) of the last lead over the starts ``inits`` of ``year`` (lengths from ``rc.start_nlead``)."""
+    n = max(year * 12 + i - 1 + rc.start_nlead(year, i) - 1 for i in inits)
+    return n // 12, n % 12 + 1
+
+
+def start_winters(year, init):
+    """Winters w (DJF w/w+1) a start may cover: ``year`` to ``year + nlead // 12`` (``djf_mean`` returns None
+    for one it does not cover); three for a 36-month start (``rc.EXTENDED_STARTS``)."""
+    return list(range(year, year + rc.start_nlead(year, init) // 12 + 1))
+
+
 def djf_mean(series, w):
     """Day-weighted DJF mean of a monthly series stamped on the 15th (dims other than time kept);
     None unless Dec, Jan and Feb are all present."""
@@ -125,13 +138,14 @@ def load_era5(cfg: StratConfig) -> SimpleNamespace:
     fields: the lazy daily zonal means. The reductions are cached under ``S2D_DIAG_ROOT/observations/strat``
     and rebuilt when the archive files change (``mode="rebuild"`` forces it).
     """
+    mode = rc.reference_mode(cfg.mode)   # ERA5: a shared reference cache
     era5 = sc.era5_daily_zonal(cfg.era5_zonal_dir, years=(cfg.era5_first_year, cfg.year), load=False)
     o = SimpleNamespace(fields=era5, obs_end=pd.Timestamp(era5["time"].values[-1]))
     path = rc.diag_dir("observations", "strat", f"ERA5_daily_zonal_indices_y{cfg.era5_first_year}-{cfg.year}"
                        f"_clim{cfg.clim_years[0]}-{cfg.clim_years[1]}_p{cfg.ref_level:g}_v{sc.CACHE_VERSION}.nc")
     expected = {"source_mtime": _era5_stamp(cfg.era5_zonal_dir), "ref_level": cfg.ref_level,
                 "clim_years": f"{cfg.clim_years[0]}-{cfg.clim_years[1]}"}
-    if cfg.mode != "rebuild" and sc._cache_ok(path, expected):
+    if mode != "rebuild" and sc._cache_ok(path, expected):
         ds = xr.load_dataset(path)
         o.u60, o.pct, o.vt, o.pcz = ds["u60"], ds["pct"], ds["vt"], ds["pcz"]
         o.qbo = ds["qbo"].rename(time_month="time")
@@ -161,13 +175,14 @@ def load_era5(cfg: StratConfig) -> SimpleNamespace:
 def era5_monthly_series(cfg: StratConfig, era5=None) -> xr.Dataset:
     """ERA5 monthly zonal means U, T, Z (time on the 15th, plev, lat) from the first climatology year
     to two years after the last (the verification months of the Reanalysis starts; "start_drift")."""
+    mode = rc.reference_mode(cfg.mode)   # ERA5: a shared reference cache
     years = (cfg.clim_years[0], cfg.clim_years[1] + 2)
     path = rc.diag_dir("observations", "strat", f"ERA5_monthly_zonal_y{years[0]}-{years[1]}_v{sc.CACHE_VERSION}.nc")
     expected = {"source_mtime": _era5_stamp(cfg.era5_zonal_dir), "years": f"{years[0]}-{years[1]}"}
-    if cfg.mode != "rebuild" and sc._cache_ok(path, expected):
+    if mode != "rebuild" and sc._cache_ok(path, expected):
         return xr.load_dataset(path)
-    if cfg.mode == "require":
-        raise FileNotFoundError(f"missing or stale ERA5 monthly zonal-mean cache {path} (run 9a)")
+    if mode == "require":
+        raise FileNotFoundError(f"missing or stale ERA5 monthly zonal-mean cache {path} (mode='require')")
     if era5 is None:
         era5 = sc.era5_daily_zonal(cfg.era5_zonal_dir, years=years, load=False)
     ds = sc.monthly_means(era5[["U", "T", "Z"]].sel(time=slice(f"{years[0]}-01-01", f"{years[1]}-12-31"))).load()
@@ -176,11 +191,12 @@ def era5_monthly_series(cfg: StratConfig, era5=None) -> xr.Dataset:
     return ds
 
 
-def lead_clim(init, refs: SimpleNamespace, era5: SimpleNamespace, method: str):
-    """Monthly lead-time climatology (lead, plev, lat) of one start with ``method`` (``sc.lead_climatology``)."""
+def lead_clim(init, refs: SimpleNamespace, era5: SimpleNamespace, method: str, nlead=rc.NLEAD):
+    """Monthly lead-time climatology (lead, plev, lat) of one start with ``method`` (``sc.lead_climatology``),
+    ``nlead`` leads (``rc.start_nlead`` of the start)."""
     month_clim = era5.month_clim.sel(plev=refs.plev) if era5 is not None else None
     series = era5.month_series.sel(plev=refs.plev) if era5 is not None and method == "start_drift" else None
-    return sc.lead_climatology(init, refs.for_method(method), month_clim, method=method, obs_monthly=series)
+    return sc.lead_climatology(init, refs.for_method(method), month_clim, method=method, obs_monthly=series, nlead=nlead)
 
 
 def observed_nino(cfg: StratConfig, product="HadISST1.1"):
@@ -235,7 +251,7 @@ def load_model(cfg: StratConfig, era5: SimpleNamespace, refs: SimpleNamespace) -
         mo = pooled_monthly(cfg, init)
         d = sc.pooled_daily_zonal(cfg.simulation_root, cfg.pool, cfg.year, init, mode=cfg.mode, workers=cfg.workers,
                                   verbose=False)
-        lc = lead_clim(init, refs, era5, cfg.clim_method)
+        lc = lead_clim(init, refs, era5, cfg.clim_method, nlead=rc.start_nlead(cfg.year, init))
         m.monthly[init], m.daily[init], m.lead_clim[init] = mo, d, lc
         lcd = sc.interp_logp(lc[["U", "Z", "T"]], sc.DAILY_LEVELS)
         m.z_offset[init] = sc.daily_monthly_offset(d, mo, cfg.year, init)
@@ -320,10 +336,10 @@ def djf_vortex(cfg: StratConfig, model: SimpleNamespace, refs: SimpleNamespace, 
     out = {}
     for init in cfg.init_months:
         raw = model.mm_u60[init].assign_coords(time=model.monthly[init]["time"]).swap_dims(lead="time")
-        lc = lead_clim(init, refs, era5, method)
+        lc = lead_clim(init, refs, era5, method, nlead=rc.start_nlead(cfg.year, init))
         clim = sc.lat_mean(lc["U"].sel(plev=cfg.ref_level), sc.U60).assign_coords(
             time=("lead", model.monthly[init]["time"].values)).swap_dims(lead="time")
-        for w in (cfg.year, cfg.year + 1):
+        for w in start_winters(cfg.year, init):   # every DJF the start covers
             r, c = djf_mean(raw, w), djf_mean(clim, w)
             if r is not None and c is not None:
                 out[(init, w)] = r - c
