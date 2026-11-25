@@ -162,6 +162,16 @@ Batch scripts are in `scripts/`; run output (logs, executed copies) goes to `/ps
 | `stratosphere/07_vortex_ssw_animation.ipynb` | Day-by-day 10-hPa polar maps of one winter: each start's ensemble mean and a featured SSW member, the all-start mean (or ERA5 for an observed winter), with a U60 timeline; GIF, video, storyboard. |
 | `stratosphere/08_vortex_evolution_animation.ipynb` | Seasonal evolution Oct 2026-Apr 2027 without event-based selection: one fixed member and the ensemble mean of each start, raw 10-hPa height contours with optional anomaly shading, reference climatologies, U60 timeline; GIF, video, preview, storyboard. |
 
+### `nov2026_outlook/`: the 1 Nov 2026 case (36-month start) and its La Niña outlook
+
+| File | Purpose |
+| --- | --- |
+| `nov2026_outlook/01_year3_drift_sensitivity.ipynb` | Year 3 of the 36-month start: the drift by lead and its year-1-to-2 change, where the lead-24 step comes from, year-3 drift extrapolations (held, per-month, adjusted for the initial-adjustment leads; r = 0 to 1), standard vs relative Niño3.4, 1981-2010 vs 1991-2018/2020 bases, and P(La Niña) for DJF 2027/28, 2028/29 and both from the 30 pooled members. |
+| `nov2026_outlook/02_outlook_checks.ipynb` | Checks behind the outlook: F-test (and Levene) of the DJF means across the clim/obs/NSIDC sets (pooling), Niño3.4 DJF anomaly correlation of the Reanalysis 1 Nov starts in years 1 and 2 against persistence, and the peak and decay timing of the forecast against observed strong El Niños and the other 2026 starts. |
+| `nov2026_outlook/03_drift_trend_and_test.ipynb` | Trend-aware drift correction (T1: linear trend in the drift; T2: Kharin et al. 2012, trend in the model climatology) against fixed 1981-2010, 1991-2018 and recent-window drifts; a test in time (drift from the 1981-2008 starts, verified on 2009-2018: bias, RMSE, La Niña Brier score); P(La Niña) of the 2026 forecast for each correction; and the 2026 forecast's sensitivity to the fixed drift window (1981-2010 default against sliding 15-year windows, 1981-1995 to 2004-2018); and the trend correction's sensitivity to the training starts (T1 held at 2018, fitted on 1981-2018 against windows starting later and ending in 2018), with its test in time (windows ending in 2008, verified on 2009-2018). Member-level index cache in the same folder. |
+
+The notebooks share an index-space cache (Niño3.4 and the tropical ocean mean of the Reanalysis Nov starts, the 30 members and HadISST) under `$S2D_DIAG_ROOT/RTENSO2026_pool/nino_drift/`.
+
 ### `initialization/`: sensitivity to the land, sea-ice and river ICs
 
 | File | Purpose |
