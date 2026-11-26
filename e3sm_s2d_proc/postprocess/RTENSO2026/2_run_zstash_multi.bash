@@ -55,7 +55,9 @@ log_msg() {
     echo "[$(timestamp)] $*" | tee -a "${main_log}"
 }
 
-trap 'log_msg "Received termination signal. Killing child jobs..."; jobs -rp | xargs -r kill || true; wait || true' SIGINT SIGTERM
+# Exit non-zero after killing the children: without the exit, the stage loop resumed and an
+# interrupted zstash check was logged as "completed successfully" (jobs 61950615/7/8, 2026-11-25).
+trap 'log_msg "Received termination signal. Killing child jobs..."; jobs -rp | xargs -r kill || true; wait || true; log_msg "Job terminated: archive NOT complete"; exit 143' SIGINT SIGTERM
 
 wait_for_slot() {
     while (( $(jobs -rp | wc -l) >= max_jobs )); do
